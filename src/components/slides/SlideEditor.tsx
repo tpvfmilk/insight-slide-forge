@@ -1,14 +1,14 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Copy, Clock, Image as ImageIcon, RefreshCw, Presentation } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Copy, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProjectById } from "@/services/projectService";
+import { uploadSlideImage } from "@/services/imageService";
 
 interface Slide {
   id: string;
@@ -28,6 +28,7 @@ export const SlideEditor = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [projectTitle, setProjectTitle] = useState<string>("");
+  const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
   
   const currentSlide = slides[currentSlideIndex];
   
@@ -211,6 +212,57 @@ export const SlideEditor = () => {
     // This would trigger CSV export
   };
   
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    
+    const file = event.target.files[0];
+    
+    try {
+      setIsUploadingImage(true);
+      toast.loading("Uploading image...", { id: "upload-image" });
+      
+      const uploadResult = await uploadSlideImage(file);
+      
+      if (!uploadResult) {
+        throw new Error("Failed to upload image");
+      }
+      
+      // Update the current slide with the image URL
+      const updatedSlides = [...slides];
+      updatedSlides[currentSlideIndex] = {
+        ...updatedSlides[currentSlideIndex],
+        imageUrl: uploadResult.url
+      };
+      
+      setSlides(updatedSlides);
+      updateSlidesInDatabase(updatedSlides);
+      
+      toast.success("Image uploaded successfully!", { id: "upload-image" });
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      toast.error(`Failed to upload image: ${error.message}`, { id: "upload-image" });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+  
+  const removeImage = () => {
+    if (currentSlide?.imageUrl) {
+      const updatedSlides = [...slides];
+      updatedSlides[currentSlideIndex] = {
+        ...updatedSlides[currentSlideIndex],
+        imageUrl: undefined
+      };
+      
+      setSlides(updatedSlides);
+      updateSlidesInDatabase(updatedSlides);
+      
+      toast.success("Image removed");
+    }
+  };
+  
   if (isLoading) {
     return (
       <div className="h-full w-full flex items-center justify-center">
@@ -305,8 +357,34 @@ export const SlideEditor = () => {
       <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-0">
         {/* Left pane - Image */}
         <div className="border-r min-h-[300px] flex flex-col">
-          <div className="p-4 border-b">
+          <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Visual</h3>
+            <div className="flex gap-2">
+              <label htmlFor="image-upload" className="flex">
+                <Button variant="outline" size="sm" disabled={isUploadingImage} className="cursor-pointer">
+                  {isUploadingImage ? (
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-1" />
+                  )}
+                  Upload Image
+                </Button>
+                <input 
+                  id="image-upload" 
+                  type="file" 
+                  accept="image/*"
+                  className="hidden" 
+                  onChange={handleImageUpload}
+                  disabled={isUploadingImage}
+                />
+              </label>
+              {currentSlide?.imageUrl && (
+                <Button variant="outline" size="sm" onClick={removeImage}>
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Remove
+                </Button>
+              )}
+            </div>
           </div>
           <div className="flex-1 flex items-center justify-center p-4">
             {currentSlide?.imageUrl ? (
@@ -321,9 +399,18 @@ export const SlideEditor = () => {
               <div className="flex flex-col items-center justify-center text-muted-foreground h-full">
                 <ImageIcon className="h-10 w-10 mb-2" />
                 <p>No image available</p>
-                <Button variant="outline" size="sm" className="mt-4">
-                  Upload Image
-                </Button>
+                <label htmlFor="image-upload-empty" className="mt-4">
+                  <Button variant="outline" size="sm" className="cursor-pointer">
+                    Upload Image
+                  </Button>
+                  <input 
+                    id="image-upload-empty" 
+                    type="file" 
+                    accept="image/*"
+                    className="hidden" 
+                    onChange={handleImageUpload}
+                  />
+                </label>
               </div>
             )}
           </div>
@@ -413,4 +500,3 @@ export const SlideEditor = () => {
     </div>
   );
 };
-
