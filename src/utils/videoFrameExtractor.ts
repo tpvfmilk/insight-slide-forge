@@ -65,6 +65,12 @@ export async function extractFramesFromVideoUrl(
     };
     
     video.onerror = function(e) {
+      // Fixed TypeScript error by properly checking event type
+      if (typeof e === 'string') {
+        reject(new Error(`Failed to load video: ${e}`));
+        return;
+      }
+      
       const videoEl = e.target as HTMLVideoElement;
       let errorMessage = "Unknown error";
       

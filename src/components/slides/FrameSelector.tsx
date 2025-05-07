@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Check, Search, X } from "lucide-react";
+import { Check, Search, X, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 interface ExtractedFrame {
@@ -84,7 +84,8 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        {/* Fixed maxHeight and added proper overflow styling */}
+        <div className="flex-1 overflow-y-auto" style={{ maxHeight: "calc(85vh - 180px)" }}>
           {filteredFrames.length === 0 ? (
             <div className="flex items-center justify-center h-64">
               <p className="text-muted-foreground">No frames match your search.</p>
