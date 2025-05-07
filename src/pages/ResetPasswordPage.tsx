@@ -1,7 +1,7 @@
 
 import { AuthForm } from "@/components/auth/AuthForm";
 import { Button } from "@/components/ui/button";
-import { Layout } from "lucide-react";
+import { Droplet } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const ResetPasswordPage = () => {
@@ -12,7 +12,7 @@ const ResetPasswordPage = () => {
         <div className="container flex h-16 items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary text-primary-foreground">
-              <Layout className="h-5 w-5" />
+              <Droplet className="h-5 w-5" />
             </div>
             <span className="font-semibold text-lg">Distill</span>
           </Link>

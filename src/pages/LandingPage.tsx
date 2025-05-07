@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Layout, CheckCircle, Key, FileText, Upload } from "lucide-react";
+import { ArrowRight, Droplet, CheckCircle, Key, FileText, Upload } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
@@ -14,7 +14,7 @@ const LandingPage = () => {
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary text-primary-foreground">
-              <Layout className="h-5 w-5" />
+              <Droplet className="h-5 w-5" />
             </div>
             <span className="font-semibold text-lg">Distill</span>
           </div>
@@ -125,7 +125,7 @@ const LandingPage = () => {
             <StepCard
               number="1"
               title="Upload Content"
-              description="Select a video file, YouTube link, or paste a transcript into InsightSlide."
+              description="Select a video file, YouTube link, or paste a transcript into Distill."
             />
             <StepCard
               number="2"
@@ -159,7 +159,7 @@ const LandingPage = () => {
               imageUrl="/lovable-uploads/f64e6eb6-5666-4075-84a0-048e723d7236.png"
             />
             <TestimonialCard
-              quote="InsightSlide has transformed how I prepare for my seminars. It extracts exactly what I need from research presentations and organizes them logically."
+              quote="Distill has transformed how I prepare for my seminars. It extracts exactly what I need from research presentations and organizes them logically."
               name="Michael Rodriguez"
               role="PhD Candidate, Neuroscience"
               imageUrl="/lovable-uploads/9993c960-3884-4f8d-b27e-fd13822400c4.png"
@@ -200,7 +200,7 @@ const LandingPage = () => {
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary text-primary-foreground">
-                  <Layout className="h-5 w-5" />
+                  <Droplet className="h-5 w-5" />
                 </div>
                 <span className="font-semibold text-lg">Distill</span>
               </div>

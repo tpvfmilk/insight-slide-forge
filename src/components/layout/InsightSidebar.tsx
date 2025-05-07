@@ -1,5 +1,5 @@
 
-import { Calendar, File, Layout, LayoutDashboard, Settings, Upload } from 'lucide-react';
+import { Calendar, Droplet, File, LayoutDashboard, Settings, Upload } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Sidebar, 
@@ -34,7 +34,7 @@ export const InsightSidebar = () => {
       <SidebarHeader className="flex items-center h-14 px-4 border-b">
         <Link to="/" className="flex items-center gap-2">
           <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary text-primary-foreground">
-            <Layout className="h-5 w-5" />
+            <Droplet className="h-5 w-5" />
           </div>
           <span className="font-semibold text-lg">Distill</span>
         </Link>

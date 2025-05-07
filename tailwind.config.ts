@@ -63,17 +63,17 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				},
-				// InsightSlide specific colors
-				insight: {
-					100: '#E5DEFF', // Light purple
-					200: '#D6BCFA', // Soft purple
-					300: '#B794F4', // Medium purple
-					400: '#9B87F5', // Primary purple
-					500: '#8B5CF6', // Vivid purple
-					600: '#7E69AB', // Secondary purple
-					700: '#6E59A5', // Tertiary purple
-					800: '#553C9A', // Dark purple
-					900: '#44337A', // Deepest purple
+				// Distill specific colors - changed from purple to blue tones
+				distill: {
+					100: '#E5F2FF', // Light blue
+					200: '#B3D7FF', // Soft blue
+					300: '#80BDFF', // Medium blue
+					400: '#4DA3FF', // Primary blue
+					500: '#1A88FF', // Vivid blue
+					600: '#0066CC', // Secondary blue
+					700: '#004C99', // Tertiary blue
+					800: '#003366', // Dark blue
+					900: '#001933', // Deepest blue
 				}
 			},
 			fontFamily: {
