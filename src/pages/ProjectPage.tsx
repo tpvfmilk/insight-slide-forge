@@ -181,6 +181,8 @@ const ProjectPage = () => {
         await loadProject();
         setNeedsFrameExtraction(false);
         toast.success("Frame extraction completed successfully");
+      } else {
+        toast.info("Placeholder images were used instead of actual video frames. The functionality requires the ffmpeg command which is not available in the current environment.");
       }
     } finally {
       setIsExtractingFrames(false);
@@ -547,12 +549,12 @@ const ProjectPage = () => {
                 {isExtractingFrames ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                    Extracting Frames...
+                    Generating Placeholders...
                   </>
                 ) : (
                   <>
                     <Image className="h-4 w-4 mr-1" />
-                    Extract Video Frames
+                    Generate Image Placeholders
                   </>
                 )}
               </Button>
