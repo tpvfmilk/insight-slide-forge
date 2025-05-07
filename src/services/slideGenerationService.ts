@@ -44,6 +44,17 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
 };
 
 /**
+ * Type definition for a slide
+ */
+interface Slide {
+  id: string;
+  title: string;
+  content: string;
+  timestamp?: string;
+  imageUrl?: string;
+}
+
+/**
  * Check if a project has slides already generated
  * @param project The project to check
  * @returns Boolean indicating if valid slides exist
@@ -53,11 +64,16 @@ export const hasValidSlides = (project: Project | null): boolean => {
   
   const slides = project.slides;
   
-  // Check if slides array exists, has items, and first slide is not a placeholder
-  return (
-    slides && 
-    Array.isArray(slides) && 
-    slides.length > 0 && 
-    slides[0].id !== "slide-placeholder"
-  );
+  // Check if slides array exists and has items
+  if (!slides || !Array.isArray(slides) || slides.length === 0) {
+    return false;
+  }
+  
+  // Safely check if the first slide is not a placeholder
+  const firstSlide = slides[0];
+  if (typeof firstSlide === 'object' && firstSlide !== null && 'id' in firstSlide) {
+    return firstSlide.id !== "slide-placeholder";
+  }
+  
+  return false;
 };
