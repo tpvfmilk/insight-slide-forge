@@ -116,6 +116,7 @@ export type Database = {
           created_at: string
           description: string | null
           expires_at: string
+          extracted_frames: Json | null
           id: string
           model_id: string | null
           slides: Json | null
@@ -128,12 +129,14 @@ export type Database = {
           transcript: string | null
           updated_at: string
           user_id: string
+          video_metadata: Json | null
         }
         Insert: {
           context_prompt?: string | null
           created_at?: string
           description?: string | null
           expires_at?: string
+          extracted_frames?: Json | null
           id?: string
           model_id?: string | null
           slides?: Json | null
@@ -146,12 +149,14 @@ export type Database = {
           transcript?: string | null
           updated_at?: string
           user_id: string
+          video_metadata?: Json | null
         }
         Update: {
           context_prompt?: string | null
           created_at?: string
           description?: string | null
           expires_at?: string
+          extracted_frames?: Json | null
           id?: string
           model_id?: string | null
           slides?: Json | null
@@ -164,6 +169,7 @@ export type Database = {
           transcript?: string | null
           updated_at?: string
           user_id?: string
+          video_metadata?: Json | null
         }
         Relationships: []
       }

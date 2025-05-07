@@ -1,8 +1,20 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { Json } from "@/integrations/supabase/types";
 
-export type Project = Database["public"]["Tables"]["projects"]["Row"];
+// Extend the Database Project type with our additional fields until Supabase types are regenerated
+export type Project = Database["public"]["Tables"]["projects"]["Row"] & {
+  video_metadata?: {
+    duration?: number;
+    original_file_name?: string;
+    file_type?: string;
+    file_size?: number;
+  };
+  extracted_frames?: Array<{
+    timestamp: string;
+    imageUrl: string;
+  }>;
+};
 
 /**
  * Fetches recent projects for the current user
