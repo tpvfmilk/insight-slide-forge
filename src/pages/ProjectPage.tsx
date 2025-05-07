@@ -6,10 +6,12 @@ import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RefreshCw, Settings2 } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings2, FileText } from "lucide-react";
 import { generateSlidesForProject, hasValidSlides } from "@/services/slideGenerationService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
+import { transcribeVideo } from "@/services/uploadService";
+import { Textarea } from "@/components/ui/textarea";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -17,8 +19,11 @@ const ProjectPage = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  const [isTranscriptDialogOpen, setIsTranscriptDialogOpen] = useState<boolean>(false);
+  const [transcript, setTranscript] = useState<string>("");
   const [isSaving, setIsSaving] = useState<boolean>(false);
   
   const loadProject = async () => {
@@ -36,13 +41,20 @@ const ProjectPage = () => {
       
       setProject(projectData);
       setContextPrompt(projectData.context_prompt || "");
+      setTranscript(projectData.transcript || "");
       
-      // For new projects, automatically trigger slide generation if no slides exist
+      // For new projects, check if we need to transcribe or generate slides
       const isNewlyCreated = Date.now() - new Date(projectData.created_at).getTime() < 60000; // Within a minute
-      const shouldAutoGenerate = isNewlyCreated && !hasValidSlides(projectData);
       
-      if (shouldAutoGenerate) {
-        handleGenerateSlides();
+      if (isNewlyCreated) {
+        // If video upload with no transcript, try to transcribe
+        if (projectData.source_type === 'video' && !projectData.transcript) {
+          handleTranscribeVideo();
+        }
+        // If has transcript but no slides, generate slides
+        else if (projectData.transcript && !hasValidSlides(projectData)) {
+          handleGenerateSlides();
+        }
       }
     } catch (error) {
       console.error("Error loading project:", error);
@@ -79,6 +91,36 @@ const ProjectPage = () => {
     }
   };
 
+  const handleTranscribeVideo = async () => {
+    if (!projectId || isTranscribing) return;
+    
+    setIsTranscribing(true);
+    
+    try {
+      const result = await transcribeVideo(projectId);
+      
+      if (result.success && result.transcript) {
+        // Update the project in state with the new transcript
+        setProject(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            transcript: result.transcript
+          };
+        });
+        
+        setTranscript(result.transcript);
+        
+        // Once transcription is complete, generate slides if none exist
+        if (!hasValidSlides(project)) {
+          handleGenerateSlides();
+        }
+      }
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   const handleSaveContext = async () => {
     if (!projectId || !project) return;
     
@@ -108,6 +150,37 @@ const ProjectPage = () => {
     }
   };
   
+  const handleSaveTranscript = async () => {
+    if (!projectId || !project) return;
+    
+    setIsSaving(true);
+    
+    try {
+      await updateProject(projectId, {
+        transcript: transcript
+      });
+      
+      toast.success("Transcript saved");
+      setIsTranscriptDialogOpen(false);
+      
+      // Update the project in state with the new transcript
+      setProject(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          transcript: transcript
+        };
+      });
+    } catch (error) {
+      console.error("Error saving transcript:", error);
+      toast.error("Failed to save transcript");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  const needsTranscription = project?.source_type === 'video' && !project?.transcript;
+  
   return (
     <InsightLayout>
       <div className="h-full flex flex-col">
@@ -133,6 +206,51 @@ const ProjectPage = () => {
           </div>
           
           <div className="flex items-center space-x-2">
+            {/* Transcript Dialog */}
+            <Dialog open={isTranscriptDialogOpen} onOpenChange={setIsTranscriptDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FileText className="h-4 w-4 mr-1" />
+                  {project?.transcript ? "Edit Transcript" : "Add Transcript"}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                  <DialogTitle>Video Transcript</DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                  <Textarea 
+                    value={transcript}
+                    onChange={(e) => setTranscript(e.target.value)}
+                    placeholder="Enter or edit the transcript here..."
+                    className="min-h-[400px]"
+                  />
+                  
+                  <div className="flex justify-end mt-4 space-x-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsTranscriptDialogOpen(false)}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSaveTranscript}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                          Saving...
+                        </>
+                      ) : "Save Transcript"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            {/* Context Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -174,11 +292,34 @@ const ProjectPage = () => {
               </DialogContent>
             </Dialog>
             
+            {/* Transcribe Button */}
+            {needsTranscription && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleTranscribeVideo} 
+                disabled={isTranscribing}
+              >
+                {isTranscribing ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    Transcribing...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-1" />
+                    Transcribe Video
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {/* Generate Slides Button */}
             <Button 
-              variant="outline" 
+              variant={needsTranscription ? "outline" : "default"} 
               size="sm" 
               onClick={handleGenerateSlides} 
-              disabled={isGenerating}
+              disabled={isGenerating || (project?.source_type === 'video' && !project?.transcript)}
             >
               {isGenerating ? (
                 <>

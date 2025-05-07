@@ -53,12 +53,20 @@ serve(async (req) => {
 
     // Get content based on source type
     let contentForProcessing = "";
-    if (project.source_type === 'transcript' && project.transcript) {
+    if (project.transcript) {
+      console.log("Using transcript from project:", project.transcript.substring(0, 100) + "...");
       contentForProcessing = project.transcript;
-    } else if ((project.source_type === 'video' || project.source_type === 'url') && project.source_url) {
-      // For demo purposes, we'll use a placeholder message
-      // In a real implementation, we would extract transcript from video or URL
-      contentForProcessing = `This is a simulated transcript extracted from ${project.source_type === 'video' ? 'the uploaded video' : 'the URL: ' + project.source_url}. In a production environment, this would contain actual transcribed content from the source material.`;
+    } else if (project.source_type === 'transcript' && project.transcript) {
+      contentForProcessing = project.transcript;
+    } else if (project.source_type === 'video' || project.source_type === 'url') {
+      // If no transcript but we have a video, inform the user
+      return new Response(
+        JSON.stringify({ 
+          error: "No transcript available for this project",
+          details: "Please run the transcription process first" 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     } else {
       return new Response(
         JSON.stringify({ error: "Content not available for processing" }),

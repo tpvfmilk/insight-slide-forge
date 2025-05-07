@@ -1,1 +1,12 @@
+
 project_id = "bjzvlatqgrqaefnwihjj"
+
+[functions]
+[functions.generate-slides]
+verify_jwt = true
+
+[functions.transcribe-video]
+verify_jwt = true
+
+[functions.init-storage]
+verify_jwt = true

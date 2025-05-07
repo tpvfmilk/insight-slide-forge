@@ -15,12 +15,19 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
     // Fetch the project to get context_prompt if available
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('context_prompt')
+      .select('context_prompt, transcript, source_type')
       .eq('id', projectId)
       .single();
       
     if (projectError) {
       console.error('Error fetching project context:', projectError);
+      throw new Error('Failed to retrieve project details');
+    }
+    
+    // Check if we have transcript for video projects
+    if (project.source_type === 'video' && !project.transcript) {
+      toast.error("This video needs to be transcribed before generating slides", { id: "generate-slides" });
+      return { success: false };
     }
     
     const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/generate-slides`, {

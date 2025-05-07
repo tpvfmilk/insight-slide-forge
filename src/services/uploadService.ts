@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, Project } from "@/services/projectService";
 import { v4 as uuidv4 } from "uuid";
@@ -78,6 +79,34 @@ export const createProjectFromVideo = async (
     const project = await createProject(projectData as any);
     
     toast.success('Project created successfully');
+    
+    // Trigger transcription process if no transcript provided
+    if (!transcript) {
+      toast.loading('Starting transcription process...', { id: 'transcribe-video' });
+      
+      try {
+        const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/transcribe-video', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+          },
+          body: JSON.stringify({ projectId: project.id })
+        });
+        
+        if (response.ok) {
+          toast.success('Video transcription started. This may take a few minutes.', { id: 'transcribe-video' });
+        } else {
+          const errorData = await response.json();
+          console.error('Transcription failed:', errorData);
+          toast.error('Failed to start transcription. You can try again later.', { id: 'transcribe-video' });
+        }
+      } catch (error) {
+        console.error('Transcription request error:', error);
+        toast.error('Failed to start transcription. You can try again later.', { id: 'transcribe-video' });
+      }
+    }
+    
     return project;
   } catch (error) {
     console.error('Error creating project from video:', error);
@@ -123,33 +152,20 @@ export const createProjectFromUrl = async (
  * Creates a new project from transcript text
  * @param transcript Transcript text
  * @param title Project title
- * @param imageFile Optional image file to include with the transcript
  * @param contextPrompt Optional context prompt to guide slide generation
  * @returns The created project
  */
 export const createProjectFromTranscript = async (
   transcript: string, 
   title: string = 'New Project',
-  imageFile: File | null = null,
   contextPrompt: string = ''
 ): Promise<Project | null> => {
   try {
-    // Upload image if provided
-    let imageUploadResult = null;
-    if (imageFile) {
-      imageUploadResult = await uploadFile(imageFile);
-      if (!imageUploadResult) {
-        console.warn('Failed to upload image, continuing with transcript only');
-      }
-    }
-    
     // Create a new project
     const projectData = {
       title: title || 'Project from transcript',
       source_type: 'transcript',
       transcript: transcript,
-      source_file_path: imageUploadResult?.path || null,
-      source_url: imageUploadResult?.url || null,
       context_prompt: contextPrompt,
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
@@ -162,5 +178,39 @@ export const createProjectFromTranscript = async (
     console.error('Error creating project from transcript:', error);
     toast.error('Failed to create project');
     return null;
+  }
+};
+
+/**
+ * Triggers video transcription for a project
+ * @param projectId ID of the project to transcribe
+ * @returns Object containing success status and transcript if successful
+ */
+export const transcribeVideo = async (projectId: string): Promise<{ success: boolean; transcript?: string }> => {
+  try {
+    toast.loading('Transcribing video...', { id: 'transcribe-video' });
+    
+    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/transcribe-video', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+      },
+      body: JSON.stringify({ projectId })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to transcribe video');
+    }
+    
+    const { transcript } = await response.json();
+    
+    toast.success('Video transcribed successfully!', { id: 'transcribe-video' });
+    return { success: true, transcript };
+  } catch (error) {
+    console.error('Error transcribing video:', error);
+    toast.error(`Failed to transcribe video: ${error.message}`, { id: 'transcribe-video' });
+    return { success: false };
   }
 };
