@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Project, fetchProjectById, updateProject } from "@/services/projectService";
@@ -287,7 +286,7 @@ const ProjectPage = () => {
             <Dialog open={isDensityDialogOpen} onOpenChange={setIsDensityDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
-                  <SliderIcon className="h-4 w-4 mr-1" />
+                  <SlidersIcon className="h-4 w-4 mr-1" />
                   Slide Density
                 </Button>
               </DialogTrigger>
