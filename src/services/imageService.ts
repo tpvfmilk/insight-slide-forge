@@ -82,6 +82,8 @@ export const slidesNeedFrameExtraction = (slides: any[] | null): boolean => {
   
   // Check if any slides have timestamps but no images
   const slidesWithTimestamps = slides.filter(slide => {
+    if (!slide) return false;
+    
     // Check if slide has timestamps (either as array or single timestamp)
     const hasTimestamps = 
       (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps) && slide.transcriptTimestamps.length > 0) ||

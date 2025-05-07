@@ -64,10 +64,12 @@ const ProjectPage = () => {
       setTitle(projectData.title || "Untitled Project");
       
       // Check if the project has slides with timestamps but no images
+      // Make sure we're passing an array to slidesNeedFrameExtraction
+      const slidesArray = Array.isArray(projectData.slides) ? projectData.slides : [];
       setNeedsFrameExtraction(
         projectData.source_type === 'video' && 
         hasValidSlides(projectData) && 
-        slidesNeedFrameExtraction(projectData.slides)
+        slidesNeedFrameExtraction(slidesArray)
       );
       
       // Get video filename if it's a video project

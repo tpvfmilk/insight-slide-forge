@@ -226,11 +226,13 @@ export const manuallyExtractFramesForExistingProject = async (projectId: string)
     }
     
     project.slides.forEach(slide => {
-      // Collect timestamps from either transcriptTimestamps array or single timestamp
-      if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
-        timestamps.push(...slide.transcriptTimestamps);
-      } else if (slide.timestamp && typeof slide.timestamp === 'string') {
-        timestamps.push(slide.timestamp);
+      if (slide) {
+        // Collect timestamps from either transcriptTimestamps array or single timestamp
+        if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
+          timestamps.push(...slide.transcriptTimestamps);
+        } else if (slide.timestamp && typeof slide.timestamp === 'string') {
+          timestamps.push(slide.timestamp);
+        }
       }
     });
     
