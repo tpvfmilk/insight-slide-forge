@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon, Edit2 } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon, Edit2, Image } from "lucide-react";
 import { generateSlidesForProject, hasValidSlides } from "@/services/slideGenerationService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "@/services/storageService";
+import { manuallyExtractFramesForExistingProject } from "@/services/frameExtractionService";
+import { slidesNeedFrameExtraction } from "@/services/imageService";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -25,6 +27,7 @@ const ProjectPage = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const [isExtractingFrames, setIsExtractingFrames] = useState<boolean>(false);
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isTranscriptDialogOpen, setIsTranscriptDialogOpen] = useState<boolean>(false);
@@ -35,6 +38,7 @@ const ProjectPage = () => {
   const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   const [title, setTitle] = useState<string>("");
   const [videoFileName, setVideoFileName] = useState<string>("");
+  const [needsFrameExtraction, setNeedsFrameExtraction] = useState<boolean>(false);
   
   const loadProject = async () => {
     if (!projectId) return;
@@ -58,6 +62,13 @@ const ProjectPage = () => {
       setTranscript(projectData.transcript || "");
       setSlidesPerMinute(projectData.slides_per_minute || 6);
       setTitle(projectData.title || "Untitled Project");
+      
+      // Check if the project has slides with timestamps but no images
+      setNeedsFrameExtraction(
+        projectData.source_type === 'video' && 
+        hasValidSlides(projectData) && 
+        slidesNeedFrameExtraction(projectData.slides)
+      );
       
       // Get video filename if it's a video project
       if (projectData.source_type === 'video' && projectData.source_file_path) {
@@ -108,10 +119,17 @@ const ProjectPage = () => {
         // Update the project in state with the new slides
         setProject(prev => {
           if (!prev) return prev;
-          return {
+          const updatedProject = {
             ...prev,
             slides: result.slides
           };
+          
+          // Check if we need frame extraction after slide generation
+          if (prev.source_type === 'video') {
+            setNeedsFrameExtraction(slidesNeedFrameExtraction(result.slides));
+          }
+          
+          return updatedProject;
         });
       }
     } finally {
@@ -146,6 +164,25 @@ const ProjectPage = () => {
       }
     } finally {
       setIsTranscribing(false);
+    }
+  };
+
+  const handleExtractFrames = async () => {
+    if (!projectId || isExtractingFrames) return;
+    
+    setIsExtractingFrames(true);
+    
+    try {
+      const success = await manuallyExtractFramesForExistingProject(projectId);
+      
+      if (success) {
+        // Reload the project to get the updated slides with images
+        await loadProject();
+        setNeedsFrameExtraction(false);
+        toast.success("Frame extraction completed successfully");
+      }
+    } finally {
+      setIsExtractingFrames(false);
     }
   };
 
@@ -497,6 +534,28 @@ const ProjectPage = () => {
                 </div>
               </DialogContent>
             </Dialog>
+            
+            {/* Extract Frames Button */}
+            {needsFrameExtraction && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleExtractFrames} 
+                disabled={isExtractingFrames}
+              >
+                {isExtractingFrames ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    Extracting Frames...
+                  </>
+                ) : (
+                  <>
+                    <Image className="h-4 w-4 mr-1" />
+                    Extract Video Frames
+                  </>
+                )}
+              </Button>
+            )}
             
             {/* Transcribe Button */}
             {needsTranscription && (

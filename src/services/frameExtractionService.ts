@@ -181,3 +181,85 @@ export const mapTimestampsToImages = (
   
   return imageUrls;
 };
+
+/**
+ * Extract frames for an existing project that already has slides with timestamps
+ * @param projectId ID of the project
+ * @returns Promise resolving to success/failure status
+ */
+export const manuallyExtractFramesForExistingProject = async (projectId: string): Promise<boolean> => {
+  try {
+    toast.loading("Preparing to extract video frames...", { id: "manual-extract-frames" });
+    
+    // Ensure user is authenticated
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.access_token) {
+      toast.error("You need to be logged in to extract frames", { id: "manual-extract-frames" });
+      return false;
+    }
+    
+    // Fetch the project to get slides and video path
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('slides, source_file_path, source_type')
+      .eq('id', projectId)
+      .single();
+    
+    if (projectError || !project) {
+      console.error("Error fetching project for frame extraction:", projectError);
+      toast.error("Could not load project details", { id: "manual-extract-frames" });
+      return false;
+    }
+    
+    // Verify this is a video project with a valid source file path
+    if (project.source_type !== 'video' || !project.source_file_path) {
+      toast.error("This project doesn't have a video source", { id: "manual-extract-frames" });
+      return false;
+    }
+    
+    // Collect timestamps from all slides
+    const timestamps: string[] = [];
+    
+    if (!project.slides || !Array.isArray(project.slides) || project.slides.length === 0) {
+      toast.error("This project doesn't have any slides with timestamps", { id: "manual-extract-frames" });
+      return false;
+    }
+    
+    project.slides.forEach(slide => {
+      // Collect timestamps from either transcriptTimestamps array or single timestamp
+      if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
+        timestamps.push(...slide.transcriptTimestamps);
+      } else if (slide.timestamp && typeof slide.timestamp === 'string') {
+        timestamps.push(slide.timestamp);
+      }
+    });
+    
+    if (timestamps.length === 0) {
+      toast.error("No timestamps found in slides", { id: "manual-extract-frames" });
+      return false;
+    }
+    
+    console.log(`Found ${timestamps.length} timestamps for frame extraction`);
+    toast.loading(`Extracting ${timestamps.length} video frames...`, { id: "manual-extract-frames" });
+    
+    // Call the frame extraction function
+    const extractionResult = await extractFramesFromVideo(
+      projectId,
+      project.source_file_path,
+      timestamps
+    );
+    
+    if (!extractionResult.success || !extractionResult.frames || extractionResult.frames.length === 0) {
+      console.error("Frame extraction failed:", extractionResult.error);
+      toast.error(`Frame extraction failed: ${extractionResult.error || "Unknown error"}`, { id: "manual-extract-frames" });
+      return false;
+    }
+    
+    toast.success(`Successfully extracted ${extractionResult.frames.length} frames`, { id: "manual-extract-frames" });
+    return true;
+  } catch (error) {
+    console.error("Error in manual frame extraction:", error);
+    toast.error(`Failed to extract frames: ${error.message}`, { id: "manual-extract-frames" });
+    return false;
+  }
+};

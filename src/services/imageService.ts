@@ -69,3 +69,33 @@ export const uploadSlideImage = async (file: File): Promise<{ path: string; url:
     return null;
   }
 };
+
+/**
+ * Checks if project slides have timestamps but no images
+ * @param slides Array of slides to check
+ * @returns Boolean indicating if frames need extraction
+ */
+export const slidesNeedFrameExtraction = (slides: any[] | null): boolean => {
+  if (!slides || !Array.isArray(slides) || slides.length === 0) {
+    return false;
+  }
+  
+  // Check if any slides have timestamps but no images
+  const slidesWithTimestamps = slides.filter(slide => {
+    // Check if slide has timestamps (either as array or single timestamp)
+    const hasTimestamps = 
+      (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps) && slide.transcriptTimestamps.length > 0) ||
+      (slide.timestamp && typeof slide.timestamp === 'string');
+    
+    // Check if slide has images (either as array or single image)
+    const hasImages = 
+      (slide.imageUrls && Array.isArray(slide.imageUrls) && slide.imageUrls.length > 0) ||
+      (slide.imageUrl && typeof slide.imageUrl === 'string');
+    
+    // We're interested in slides that have timestamps but no images
+    return hasTimestamps && !hasImages;
+  });
+  
+  return slidesWithTimestamps.length > 0;
+};
+
