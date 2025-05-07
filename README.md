@@ -1,73 +1,125 @@
-# Welcome to your Lovable project
+# 🧠 Insight Slide Forge
 
-## Project info
+Transform videos into structured, AI-powered slide decks for professional study, review, and licensing prep — all in your browser.
 
-**URL**: https://lovable.dev/projects/0c7764c6-d598-466f-8483-e2efa465649e
+![Distill Logo](public/logo.png)
 
-## How can I edit this code?
+## 🚀 Overview
 
-There are several ways of editing your application.
+Insight Slide Forge is a full-stack web app that lets users upload video content (or provide transcripts) and automatically generates slide presentations using OpenAI's GPT models. Built for professionals studying for certification exams — like architecture, law, medicine, or engineering — this tool saves time by turning dense spoken content into structured learning resources.
 
-**Use Lovable**
+- 🎞 Upload videos, YouTube/Vimeo links, or transcripts
+- 🧠 AI-generated slides based on actual content
+- 🧾 Export to PDF, CSV, or Anki decks
+- 🧰 Edit and customize slides with rich UI
+- 📂 Projects auto-expire after 48 hours to protect user data
+- 💬 Optional context prompts to guide AI slide generation
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/0c7764c6-d598-466f-8483-e2efa465649e) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🧱 Tech Stack
 
-**Use your preferred IDE**
+| Layer        | Tool/Service            |
+| ------------ | ----------------------- |
+| Frontend     | React + Vite + Tailwind |
+| UI Framework | ShadCN / Radix UI       |
+| Backend      | Supabase (DB + Auth + Storage) |
+| AI           | OpenAI (GPT-4, Whisper) |
+| Deployment   | Vercel (or self-hosted) |
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 📦 Features
 
-Follow these steps:
+- 🔐 **User Authentication** via Supabase
+- 📤 **File Uploads** (video/audio/transcripts)
+- 🧠 **Slide Generation** using OpenAI Edge Functions
+- 🖼 **Slide Editor & Preview** with transitions and themes
+- 🧾 **Export** to PDF, Anki, CSV
+- 🌙 **Dark Mode** and Theme Customization
+- ⏳ **Auto-delete projects** after 48 hours
+- 💬 **Optional Prompting** for better slide accuracy
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## 🛠 Setup Instructions
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 1. Clone the Repo
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```bash
+git clone https://github.com/tpvfmilk/insight-slide-forge.git
+cd insight-slide-forge
 ```
 
-**Edit a file directly in GitHub**
+2. Install Dependencies
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
 
-**Use GitHub Codespaces**
+```bash
+npm install
+```
+3. Environment Setup
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Create a .env file and configure:
+```bash
+VITE_SUPABASE_URL=your-supabase-url
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+VITE_OPENAI_API_KEY=your-default-api-key (optional)
+```
+4. Run the Dev Server
+```bash
+npm run dev
+```
+🧠 How It Works
 
-## What technologies are used for this project?
+  Upload Content
+    Upload a video file, YouTube/Vimeo link, or a transcript image/text.
 
-This project is built with:
+   Transcription (Whisper)
+    Audio is transcribed using OpenAI Whisper or provided transcript is parsed.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+  Slide Generation (GPT-4)
+    The generate-slides Supabase edge function formats input into high-quality slides.
 
-## How can I deploy this project?
+  Edit + Export
+    Users can revise content and export it as PDF, Anki flashcards, or CSV.
 
-Simply open [Lovable](https://lovable.dev/projects/0c7764c6-d598-466f-8483-e2efa465649e) and click on Share -> Publish.
+📁 Project Structure
+```bash
+├── src
+│   ├── components      # UI components
+│   ├── pages           # Route views
+│   ├── services        # Supabase and OpenAI services
+│   └── edge-functions  # Supabase Edge Functions (generate-slides, etc)
+├── public              # Static assets and logo
+└── README.md
+```
+🛡 Security & Data Retention
 
-## Can I connect a custom domain to my Lovable project?
+  All user-uploaded data is stored temporarily
 
-Yes, you can!
+  Projects are auto-deleted 48 hours after upload
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+  API keys are stored securely using Supabase Edge Functions
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+  No personal data is used to train any model
+
+🧪 Roadmap
+
+File Upload + Transcription
+
+Slide Generation with GPT
+
+Slide Editor + PDF/CSV/Anki Export
+
+Collaborative Editing
+
+Theme Templates
+
+Shareable Project URLs
+
+Mobile Enhancements
+
+🧑‍💻 Contributing
+
+Got feedback or a use case in mind?
+Reach out via GitHub issues
