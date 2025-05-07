@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "./storageService";
@@ -22,6 +21,12 @@ interface Slide {
   [key: string]: any; // Allow for additional properties
 }
 
+// Define a type for extracted frames to store in project
+export interface ExtractedFrame {
+  timestamp: string;
+  imageUrl: string;
+}
+
 /**
  * Extract frames from a video at specific timestamps using client-side HTML5 Video API
  * @param projectId ID of the project
@@ -36,6 +41,34 @@ export const clientExtractFramesFromVideo = async (
   onComplete?: (frames: Array<{ timestamp: string, imageUrl: string }>) => void
 ): Promise<ClientFrameExtractionResult> => {
   try {
+    // First check if we already have extracted frames for this project
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('extracted_frames')
+      .eq('id', projectId)
+      .single();
+    
+    if (!projectError && project && project.extracted_frames) {
+      const extractedFrames = project.extracted_frames as ExtractedFrame[];
+      
+      // Check if all requested timestamps already have extracted frames
+      const missingTimestamps = timestamps.filter(timestamp => 
+        !extractedFrames.some(frame => frame.timestamp === timestamp)
+      );
+      
+      if (missingTimestamps.length === 0) {
+        console.log('All requested frames already extracted, returning them');
+        return { 
+          success: true, 
+          frames: extractedFrames
+        };
+      }
+      
+      // If we're missing some timestamps, we'll only extract those
+      console.log(`Found ${extractedFrames.length} previously extracted frames, need to extract ${missingTimestamps.length} more`);
+      timestamps = missingTimestamps;
+    }
+    
     if (!timestamps || timestamps.length === 0) {
       console.warn("No timestamps provided for frame extraction");
       return { success: false, error: "No timestamps provided" };
@@ -95,14 +128,14 @@ export const updateSlidesWithExtractedFrames = async (
     
     toast.loading("Updating slides with extracted frames...", { id: "update-slides" });
     
-    // Fetch the project to get the current slides
+    // Fetch the project to get the current slides and any previously extracted frames
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('slides')
+      .select('slides, extracted_frames')
       .eq('id', projectId)
       .single();
     
-    if (projectError || !project || !project.slides) {
+    if (projectError || !project) {
       console.error("Error fetching project slides:", projectError);
       toast.error("Failed to fetch project slides", { id: "update-slides" });
       return false;
@@ -120,7 +153,8 @@ export const updateSlidesWithExtractedFrames = async (
     };
     
     // Update each slide with matching timestamps
-    const updatedSlides = Array.isArray(project.slides) ? project.slides.map(item => {
+    const slides = Array.isArray(project.slides) ? project.slides : [];
+    const updatedSlides = slides.map(item => {
       if (!isSlideObject(item)) return item;
       
       // Create a copy of the slide to update
@@ -153,12 +187,33 @@ export const updateSlidesWithExtractedFrames = async (
       }
       
       return updatedSlide;
-    }) : [];
+    });
     
-    // Update the project with the updated slides
+    // Combine previously extracted frames with new ones
+    let allExtractedFrames: ExtractedFrame[] = [];
+    
+    // If there are existing extracted frames, include them
+    if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
+      // Filter out any frames that might be duplicated in the new batch
+      const existingFrames = project.extracted_frames as ExtractedFrame[];
+      const existingTimestamps = new Set(extractedFrames.map(f => f.timestamp));
+      
+      // Keep existing frames that don't have duplicates in the new batch
+      const uniqueExistingFrames = existingFrames.filter(frame => !existingTimestamps.has(frame.timestamp));
+      
+      allExtractedFrames = [...uniqueExistingFrames];
+    }
+    
+    // Add the new frames
+    allExtractedFrames = [...allExtractedFrames, ...extractedFrames];
+    
+    // Update the project with the updated slides and all extracted frames
     const { error: updateError } = await supabase
       .from('projects')
-      .update({ slides: updatedSlides })
+      .update({ 
+        slides: updatedSlides,
+        extracted_frames: allExtractedFrames
+      })
       .eq('id', projectId);
     
     if (updateError) {
@@ -173,5 +228,34 @@ export const updateSlidesWithExtractedFrames = async (
     console.error("Error updating slides with extracted frames:", error);
     toast.error(`Failed to update slides: ${(error as Error).message}`, { id: "update-slides" });
     return false;
+  }
+};
+
+/**
+ * Get previously extracted frames for a project
+ * @param projectId ID of the project
+ * @returns Array of extracted frames or undefined if none found
+ */
+export const getExtractedFrames = async (projectId: string): Promise<ExtractedFrame[] | undefined> => {
+  try {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('extracted_frames')
+      .eq('id', projectId)
+      .single();
+    
+    if (error) {
+      console.error("Error fetching extracted frames:", error);
+      return undefined;
+    }
+    
+    if (data && data.extracted_frames && Array.isArray(data.extracted_frames)) {
+      return data.extracted_frames as ExtractedFrame[];
+    }
+    
+    return [];
+  } catch (error) {
+    console.error("Error getting extracted frames:", error);
+    return undefined;
   }
 };

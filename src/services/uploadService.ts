@@ -44,6 +44,53 @@ export const uploadFile = async (file: File): Promise<{ path: string; url: strin
 };
 
 /**
+ * Get duration and other metadata from video file
+ * @param file Video file
+ * @returns Promise with duration in seconds and other metadata
+ */
+export const getVideoMetadata = async (file: File): Promise<{ 
+  duration: number; 
+  originalFileName: string;
+  fileType: string;
+  fileSize: number;
+} | null> => {
+  return new Promise((resolve) => {
+    try {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      
+      video.onloadedmetadata = () => {
+        // Round to nearest second for consistency
+        const duration = Math.round(video.duration);
+        resolve({
+          duration,
+          originalFileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+        });
+        URL.revokeObjectURL(video.src);
+      };
+      
+      video.onerror = () => {
+        console.error('Error loading video metadata');
+        resolve({
+          duration: 0,
+          originalFileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+        });
+        URL.revokeObjectURL(video.src);
+      };
+      
+      video.src = URL.createObjectURL(file);
+    } catch (error) {
+      console.error('Error getting video metadata:', error);
+      resolve(null);
+    }
+  });
+};
+
+/**
  * Creates a new project from an uploaded video file
  * @param file Video file to be uploaded
  * @param title Project title
@@ -66,6 +113,9 @@ export const createProjectFromVideo = async (
     if (!uploadResult) {
       throw new Error('Failed to upload video file');
     }
+
+    // Get video metadata
+    const metadata = await getVideoMetadata(file);
     
     // Create a new project
     const projectData = {
@@ -76,6 +126,13 @@ export const createProjectFromVideo = async (
       context_prompt: contextPrompt,
       transcript: transcript || null, // Add transcript if provided
       slides_per_minute: slidesPerMinute, // Add slides per minute
+      video_metadata: metadata ? {
+        duration: metadata.duration,
+        original_file_name: metadata.originalFileName,
+        file_type: metadata.fileType,
+        file_size: metadata.fileSize
+      } : null,
+      extracted_frames: [],
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 

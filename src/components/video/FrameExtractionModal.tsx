@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,7 @@ import { toast } from "sonner";
 import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 import { uploadSlideImage } from "@/services/imageService";
 import { RefreshCw, Check, X, Image, AlertTriangle, Play, PauseIcon, SkipForward } from "lucide-react";
+import { timestampToSeconds } from "@/utils/formatUtils";
 
 interface FrameExtractionModalProps {
   open: boolean;
@@ -31,6 +33,7 @@ export const FrameExtractionModal = ({
   const [uploadedFrames, setUploadedFrames] = useState<Array<{ timestamp: string, imageUrl: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [videoReady, setVideoReady] = useState<boolean>(false);
+  const [videoDuration, setVideoDuration] = useState<number>(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   
   // Step 1: Load the video when the component mounts
@@ -41,6 +44,7 @@ export const FrameExtractionModal = ({
       try {
         setError(null);
         setVideoReady(false);
+        
         // Generate the signed URL for the video - removing transformations
         const { supabase } = await import('@/integrations/supabase/client');
         const { data, error } = await supabase.storage
@@ -72,17 +76,38 @@ export const FrameExtractionModal = ({
     loadVideo();
   }, [open, videoPath]);
   
+  // Filter out timestamps that exceed video duration
+  const validTimestamps = timestamps.filter(timestamp => {
+    if (!videoDuration) return true; // Keep all if we don't know duration yet
+    const seconds = timestampToSeconds(timestamp);
+    return seconds <= videoDuration;
+  });
+  
   // Handle video loaded data event
   const handleVideoLoaded = () => {
     if (videoRef.current) {
       const video = videoRef.current;
       if (video.videoWidth > 0 && video.videoHeight > 0) {
         setVideoReady(true);
+        setVideoDuration(Math.round(video.duration));
+        
         console.log(`Video ready. Dimensions: ${video.videoWidth}x${video.videoHeight}, Duration: ${video.duration}s`);
+        
+        // Filter timestamps based on video duration
+        const invalidTimestamps = timestamps.filter(timestamp => {
+          const seconds = timestampToSeconds(timestamp);
+          return seconds > Math.round(video.duration);
+        });
+        
+        if (invalidTimestamps.length > 0) {
+          console.warn(`Found ${invalidTimestamps.length} timestamps that exceed video duration:`, invalidTimestamps);
+          toast.warning(`${invalidTimestamps.length} timestamp(s) exceed video duration and will be skipped`);
+        }
+        
         // Preload by seeking to the first timestamp to warm up the video
-        if (timestamps.length > 0) {
+        if (validTimestamps.length > 0) {
           try {
-            const firstSeconds = timestamps[0].split(':').reduce((acc, time) => (60 * acc) + +time, 0);
+            const firstSeconds = timestampToSeconds(validTimestamps[0]);
             video.currentTime = Math.min(firstSeconds, Math.floor(video.duration - 1));
           } catch (e) {
             console.warn("Failed to seek to first timestamp", e);
@@ -94,8 +119,10 @@ export const FrameExtractionModal = ({
   
   // Extract frames from the video
   const startExtraction = async () => {
-    if (!videoUrl || timestamps.length === 0) {
-      toast.error("Video URL or timestamps are missing");
+    if (!videoUrl || validTimestamps.length === 0) {
+      toast.error(validTimestamps.length === 0 ? 
+        "No valid timestamps to extract frames from" : 
+        "Video URL is missing");
       return;
     }
     
@@ -113,15 +140,16 @@ export const FrameExtractionModal = ({
     try {
       toast.loading("Extracting frames from video...", { id: "extract-frames" });
       
-      // Start the extraction process
+      // Start the extraction process with only valid timestamps
       const frames = await extractFramesFromVideoUrl(
         videoUrl,
-        timestamps,
+        validTimestamps,
         (completed, total) => {
           // Update progress
           const progressPercentage = Math.floor((completed / total) * 100);
           setProgress(progressPercentage);
-        }
+        },
+        videoDuration // Pass video duration for validation
       );
       
       // Generate preview URLs for the extracted frames
@@ -368,6 +396,19 @@ export const FrameExtractionModal = ({
             </div>
           )}
           
+          {/* Video Duration Warning */}
+          {videoReady && videoDuration > 0 && timestamps.length !== validTimestamps.length && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-md flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-amber-600" />
+              <div className="text-sm">
+                <p className="font-medium">Invalid Timestamps Detected</p>
+                <p>
+                  {timestamps.length - validTimestamps.length} timestamp(s) exceed the video duration of {videoDuration} seconds and will be skipped.
+                </p>
+              </div>
+            </div>
+          )}
+          
           {/* Video Preview */}
           {videoUrl && (
             <div className="aspect-video bg-black rounded-md overflow-hidden">
@@ -387,8 +428,8 @@ export const FrameExtractionModal = ({
           {/* Video Readiness Indicator */}
           <div className="flex justify-between items-center">
             <div className="text-sm text-muted-foreground">
-              <p>Ready to extract {timestamps.length} frames from video</p>
-              <p className="mt-1">Frames will be saved for each timestamp in your slides</p>
+              <p>Ready to extract {validTimestamps.length} frames from video</p>
+              <p className="mt-1">Frames will be saved for each valid timestamp in your slides</p>
             </div>
             <div className={`flex items-center gap-2 ${videoReady ? 'text-green-500' : 'text-amber-500'}`}>
               {videoReady ? (

@@ -20,6 +20,7 @@ import { manuallyExtractFramesForExistingProject } from "@/services/frameExtract
 import { slidesNeedFrameExtraction } from "@/services/imageService";
 import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
+import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -42,6 +43,13 @@ const ProjectPage = () => {
   const [needsFrameExtraction, setNeedsFrameExtraction] = useState<boolean>(false);
   const [allTimestamps, setAllTimestamps] = useState<string[]>([]);
   const [isFrameExtractionModalOpen, setIsFrameExtractionModalOpen] = useState<boolean>(false);
+  const [videoMetadata, setVideoMetadata] = useState<{
+    duration?: number;
+    original_file_name?: string;
+    file_type?: string;
+    file_size?: number;
+  } | null>(null);
+  const [extractedFrames, setExtractedFrames] = useState<ExtractedFrame[]>([]);
   
   const loadProject = async () => {
     if (!projectId) return;
@@ -65,6 +73,21 @@ const ProjectPage = () => {
       setTranscript(projectData.transcript || "");
       setSlidesPerMinute(projectData.slides_per_minute || 6);
       setTitle(projectData.title || "Untitled Project");
+      
+      // Extract video metadata if it exists
+      if (projectData.video_metadata) {
+        setVideoMetadata(projectData.video_metadata as {
+          duration?: number;
+          original_file_name?: string;
+          file_type?: string;
+          file_size?: number;
+        });
+      }
+      
+      // Get previously extracted frames
+      if (projectData.extracted_frames && Array.isArray(projectData.extracted_frames)) {
+        setExtractedFrames(projectData.extracted_frames as ExtractedFrame[]);
+      }
       
       // Check if the project has slides with timestamps but no images
       // Make sure we're passing an array to slidesNeedFrameExtraction
@@ -202,10 +225,40 @@ const ProjectPage = () => {
     setIsExtractingFrames(true);
     
     try {
-      const result = await clientExtractFramesFromVideo(projectId, project.source_file_path, allTimestamps);
+      // First check if we already have all the frames extracted
+      if (extractedFrames.length > 0) {
+        const allTimestampsExtracted = allTimestamps.every(timestamp => 
+          extractedFrames.some(frame => frame.timestamp === timestamp)
+        );
+        
+        if (allTimestampsExtracted) {
+          toast.success("All frames already extracted");
+          setNeedsFrameExtraction(false);
+          
+          // Update the slides with these frames
+          await updateSlidesWithExtractedFrames(projectId, extractedFrames);
+          await loadProject(); // Reload the project to get updated slides
+          return;
+        }
+      }
+      
+      // Get remaining timestamps to extract
+      const remainingTimestamps = allTimestamps.filter(timestamp => 
+        !extractedFrames.some(frame => frame.timestamp === timestamp)
+      );
+      
+      const result = await clientExtractFramesFromVideo(projectId, project.source_file_path, remainingTimestamps);
       
       if (result.success) {
-        setIsFrameExtractionModalOpen(true);
+        // If we retrieved previously extracted frames, use them directly
+        if (result.frames && result.frames.length > 0) {
+          await updateSlidesWithExtractedFrames(projectId, result.frames);
+          await loadProject(); // Reload the project with updated slides
+          setNeedsFrameExtraction(false);
+        } else {
+          // Otherwise open the frame extraction modal
+          setIsFrameExtractionModalOpen(true);
+        }
       } else {
         toast.error(`Failed to prepare frame extraction: ${result.error}`);
       }
@@ -591,16 +644,17 @@ const ProjectPage = () => {
                 size="sm" 
                 onClick={handleExtractFrames} 
                 disabled={isExtractingFrames}
+                className="w-full mt-4"
               >
                 {isExtractingFrames ? (
                   <>
-                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                    Preparing Video...
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Preparing...
                   </>
                 ) : (
                   <>
-                    <Image className="h-4 w-4 mr-1" />
-                    Extract Video Frames
+                    <Image className="h-4 w-4 mr-2" />
+                    {extractedFrames.length > 0 ? "Extract Missing Frames" : "Extract Video Frames"}
                   </>
                 )}
               </Button>
@@ -650,17 +704,83 @@ const ProjectPage = () => {
           </div>
         </div>
         
-        <div className="flex-1 overflow-hidden">
-          {isLoading ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
-                <p className="text-sm text-muted-foreground">Loading project...</p>
-              </div>
+        <div className="flex-1 overflow-hidden flex">
+          {/* Video Details Sidebar */}
+          {project?.source_type === 'video' && (
+            <div className="w-64 p-4 border-r overflow-y-auto">
+              <VideoDetailsCard
+                fileName={videoMetadata?.original_file_name}
+                duration={videoMetadata?.duration}
+                fileType={videoMetadata?.file_type}
+                fileSize={videoMetadata?.file_size}
+              />
+              
+              {/* Previously Extracted Frames */}
+              {extractedFrames.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium mb-2">Extracted Frames ({extractedFrames.length})</h3>
+                  <div className="space-y-2 mt-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      {extractedFrames.slice(0, 4).map((frame, index) => (
+                        <div key={index} className="aspect-video bg-muted rounded-md overflow-hidden relative">
+                          <img 
+                            src={frame.imageUrl} 
+                            alt={`Frame at ${frame.timestamp}`} 
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1 text-center">
+                            {frame.timestamp}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {extractedFrames.length > 4 && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        + {extractedFrames.length - 4} more frames
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Frame Extraction Button */}
+              {needsFrameExtraction && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleExtractFrames} 
+                  disabled={isExtractingFrames}
+                  className="w-full mt-4"
+                >
+                  {isExtractingFrames ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      <Image className="h-4 w-4 mr-2" />
+                      {extractedFrames.length > 0 ? "Extract Missing Frames" : "Extract Video Frames"}
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
-          ) : (
-            <SlideEditor />
           )}
+          
+          {/* Main Content Area */}
+          <div className="flex-1 overflow-hidden">
+            {isLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
+                  <p className="text-sm text-muted-foreground">Loading project...</p>
+                </div>
+              </div>
+            ) : (
+              <SlideEditor />
+            )}
+          </div>
         </div>
         
         {/* Frame Extraction Modal */}
@@ -670,7 +790,9 @@ const ProjectPage = () => {
             onClose={() => setIsFrameExtractionModalOpen(false)}
             videoPath={project.source_file_path}
             projectId={projectId || ""}
-            timestamps={allTimestamps}
+            timestamps={allTimestamps.filter(timestamp => 
+              !extractedFrames.some(frame => frame.timestamp === timestamp)
+            )}
             onComplete={handleFrameExtractionComplete}
           />
         )}

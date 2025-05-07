@@ -1,325 +1,210 @@
 /**
- * Utility for extracting frames from videos using the HTML5 Video API
+ * Extract frames from a video at specific timestamps
  */
 
 /**
- * Converts a timestamp string (HH:MM:SS) to seconds
- * @param timestamp Timestamp in HH:MM:SS format
- * @returns Number of seconds
- */
-export const timestampToSeconds = (timestamp: string): number => {
-  const parts = timestamp.split(':');
-  
-  if (parts.length === 3) {
-    // HH:MM:SS format
-    const hours = parseInt(parts[0], 10);
-    const minutes = parseInt(parts[1], 10);
-    const seconds = parseInt(parts[2], 10);
-    return hours * 3600 + minutes * 60 + seconds;
-  } else if (parts.length === 2) {
-    // MM:SS format
-    const minutes = parseInt(parts[0], 10);
-    const seconds = parseInt(parts[1], 10);
-    return minutes * 60 + seconds;
-  }
-  
-  // If format is not recognized, try parsing as seconds
-  return parseFloat(timestamp);
-};
-
-/**
- * Checks if a frame is likely black or empty
- * @param context Canvas 2D context with frame drawn
- * @param threshold Darkness threshold (0-255, lower means darker)
- * @returns Boolean indicating if the frame is black
- */
-export const isBlackFrame = (
-  context: CanvasRenderingContext2D, 
-  width: number,
-  height: number,
-  threshold: number = 20
-): boolean => {
-  // Sample pixels from the frame to determine if it's black
-  // We'll check a few points rather than the entire frame for performance
-  const sampleSize = Math.min(100, Math.floor(width * height / 100));
-  const samplePoints = [];
-  
-  // Create sampling points spread across the frame
-  for (let i = 0; i < sampleSize; i++) {
-    samplePoints.push({
-      x: Math.floor(Math.random() * width),
-      y: Math.floor(Math.random() * height)
-    });
-  }
-  
-  // Check the sample points
-  let darkPixelCount = 0;
-  for (const point of samplePoints) {
-    const pixel = context.getImageData(point.x, point.y, 1, 1).data;
-    const brightness = (pixel[0] + pixel[1] + pixel[2]) / 3;
-    if (brightness < threshold) {
-      darkPixelCount++;
-    }
-  }
-  
-  // If more than 90% of pixels are dark, consider it a black frame
-  return (darkPixelCount / sampleSize) > 0.9;
-};
-
-/**
- * Extracts a frame from a video at a specific timestamp
- * @param videoElement HTML Video element to extract from
- * @param timestamp Timestamp in seconds
- * @param maxRetries Maximum number of retry attempts
- * @returns Promise resolving to a Blob of the extracted frame
- */
-export const extractFrameFromVideo = (
-  videoElement: HTMLVideoElement,
-  timestamp: number,
-  maxRetries: number = 3
-): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    // Log video element state for debugging
-    console.log(`Extracting frame at ${timestamp}s. Video state:`, {
-      readyState: videoElement.readyState,
-      paused: videoElement.paused,
-      currentTime: videoElement.currentTime,
-      videoWidth: videoElement.videoWidth,
-      videoHeight: videoElement.videoHeight,
-      crossOrigin: videoElement.crossOrigin,
-    });
-    
-    let retryCount = 0;
-    
-    const attemptExtraction = () => {
-      // Set the current time of the video to the requested timestamp
-      videoElement.currentTime = timestamp;
-      
-      const seekTimeout = setTimeout(() => {
-        if (retryCount < maxRetries) {
-          console.warn(`Seek timeout at ${timestamp}s, retrying (${retryCount + 1}/${maxRetries})`);
-          retryCount++;
-          clearListeners();
-          attemptExtraction();
-        } else {
-          reject(new Error(`Seek timeout at timestamp ${timestamp}s after ${maxRetries} attempts`));
-        }
-      }, 10000); // 10 second timeout for seeking
-      
-      const clearListeners = () => {
-        clearTimeout(seekTimeout);
-        videoElement.onseeked = null;
-        videoElement.onerror = null;
-      };
-      
-      // Wait for the video to seek to the specified timestamp
-      videoElement.onseeked = () => {
-        clearTimeout(seekTimeout);
-        
-        try {
-          // Create a canvas element with the same dimensions as the video
-          const canvas = document.createElement('canvas');
-          const videoWidth = videoElement.videoWidth || 640;
-          const videoHeight = videoElement.videoHeight || 360;
-          
-          // Double-check that we have valid dimensions
-          if (videoWidth <= 0 || videoHeight <= 0) {
-            if (retryCount < maxRetries) {
-              console.warn(`Invalid video dimensions at ${timestamp}s, retrying (${retryCount + 1}/${maxRetries})`);
-              retryCount++;
-              clearListeners();
-              setTimeout(attemptExtraction, 500); // Wait a bit before retrying
-              return;
-            } else {
-              reject(new Error(`Invalid video dimensions at timestamp ${timestamp}s: ${videoWidth}x${videoHeight}`));
-              return;
-            }
-          }
-          
-          canvas.width = videoWidth;
-          canvas.height = videoHeight;
-          
-          // Draw the current frame to the canvas
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Failed to get canvas context'));
-            return;
-          }
-          
-          // Try to draw the frame to canvas
-          try {
-            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-            
-            // Check if it's a black frame
-            if (isBlackFrame(ctx, canvas.width, canvas.height)) {
-              if (retryCount < maxRetries) {
-                console.warn(`Black frame detected at ${timestamp}s, retrying (${retryCount + 1}/${maxRetries})`);
-                retryCount++;
-                clearListeners();
-                // Wait a bit longer before retry to ensure video is fully loaded
-                setTimeout(attemptExtraction, 1000);
-                return;
-              }
-              // Still black after retries, but we'll return it anyway as a fallback
-              console.warn(`Black frame persisted at ${timestamp}s after ${maxRetries} attempts, returning anyway`);
-            }
-          } catch (drawError) {
-            if (retryCount < maxRetries) {
-              console.error(`Drawing error at ${timestamp}s, retrying (${retryCount + 1}/${maxRetries}):`, drawError);
-              retryCount++;
-              clearListeners();
-              setTimeout(attemptExtraction, 500);
-              return;
-            }
-            reject(new Error(`CORS error or failed to draw video frame: ${drawError.message}`));
-            return;
-          }
-          
-          // Convert the canvas to a blob
-          canvas.toBlob((blob) => {
-            if (blob) {
-              console.log(`Successfully extracted frame at ${timestamp}s, blob size: ${blob.size} bytes`);
-              resolve(blob);
-            } else {
-              reject(new Error('Failed to create blob from canvas'));
-            }
-          }, 'image/jpeg', 0.9); // JPEG with 90% quality
-        } catch (error) {
-          reject(error);
-        }
-      };
-      
-      // Handle errors
-      videoElement.onerror = () => {
-        clearTimeout(seekTimeout);
-        reject(new Error(`Video error at timestamp ${timestamp}s: ${videoElement.error?.message || 'Unknown error'}`));
-      };
-    };
-    
-    attemptExtraction();
-  });
-};
-
-/**
- * Creates a video element and loads a video from a URL
- * @param videoUrl URL of the video to load
- * @returns Promise resolving to a loaded video element
- */
-export const createVideoElement = (videoUrl: string): Promise<HTMLVideoElement> => {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.crossOrigin = 'anonymous'; // Required for canvas operations with cross-origin videos
-    video.preload = 'auto';
-    video.muted = true;
-    
-    // Enhanced CORS handling
-    video.setAttribute('crossOrigin', 'anonymous');
-    
-    // Enable cors mode and prevent caching
-    const corsUrl = new URL(videoUrl);
-    corsUrl.searchParams.append('cors', 'true');
-    corsUrl.searchParams.append('_cache', Date.now().toString());
-    
-    console.log(`Loading video from ${corsUrl.toString()} with enhanced CORS handling`);
-    
-    // Set up event handlers
-    const loadTimeout = setTimeout(() => {
-      console.error('Video loading timeout');
-      reject(new Error('Video loading timeout after 30 seconds'));
-    }, 30000); // 30 second timeout
-    
-    const handleVideoReady = () => {
-      clearTimeout(loadTimeout);
-      
-      // Force the video to load a bit more content
-      video.currentTime = 0.1;
-      
-      // Check if video dimensions are available
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        console.log(`Video loaded successfully. Dimensions: ${video.videoWidth}x${video.videoHeight}`);
-        resolve(video);
-      } else {
-        console.warn('Video loaded but dimensions not available, waiting for loadeddata');
-        video.addEventListener('loadeddata', () => {
-          console.log(`Video data loaded. Dimensions: ${video.videoWidth}x${video.videoHeight}`);
-          resolve(video);
-        }, { once: true });
-      }
-    };
-    
-    video.addEventListener('loadedmetadata', () => {
-      console.log('Video metadata loaded, dimensions might not be available yet');
-      
-      // Try to get dimensions right away if possible
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        handleVideoReady();
-      } else {
-        // Otherwise wait for loadeddata event
-        video.addEventListener('loadeddata', handleVideoReady, { once: true });
-      }
-    }, { once: true });
-    
-    video.addEventListener('error', () => {
-      clearTimeout(loadTimeout);
-      const errorMessage = video.error ? `Video error: ${video.error.code} - ${video.error.message}` : 'Unknown video error';
-      console.error(errorMessage);
-      reject(new Error(`Failed to load video: ${errorMessage}`));
-    }, { once: true });
-    
-    // Set the source and start loading
-    video.src = corsUrl.toString();
-    video.load();
-  });
-};
-
-/**
- * Extract frames from a video URL at specific timestamps
- * @param videoUrl URL of the video to extract frames from
- * @param timestamps Array of timestamps in format "HH:MM:SS"
- * @param onProgress Optional callback for progress updates
- * @returns Promise resolving to an array of extracted frames with timestamps
+ * Extract frames from a video at specific timestamps
+ * @param videoUrl URL of the video file
+ * @param timestamps Array of timestamps in format "HH:MM:SS" to extract frames at
+ * @param onProgress Optional progress callback (completed, total)
+ * @param videoDuration Optional video duration in seconds (for validation)
+ * @returns Array of extracted frames with their timestamps
  */
 export const extractFramesFromVideoUrl = async (
   videoUrl: string,
   timestamps: string[],
-  onProgress?: (completed: number, total: number) => void
+  onProgress?: (completed: number, total: number) => void,
+  videoDuration?: number
 ): Promise<Array<{ timestamp: string, frame: Blob }>> => {
-  // Create and load the video element
-  console.log(`Starting frame extraction for ${timestamps.length} timestamps`);
-  const video = await createVideoElement(videoUrl);
-  
-  // Convert timestamps to seconds
-  const timestampsInSeconds = timestamps.map(t => ({
-    original: t,
-    seconds: timestampToSeconds(t)
-  }));
-  
-  // Sort timestamps to process them in order
-  timestampsInSeconds.sort((a, b) => a.seconds - b.seconds);
-  
-  const results: Array<{ timestamp: string, frame: Blob }> = [];
-  let completed = 0;
-  
-  // Process each timestamp
-  for (const { original, seconds } of timestampsInSeconds) {
-    try {
-      console.log(`Extracting frame at timestamp ${original} (${seconds}s)`);
-      const frame = await extractFrameFromVideo(video, seconds);
+  try {
+    if (!timestamps || timestamps.length === 0) {
+      throw new Error('No timestamps provided for frame extraction');
+    }
+    
+    console.log(`Extracting ${timestamps.length} frames from video`);
+    
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.preload = 'auto';
+      video.muted = true;
       
-      results.push({
-        timestamp: original,
-        frame
+      // Enhanced CORS handling
+      video.setAttribute('crossOrigin', 'anonymous');
+      
+      // Enable cors mode and prevent caching
+      const corsUrl = new URL(videoUrl);
+      corsUrl.searchParams.append('cors', 'true');
+      corsUrl.searchParams.append('_cache', Date.now().toString());
+      
+      console.log(`Loading video from ${corsUrl.toString()} with enhanced CORS handling`);
+      
+      // Set up event handlers
+      const loadTimeout = setTimeout(() => {
+        reject(new Error('Video load timeout after 30 seconds'));
+        // Clean up the video element
+        video.src = '';
+        video.load();
+      }, 30000); // 30 seconds timeout
+      
+      const extractedFrames: Array<{ timestamp: string, frame: Blob }> = [];
+      let completedExtractions = 0;
+      
+      // Convert timestamps to seconds for easier comparison
+      const timestampsInSeconds = timestamps.map(timestamp => {
+        const parts = timestamp.split(':').map(part => parseInt(part, 10));
+        if (parts.length === 3) {
+          return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        } else if (parts.length === 2) {
+          return parts[0] * 60 + parts[1];
+        }
+        return 0;
       });
       
-      completed++;
-      if (onProgress) {
-        onProgress(completed, timestampsInSeconds.length);
-      }
-    } catch (error) {
-      console.error(`Failed to extract frame at ${original}:`, error);
-      // Continue with other timestamps even if one fails
-    }
+      // Function to extract a frame at the current playback position
+      const extractCurrentFrame = (): Blob | null => {
+        try {
+          // Create a canvas at the current video dimensions
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          
+          // Draw the current frame to the canvas
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            console.error('Could not get 2D context from canvas');
+            return null;
+          }
+          
+          // Draw the video frame on the canvas
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // Convert canvas to blob
+          const dataURL = canvas.toDataURL('image/jpeg', 0.92); // Use 92% quality JPEG
+          const base64 = dataURL.split(',')[1];
+          const byteCharacters = atob(base64);
+          const byteArrays = [];
+          
+          for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+            const slice = byteCharacters.slice(offset, offset + 512);
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+              byteNumbers[i] = slice.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+          }
+          
+          return new Blob(byteArrays, { type: 'image/jpeg' });
+        } catch (error) {
+          console.error('Error extracting frame:', error);
+          return null;
+        }
+      };
+      
+      // Process each timestamp in sequence
+      const processNextTimestamp = (index: number) => {
+        if (index >= timestamps.length) {
+          // All timestamps processed
+          clearTimeout(loadTimeout);
+          onProgress?.(timestamps.length, timestamps.length);
+          
+          // Clean up and resolve
+          video.src = '';
+          video.load();
+          resolve(extractedFrames);
+          return;
+        }
+        
+        const currentTimestamp = timestamps[index];
+        const seekTime = timestampsInSeconds[index];
+        
+        // Skip invalid timestamps (beyond video duration)
+        if (videoDuration && seekTime > videoDuration) {
+          console.warn(`Skipping timestamp ${currentTimestamp} (${seekTime}s) as it exceeds video duration (${videoDuration}s)`);
+          completedExtractions++;
+          onProgress?.(completedExtractions, timestamps.length);
+          processNextTimestamp(index + 1);
+          return;
+        }
+        
+        // Seek to the current timestamp
+        video.currentTime = seekTime;
+      };
+      
+      // When the video can seek, set up the 'seeked' event to extract frames
+      video.addEventListener('canplay', () => {
+        clearTimeout(loadTimeout);
+        
+        // When seeking is complete, extract the frame
+        video.addEventListener('seeked', () => {
+          console.log(`Extracting frame at timestamp ${timestamps[completedExtractions]} (${Math.round(video.currentTime)}s)`);
+          
+          const currentTimestamp = timestamps[completedExtractions];
+          const frame = extractCurrentFrame();
+          
+          if (frame) {
+            extractedFrames.push({
+              timestamp: currentTimestamp,
+              frame
+            });
+          } else {
+            console.error(`Failed to extract frame at timestamp ${currentTimestamp}`);
+          }
+          
+          completedExtractions++;
+          onProgress?.(completedExtractions, timestamps.length);
+          
+          // Process the next timestamp
+          processNextTimestamp(completedExtractions);
+        });
+        
+        // Get actual video duration for validation
+        if (!videoDuration) {
+          videoDuration = Math.round(video.duration);
+          console.log(`Video duration detected: ${videoDuration} seconds`);
+        }
+        
+        // Start processing the first timestamp
+        processNextTimestamp(0);
+      });
+      
+      // Handle errors
+      video.addEventListener('error', (e) => {
+        clearTimeout(loadTimeout);
+        console.error('Video error:', video.error);
+        reject(new Error(`Video error: ${video.error ? video.error.message : 'unknown error'}`));
+        
+        // Clean up the video element
+        video.src = '';
+        video.load();
+      });
+      
+      // Start loading the video
+      video.src = corsUrl.toString();
+      video.load();
+    });
+  } catch (error) {
+    console.error('Error in extractFramesFromVideoUrl:', error);
+    throw error;
+  }
+};
+
+/**
+ * Convert a timestamp in format "HH:MM:SS" to seconds
+ * @param timestamp Timestamp string in format "HH:MM:SS" or "MM:SS"
+ * @returns Number of seconds
+ */
+const timestampToSeconds = (timestamp: string): number => {
+  const parts = timestamp.split(':').map(part => parseInt(part, 10));
+  
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  } else if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  } else if (parts.length === 1) {
+    return parts[0];
   }
   
-  return results;
+  return 0;
 };
