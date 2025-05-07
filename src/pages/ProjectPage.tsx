@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Project, fetchProjectById, updateProject } from "@/services/projectService";
@@ -5,7 +6,7 @@ import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RefreshCw, Settings2, FileText, SliderIcon } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon } from "lucide-react";
 import { generateSlidesForProject, hasValidSlides } from "@/services/slideGenerationService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ContextPromptInput } from "@/components/upload/ContextPromptInput";

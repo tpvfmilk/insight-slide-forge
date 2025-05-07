@@ -1,9 +1,8 @@
-
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Laptop, Home, UsersRound, FilePlus, AlignLeft, ChevronRight } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
-import { useMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useEffect, useState } from "react";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
@@ -16,7 +15,7 @@ interface SidebarProps {
 
 export function InsightSidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     projects: true,
   });
