@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon, Edit2, Image } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon, Edit2, Image, Film } from "lucide-react";
 import { generateSlidesForProject, hasValidSlides } from "@/services/slideGenerationService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
@@ -16,10 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "@/services/storageService";
-import { manuallyExtractFramesForExistingProject } from "@/services/frameExtractionService";
 import { slidesNeedFrameExtraction } from "@/services/imageService";
 import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
+import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
 
 const ProjectPage = () => {
@@ -43,6 +43,7 @@ const ProjectPage = () => {
   const [needsFrameExtraction, setNeedsFrameExtraction] = useState<boolean>(false);
   const [allTimestamps, setAllTimestamps] = useState<string[]>([]);
   const [isFrameExtractionModalOpen, setIsFrameExtractionModalOpen] = useState<boolean>(false);
+  const [isFramePickerModalOpen, setIsFramePickerModalOpen] = useState<boolean>(false);
   const [videoMetadata, setVideoMetadata] = useState<{
     duration?: number;
     original_file_name?: string;
@@ -286,6 +287,36 @@ const ProjectPage = () => {
       setNeedsFrameExtraction(false);
       toast.success("Frame extraction completed successfully");
     }
+  };
+  
+  const handleManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]) => {
+    if (!projectId) return;
+    
+    setIsFramePickerModalOpen(false);
+    
+    if (selectedFrames.length === 0) {
+      toast.info("No frames were selected");
+      return;
+    }
+    
+    // Update the project's slides with the selected frames
+    const success = await updateSlidesWithExtractedFrames(projectId, selectedFrames);
+    
+    if (success) {
+      // Reload the project to get the updated slides with images
+      await loadProject();
+      setNeedsFrameExtraction(false);
+      toast.success(`${selectedFrames.length} frames have been applied to your slides`);
+    }
+  };
+  
+  const handleOpenManualFramePicker = () => {
+    if (!project?.source_file_path) {
+      toast.error("No video source available");
+      return;
+    }
+    
+    setIsFramePickerModalOpen(true);
   };
   
   const handleSaveContext = async () => {
@@ -637,6 +668,18 @@ const ProjectPage = () => {
               </DialogContent>
             </Dialog>
             
+            {/* Frame Selection Button */}
+            {project?.source_type === 'video' && project?.source_file_path && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleOpenManualFramePicker}
+              >
+                <Film className="h-4 w-4 mr-2" />
+                Select Video Frames
+              </Button>
+            )}
+            
             {/* Extract Frames Button */}
             {needsFrameExtraction && (
               <Button 
@@ -729,6 +772,19 @@ const ProjectPage = () => {
             onComplete={handleFrameExtractionComplete}
             videoMetadata={videoMetadata || undefined}
             previouslyExtractedFrames={extractedFrames}
+          />
+        )}
+        
+        {/* Frame Picker Modal */}
+        {project && project.source_file_path && (
+          <FramePickerModal
+            open={isFramePickerModalOpen}
+            onClose={() => setIsFramePickerModalOpen(false)}
+            videoPath={project.source_file_path}
+            projectId={projectId || ""}
+            onComplete={handleManualFrameSelectionComplete}
+            videoMetadata={videoMetadata || undefined}
+            existingFrames={extractedFrames}
           />
         )}
       </div>

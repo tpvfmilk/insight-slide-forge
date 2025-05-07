@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "./storageService";
@@ -26,6 +25,8 @@ interface Slide {
 export interface ExtractedFrame {
   timestamp: string;
   imageUrl: string;
+  // Make it Json-compatible with an index signature
+  [key: string]: string | number | boolean | null | undefined;
 }
 
 /**
@@ -261,5 +262,165 @@ export const getExtractedFrames = async (projectId: string): Promise<ExtractedFr
   } catch (error) {
     console.error("Error getting extracted frames:", error);
     return undefined;
+  }
+};
+
+/**
+ * Manually capture a frame at the current video time
+ * @param videoElement HTML video element to capture frame from
+ * @param timestamp String timestamp of the current position
+ * @returns The captured frame as a Blob
+ */
+export const captureFrameFromVideoElement = (
+  videoElement: HTMLVideoElement,
+  timestamp: string
+): Blob | null => {
+  try {
+    if (!videoElement || videoElement.readyState < 2) {
+      console.error("Video element is not ready for frame capture");
+      return null;
+    }
+
+    // Create a canvas with the video dimensions
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+
+    // Draw the current frame to the canvas
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      console.error('Could not get 2D context from canvas');
+      return null;
+    }
+
+    // Draw the video frame on the canvas
+    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+    // Convert canvas to blob
+    const blob = canvas.toBlob((blob) => {
+      return blob;
+    }, 'image/jpeg', 0.92);
+
+    // For synchronous return, we need to use a different approach
+    const dataURL = canvas.toDataURL('image/jpeg', 0.92);
+    const base64 = dataURL.split(',')[1];
+    const byteCharacters = atob(base64);
+    const byteArrays = [];
+    
+    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+      const slice = byteCharacters.slice(offset, offset + 512);
+      const byteNumbers = new Array(slice.length);
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      byteArrays.push(byteArray);
+    }
+    
+    return new Blob(byteArrays, { type: 'image/jpeg' });
+  } catch (error) {
+    console.error("Error capturing frame:", error);
+    return null;
+  }
+};
+
+/**
+ * Upload a manually captured frame and associate it with a project
+ * @param projectId ID of the project
+ * @param frameBlob Blob object containing the captured frame
+ * @param timestamp String timestamp of when the frame was captured
+ * @returns Promise resolving to the uploaded frame info or null if fails
+ */
+export const uploadManuallySelectedFrame = async (
+  projectId: string,
+  frameBlob: Blob,
+  timestamp: string
+): Promise<ExtractedFrame | null> => {
+  try {
+    toast.loading("Uploading selected frame...", { id: "upload-frame" });
+    
+    // Create a file name based on timestamp and project ID
+    const fileName = `manual-frame-${timestamp.replace(/:/g, '-')}-${projectId}.jpg`;
+    const file = new File([frameBlob], fileName, { type: 'image/jpeg' });
+    
+    // Import the uploadSlideImage function from imageService
+    const { uploadSlideImage } = await import("@/services/imageService");
+    
+    // Upload the frame
+    const uploadResult = await uploadSlideImage(file);
+    
+    if (!uploadResult) {
+      toast.error("Failed to upload selected frame", { id: "upload-frame" });
+      return null;
+    }
+    
+    const frameInfo: ExtractedFrame = {
+      timestamp,
+      imageUrl: uploadResult.url,
+      captureMethod: "manual", // Add metadata to distinguish manually captured frames
+    };
+    
+    toast.success("Frame uploaded successfully", { id: "upload-frame" });
+    return frameInfo;
+    
+  } catch (error) {
+    console.error("Error uploading manually selected frame:", error);
+    toast.error(`Upload failed: ${(error as Error).message}`, { id: "upload-frame" });
+    return null;
+  }
+};
+
+/**
+ * Add a manually selected frame to a project's extracted_frames
+ * @param projectId ID of the project
+ * @param frameInfo Frame information including timestamp and imageUrl
+ * @returns Promise resolving to true if successful, false otherwise
+ */
+export const addManuallySelectedFrameToProject = async (
+  projectId: string,
+  frameInfo: ExtractedFrame
+): Promise<boolean> => {
+  try {
+    // Fetch the project to get existing extracted frames
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('extracted_frames')
+      .eq('id', projectId)
+      .single();
+    
+    if (projectError) {
+      console.error("Error fetching project for frame addition:", projectError);
+      return false;
+    }
+    
+    // Initialize the extracted_frames array or use the existing one
+    let extractedFrames: ExtractedFrame[] = [];
+    
+    if (project?.extracted_frames) {
+      if (Array.isArray(project.extracted_frames)) {
+        extractedFrames = project.extracted_frames as unknown as ExtractedFrame[];
+      }
+    }
+    
+    // Add the new frame
+    extractedFrames.push(frameInfo);
+    
+    // Update the project with the new extracted_frames array
+    const { error: updateError } = await supabase
+      .from('projects')
+      .update({ 
+        extracted_frames: extractedFrames as unknown as Json
+      })
+      .eq('id', projectId);
+    
+    if (updateError) {
+      console.error("Error updating project with new frame:", updateError);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error adding frame to project:", error);
+    return false;
   }
 };

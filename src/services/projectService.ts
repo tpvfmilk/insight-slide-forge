@@ -32,13 +32,16 @@ export const fetchRecentProjects = async (limit: number = 3): Promise<Project[]>
   }
 
   // Cast data to Project[] with proper handling of JSON fields
-  return (data || []).map(project => ({
-    ...project,
-    // Cast video_metadata JSON to the correct type if present
-    video_metadata: project.video_metadata as Project['video_metadata'],
-    // Cast extracted_frames JSON to the correct type if present
-    extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | undefined
-  }));
+  return (data || []).map(project => {
+    const typedProject: Project = {
+      ...project,
+      // Cast video_metadata JSON to the correct type if present
+      video_metadata: project.video_metadata as Project['video_metadata'],
+      // Cast extracted_frames JSON to the correct type if present
+      extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | undefined
+    };
+    return typedProject;
+  });
 };
 
 /**
@@ -60,13 +63,15 @@ export const fetchProjectById = async (id: string): Promise<Project | null> => {
   if (!data) return null;
 
   // Cast data to Project with proper handling of JSON fields
-  return {
+  const typedProject: Project = {
     ...data,
     // Cast video_metadata JSON to the correct type if present
     video_metadata: data.video_metadata as Project['video_metadata'],
     // Cast extracted_frames JSON to the correct type if present
     extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | undefined
   };
+  
+  return typedProject;
 };
 
 /**
@@ -86,13 +91,15 @@ export const createProject = async (projectData: Omit<Project, 'id' | 'created_a
   }
 
   // Cast data to Project with proper handling of JSON fields
-  return {
+  const typedProject: Project = {
     ...data,
     // Cast video_metadata JSON to the correct type if present
     video_metadata: data.video_metadata as Project['video_metadata'],
     // Cast extracted_frames JSON to the correct type if present
     extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | undefined
   };
+  
+  return typedProject;
 };
 
 /**
@@ -101,14 +108,32 @@ export const createProject = async (projectData: Omit<Project, 'id' | 'created_a
  * @param projectData Updated project data
  */
 export const updateProject = async (id: string, projectData: Partial<Project>): Promise<void> => {
-  const { error } = await supabase
-    .from('projects')
-    .update(projectData)
-    .eq('id', id);
+  // If projectData contains extracted_frames, ensure it's cast correctly for Supabase
+  if (projectData.extracted_frames) {
+    const updatedData = {
+      ...projectData,
+      extracted_frames: projectData.extracted_frames as unknown as Json
+    };
+    
+    const { error } = await supabase
+      .from('projects')
+      .update(updatedData)
+      .eq('id', id);
 
-  if (error) {
-    console.error(`Error updating project with ID ${id}:`, error);
-    throw error;
+    if (error) {
+      console.error(`Error updating project with ID ${id}:`, error);
+      throw error;
+    }
+  } else {
+    const { error } = await supabase
+      .from('projects')
+      .update(projectData)
+      .eq('id', id);
+
+    if (error) {
+      console.error(`Error updating project with ID ${id}:`, error);
+      throw error;
+    }
   }
 };
 
