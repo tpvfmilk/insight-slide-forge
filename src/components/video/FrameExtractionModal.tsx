@@ -59,7 +59,11 @@ export const FrameExtractionModal = ({
           return;
         }
         
-        setVideoUrl(data.signedUrl);
+        // Add a cache-busting parameter to prevent caching issues
+        const videoUrlWithCache = new URL(data.signedUrl);
+        videoUrlWithCache.searchParams.append('_cache', Date.now().toString());
+        
+        setVideoUrl(videoUrlWithCache.toString());
         console.log("Successfully loaded video with secure URL");
       } catch (error) {
         console.error("Error loading video:", error);
@@ -315,8 +319,23 @@ export const FrameExtractionModal = ({
   // Handle video loading error
   const handleVideoError = () => {
     if (videoRef.current) {
-      setError(`Video failed to load: ${videoRef.current.error?.message || "Unknown error"}`);
-      console.error("Video error:", videoRef.current.error);
+      const videoError = videoRef.current.error;
+      let errorMessage = "Unknown error";
+      
+      if (videoError) {
+        errorMessage = `${videoError.message} (code: ${videoError.code})`;
+        // Log detailed error information
+        console.error("Video error details:", {
+          code: videoError.code,
+          message: videoError.message,
+          MEDIA_ERR_ABORTED: videoError.MEDIA_ERR_ABORTED,
+          MEDIA_ERR_NETWORK: videoError.MEDIA_ERR_NETWORK,
+          MEDIA_ERR_DECODE: videoError.MEDIA_ERR_DECODE,
+          MEDIA_ERR_SRC_NOT_SUPPORTED: videoError.MEDIA_ERR_SRC_NOT_SUPPORTED
+        });
+      }
+      
+      setError(`Video failed to load: ${errorMessage}`);
     }
   };
   
@@ -328,7 +347,7 @@ export const FrameExtractionModal = ({
         </DialogHeader>
         
         <div className="p-4 space-y-6">
-          {/* Error Message */}
+          {/* Error Message with enhanced troubleshooting info */}
           {error && (
             <div className="bg-destructive/10 text-destructive p-4 rounded-md flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
@@ -339,9 +358,14 @@ export const FrameExtractionModal = ({
                   Common issues:
                   <ul className="list-disc list-inside ml-2 mt-1">
                     <li>Browser security restrictions for video access</li>
-                    <li>Video storage bucket permissions</li>
+                    <li>Video storage bucket permissions (make sure video_uploads bucket is public)</li>
                     <li>Network connectivity issues</li>
+                    <li>Format not supported by your browser</li>
+                    <li>CORS configuration preventing video access</li>
                   </ul>
+                </p>
+                <p className="mt-1 text-xs">
+                  Troubleshooting: Try refreshing the page or uploading the video in a different format.
                 </p>
               </div>
             </div>

@@ -1,4 +1,3 @@
-
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "./storageService";
@@ -48,21 +47,6 @@ export const clientExtractFramesFromVideo = async (
     
     // Ensure storage buckets are initialized before proceeding
     await initializeStorage();
-    
-    // Verify slide_stills bucket exists
-    try {
-      const { data: bucketData, error: bucketError } = await supabase
-        .storage
-        .getBucket('slide_stills');
-        
-      if (bucketError) {
-        console.error("Error checking slide_stills bucket:", bucketError);
-      } else {
-        console.log("Verified slide_stills bucket exists:", bucketData);
-      }
-    } catch (bucketCheckError) {
-      console.warn("Failed to verify slide_stills bucket:", bucketCheckError);
-    }
     
     // Generate a signed URL for the video with an expiration of 1 hour and CORS settings
     const { data, error } = await supabase.storage.from('video_uploads')

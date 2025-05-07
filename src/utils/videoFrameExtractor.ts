@@ -212,12 +212,12 @@ export const createVideoElement = (videoUrl: string): Promise<HTMLVideoElement> 
     video.preload = 'auto';
     video.muted = true;
     
-    // Enable cors mode explicitly
-    const corsMode = (videoUrl.includes('?')) 
-      ? `${videoUrl}&cors=true` 
-      : `${videoUrl}?cors=true`;
+    // Enable cors mode and prevent caching
+    const corsUrl = new URL(videoUrl);
+    corsUrl.searchParams.append('cors', 'true');
+    corsUrl.searchParams.append('_cache', Date.now().toString());
     
-    console.log(`Loading video from ${corsMode}`);
+    console.log(`Loading video from ${corsUrl.toString()}`);
     
     // Set up event handlers
     const loadTimeout = setTimeout(() => {
@@ -258,12 +258,13 @@ export const createVideoElement = (videoUrl: string): Promise<HTMLVideoElement> 
     
     video.addEventListener('error', () => {
       clearTimeout(loadTimeout);
-      console.error(`Video loading error: ${video.error?.message || 'Unknown error'}`);
-      reject(new Error(`Failed to load video: ${video.error?.message || 'Unknown error'}`));
+      const errorMessage = video.error ? `Video error: ${video.error.code} - ${video.error.message}` : 'Unknown video error';
+      console.error(errorMessage);
+      reject(new Error(`Failed to load video: ${errorMessage}`));
     }, { once: true });
     
     // Set the source and start loading
-    video.src = corsMode;
+    video.src = corsUrl.toString();
     video.load();
   });
 };
