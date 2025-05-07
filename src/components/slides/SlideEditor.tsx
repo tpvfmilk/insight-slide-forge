@@ -704,17 +704,18 @@ export const SlideEditor = () => {
           <ChevronRight className="h-4 w-4 ml-1" />
         </Button>
       </div>
+
+      {/* Frame Extraction Modal - Properly placed inside the component return */}
+      {videoPath && (
+        <FrameExtractionModal
+          open={isFrameExtractionModalOpen}
+          onClose={() => setIsFrameExtractionModalOpen(false)}
+          videoPath={videoPath}
+          projectId={projectId || ""}
+          timestamps={timestamps}
+          onComplete={handleFrameExtractionComplete}
+        />
+      )}
     </div>
   );
 };
-
-{videoPath && (
-  <FrameExtractionModal
-    open={isFrameExtractionModalOpen}
-    onClose={() => setIsFrameExtractionModalOpen(false)}
-    videoPath={videoPath}
-    projectId={projectId || ""}
-    timestamps={timestamps}
-    onComplete={handleFrameExtractionComplete}
-  />
-)}
