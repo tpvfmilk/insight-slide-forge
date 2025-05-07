@@ -151,18 +151,20 @@ export const createProjectFromUrl = async (
 /**
  * Creates a new project from transcript text
  * @param transcript Transcript text
- * @param title Project title
- * @param contextPrompt Optional context prompt to guide slide generation
+ * @param title Project title (optional)
+ * @param contextPrompt Optional context prompt to guide slide generation (optional)
+ * @param imageFile Optional image file to attach to the project (optional)
  * @returns The created project
  */
 export const createProjectFromTranscript = async (
   transcript: string, 
   title: string = 'New Project',
-  contextPrompt: string = ''
+  contextPrompt: string = '',
+  imageFile?: File | null
 ): Promise<Project | null> => {
   try {
-    // Create a new project
-    const projectData = {
+    // Initialize the project data
+    const projectData: any = {
       title: title || 'Project from transcript',
       source_type: 'transcript',
       transcript: transcript,
@@ -170,7 +172,18 @@ export const createProjectFromTranscript = async (
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 
-    const project = await createProject(projectData as any);
+    // If an image file was provided, upload it
+    if (imageFile) {
+      const uploadResult = await uploadFile(imageFile);
+      
+      if (uploadResult) {
+        projectData.image_path = uploadResult.path;
+        projectData.image_url = uploadResult.url;
+      }
+    }
+
+    // Create the project
+    const project = await createProject(projectData);
     
     toast.success('Project created successfully');
     return project;

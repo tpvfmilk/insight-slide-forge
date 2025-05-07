@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,9 +29,8 @@ export const TranscriptUpload = () => {
       // Create project from transcript text - now with context prompt
       const project = await createProjectFromTranscript(
         transcriptText, 
-        undefined, 
-        imageFile, 
-        contextPrompt
+        undefined, // title parameter (using default)
+        contextPrompt // contextPrompt parameter
       );
       
       if (project) {
