@@ -10,7 +10,11 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -36,6 +40,7 @@ serve(async (req) => {
     ];
 
     console.log("Starting storage initialization...");
+    const results = [];
 
     for (const bucket of buckets) {
       // Check if bucket exists
@@ -56,11 +61,26 @@ serve(async (req) => {
 
           if (createBucketError) {
             console.error(`Error creating bucket ${bucket.id}:`, createBucketError);
+            results.push({ 
+              bucket: bucket.id, 
+              status: 'error', 
+              message: `Failed to create bucket: ${createBucketError.message}` 
+            });
           } else {
             console.log(`Created bucket: ${bucket.id}`);
+            results.push({ 
+              bucket: bucket.id, 
+              status: 'created', 
+              message: 'Bucket created successfully' 
+            });
           }
         } else {
           console.error(`Error checking bucket ${bucket.id}:`, getBucketError);
+          results.push({ 
+            bucket: bucket.id, 
+            status: 'error', 
+            message: `Failed to check bucket: ${getBucketError.message}` 
+          });
         }
       } else {
         console.log(`Bucket already exists: ${bucket.id}`);
@@ -75,14 +95,31 @@ serve(async (req) => {
         
         if (updateError) {
           console.error(`Error updating bucket ${bucket.id}:`, updateError);
+          results.push({ 
+            bucket: bucket.id, 
+            status: 'error', 
+            message: `Failed to update bucket: ${updateError.message}` 
+          });
         } else {
           console.log(`Updated bucket settings: ${bucket.id}`);
+          results.push({ 
+            bucket: bucket.id, 
+            status: 'updated', 
+            message: 'Bucket settings updated successfully' 
+          });
         }
       }
     }
 
+    // Check if any bucket setup had errors
+    const hasErrors = results.some(result => result.status === 'error');
+
     return new Response(
-      JSON.stringify({ success: true, message: "Storage initialization completed" }),
+      JSON.stringify({ 
+        success: !hasErrors, 
+        message: "Storage initialization completed", 
+        results 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {

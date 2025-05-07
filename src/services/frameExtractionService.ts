@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { initializeStorage } from "./storageService";
 
 interface FrameExtractionResult {
   success: boolean;
@@ -45,6 +46,27 @@ export const extractFramesFromVideo = async (
       
       toast.success("Generated placeholder frames for local development", { id: "extract-frames" });
       return { success: true, frames: placeholderFrames };
+    }
+    
+    // Ensure storage buckets are initialized before proceeding
+    await initializeStorage();
+    
+    // Verify slide_images bucket exists
+    try {
+      const { data: bucketData, error: bucketError } = await supabase
+        .storage
+        .getBucket('slide_images');
+        
+      if (bucketError) {
+        console.error("Error checking slide_images bucket:", bucketError);
+        // We'll continue anyway because the init-storage function should have created it
+        // and the extract-frames function will also try to create it if needed
+      } else {
+        console.log("Verified slide_images bucket exists:", bucketData);
+      }
+    } catch (bucketCheckError) {
+      console.warn("Failed to verify slide_images bucket:", bucketCheckError);
+      // Continue with frame extraction attempt
     }
     
     // Call the edge function to extract frames
@@ -99,6 +121,9 @@ export const extractFramesFromVideo = async (
     if (validFrames.length < frames.length) {
       console.warn(`Some frames were invalid: ${frames.length - validFrames.length} out of ${frames.length}`);
     }
+    
+    // Log the frame URLs for debugging
+    console.log("Frame URLs:", validFrames.map(f => f.imageUrl));
     
     toast.success(`Successfully extracted ${validFrames.length} frames`, { id: "extract-frames" });
     return { success: true, frames: validFrames };

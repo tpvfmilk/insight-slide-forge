@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Project } from "@/services/projectService";
 import { extractFramesFromVideo, mapTimestampsToImages } from "@/services/frameExtractionService";
+import { initializeStorage } from "@/services/storageService";
 
 /**
  * Initiates the slide generation process for a project
@@ -12,6 +13,9 @@ import { extractFramesFromVideo, mapTimestampsToImages } from "@/services/frameE
 export const generateSlidesForProject = async (projectId: string): Promise<{ success: boolean; slides?: any[] }> => {
   try {
     toast.loading("Generating slides...", { id: "generate-slides" });
+    
+    // Ensure storage buckets are initialized before generating slides
+    await initializeStorage();
     
     // Fetch the project to get context_prompt and slides_per_minute if available
     const { data: project, error: projectError } = await supabase

@@ -75,6 +75,64 @@ async function extractFrameWithFFmpeg(
   }
 }
 
+// Function to ensure the slide_images bucket exists
+async function ensureSlideImagesBucketExists(): Promise<boolean> {
+  try {
+    console.log("Checking if slide_images bucket exists");
+    
+    // Try to get the bucket
+    const { data: bucket, error: getBucketError } = await supabase
+      .storage
+      .getBucket('slide_images');
+      
+    if (getBucketError) {
+      if (getBucketError.message === 'The resource was not found') {
+        console.log("slide_images bucket doesn't exist, creating it now");
+        
+        // Create the bucket
+        const { error: createError } = await supabase
+          .storage
+          .createBucket('slide_images', {
+            public: true,
+            fileSizeLimit: 5242880 // 5MB
+          });
+          
+        if (createError) {
+          console.error("Error creating slide_images bucket:", createError);
+          return false;
+        } else {
+          console.log("Created slide_images bucket successfully");
+          return true;
+        }
+      } else {
+        console.error("Error checking slide_images bucket:", getBucketError);
+        return false;
+      }
+    } else {
+      console.log("slide_images bucket already exists");
+      
+      // Ensure the bucket is public
+      const { error: updateError } = await supabase
+        .storage
+        .updateBucket('slide_images', {
+          public: true,
+          fileSizeLimit: 5242880 // 5MB
+        });
+        
+      if (updateError) {
+        console.error("Error updating slide_images bucket:", updateError);
+      } else {
+        console.log("Updated slide_images bucket to ensure it's public");
+      }
+      
+      return true;
+    }
+  } catch (bucketError) {
+    console.error("Exception checking/creating slide_images bucket:", bucketError);
+    return false;
+  }
+}
+
 serve(async (req) => {
   console.log("Extract-frames function called");
   
@@ -124,34 +182,10 @@ serve(async (req) => {
       );
     }
 
-    console.log("Project found, checking slide_images bucket");
-
-    // Check if slide_images bucket exists, create if it doesn't
-    try {
-      const { data: bucket, error: bucketError } = await supabase
-        .storage
-        .getBucket('slide_images');
-      
-      if (bucketError && bucketError.message === 'The resource was not found') {
-        // Create the bucket if it doesn't exist
-        console.log("slide_images bucket not found, creating it now");
-        const { error: createError } = await supabase
-          .storage
-          .createBucket('slide_images', { public: true });
-          
-        if (createError) {
-          console.error("Error creating slide_images bucket:", createError);
-        } else {
-          console.log("Created slide_images bucket successfully");
-        }
-      } else if (bucketError) {
-        console.error("Error checking slide_images bucket:", bucketError);
-      } else {
-        console.log("slide_images bucket exists");
-      }
-    } catch (bucketError) {
-      console.error("Exception checking/creating slide_images bucket:", bucketError);
-      // Continue execution, we'll see if the upload works
+    // Ensure slide_images bucket exists
+    const bucketExists = await ensureSlideImagesBucketExists();
+    if (!bucketExists) {
+      console.warn("Could not verify slide_images bucket, will attempt to continue anyway");
     }
 
     // Download the video file from storage

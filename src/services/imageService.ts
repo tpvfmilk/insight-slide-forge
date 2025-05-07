@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
+import { initializeStorage } from "./storageService";
 
 /**
  * Uploads an image file to Supabase storage for slides
@@ -9,6 +10,9 @@ import { v4 as uuidv4 } from "uuid";
  */
 export const uploadSlideImage = async (file: File): Promise<{ path: string; url: string } | null> => {
   try {
+    // Ensure storage buckets are initialized before uploading
+    await initializeStorage();
+    
     // Check if it's a valid image file
     if (!file.type.startsWith('image/')) {
       throw new Error('File must be an image');
@@ -18,6 +22,21 @@ export const uploadSlideImage = async (file: File): Promise<{ path: string; url:
     const fileExt = file.name.split('.').pop();
     const fileName = `${uuidv4()}.${fileExt}`;
     const filePath = `slides/${fileName}`;
+
+    // Check if slide_images bucket exists
+    try {
+      const { data: bucket, error: bucketError } = await supabase
+        .storage
+        .getBucket('slide_images');
+        
+      if (bucketError) {
+        console.error('Error checking slide_images bucket:', bucketError);
+        // We'll continue anyway since initializeStorage should have created it
+      }
+    } catch (bucketError) {
+      console.error('Exception checking slide_images bucket:', bucketError);
+      // Continue with upload attempt
+    }
 
     // Upload file to Supabase storage
     const { data, error } = await supabase

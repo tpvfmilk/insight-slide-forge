@@ -16,6 +16,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { initializeStorage } from "@/services/storageService";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -40,6 +41,10 @@ const ProjectPage = () => {
     
     try {
       setIsLoading(true);
+      
+      // Ensure storage buckets are initialized when viewing a project
+      await initializeStorage();
+      
       const projectData = await fetchProjectById(projectId);
       
       if (!projectData) {
