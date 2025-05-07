@@ -118,6 +118,7 @@ export type Database = {
           id: string
           model_id: string | null
           slides: Json | null
+          source_file_path: string | null
           source_type: string
           source_url: string | null
           title: string
@@ -132,6 +133,7 @@ export type Database = {
           id?: string
           model_id?: string | null
           slides?: Json | null
+          source_file_path?: string | null
           source_type: string
           source_url?: string | null
           title: string
@@ -146,6 +148,7 @@ export type Database = {
           id?: string
           model_id?: string | null
           slides?: Json | null
+          source_file_path?: string | null
           source_type?: string
           source_url?: string | null
           title?: string
