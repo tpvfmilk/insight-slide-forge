@@ -63,8 +63,7 @@ export const ProfileForm = () => {
       const { error } = await supabase
         .from('profiles')
         .upsert(updates, { 
-          onConflict: 'id',
-          returning: 'minimal' 
+          onConflict: 'id'
         });
 
       if (error) throw error;
