@@ -115,7 +115,7 @@ export const createVideoElement = (videoUrl: string): Promise<HTMLVideoElement> 
  * @param path Storage path to the video file
  * @returns Public URL for the video
  */
-export const getVideoPublicUrl = (path: string): string => {
+export const getVideoPublicUrl = async (path: string): Promise<string> => {
   const { supabase } = await import('@/integrations/supabase/client');
   const { data } = supabase.storage.from('video_uploads').getPublicUrl(path);
   return data.publicUrl;

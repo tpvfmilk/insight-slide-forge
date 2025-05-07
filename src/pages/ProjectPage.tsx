@@ -41,6 +41,7 @@ const ProjectPage = () => {
   const [videoFileName, setVideoFileName] = useState<string>("");
   const [needsFrameExtraction, setNeedsFrameExtraction] = useState<boolean>(false);
   const [allTimestamps, setAllTimestamps] = useState<string[]>([]);
+  const [isFrameExtractionModalOpen, setIsFrameExtractionModalOpen] = useState<boolean>(false);
   
   const loadProject = async () => {
     if (!projectId) return;
@@ -78,11 +79,14 @@ const ProjectPage = () => {
       const timestamps: string[] = [];
       if (Array.isArray(projectData.slides)) {
         projectData.slides.forEach(slide => {
-          if (slide.timestamp) {
-            timestamps.push(slide.timestamp);
-          }
-          if (Array.isArray(slide.transcriptTimestamps)) {
-            timestamps.push(...slide.transcriptTimestamps);
+          // Properly check and extract timestamps with type checking
+          if (slide && typeof slide === 'object') {
+            if ('timestamp' in slide && typeof slide.timestamp === 'string') {
+              timestamps.push(slide.timestamp);
+            }
+            if ('transcriptTimestamps' in slide && Array.isArray(slide.transcriptTimestamps)) {
+              timestamps.push(...slide.transcriptTimestamps);
+            }
           }
         });
       }

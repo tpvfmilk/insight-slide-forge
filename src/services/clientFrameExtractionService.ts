@@ -108,7 +108,7 @@ export const updateSlidesWithExtractedFrames = async (
     });
     
     // Update each slide with matching timestamps
-    const updatedSlides = project.slides.map(slide => {
+    const updatedSlides = Array.isArray(project.slides) ? project.slides.map(slide => {
       if (!slide) return slide;
       
       const updatedSlide = { ...slide };
@@ -135,7 +135,7 @@ export const updateSlidesWithExtractedFrames = async (
       }
       
       return updatedSlide;
-    });
+    }) : [];
     
     // Update the project with the updated slides
     const { error: updateError } = await supabase
