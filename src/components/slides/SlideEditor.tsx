@@ -2,10 +2,13 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Copy, Clock, Image as ImageIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Copy, Clock, Image as ImageIcon, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { useParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { fetchProjectById } from "@/services/projectService";
 
 interface Slide {
   id: string;
@@ -15,35 +18,56 @@ interface Slide {
   imageUrl?: string;
 }
 
-const dummySlides: Slide[] = [
-  {
-    id: "slide-1",
-    title: "Introduction to Quantum Computing",
-    content: "• Quantum computing leverages quantum mechanics principles\n• Uses qubits instead of classical bits\n• Capable of solving complex problems exponentially faster\n• Currently in early stages of development",
-    timestamp: "00:01:15",
-    imageUrl: "/lovable-uploads/0ad5b08b-62f2-48a2-a50d-f34e2feaa43e.png"
-  },
-  {
-    id: "slide-2",
-    title: "Quantum Bits (Qubits)",
-    content: "• Fundamental unit of quantum information\n• Can exist in superposition of states\n• Enables parallel computation\n• Types: superconducting, trapped ion, photonic",
-    timestamp: "00:03:42"
-  },
-  {
-    id: "slide-3",
-    title: "Quantum Algorithms",
-    content: "• Shor's Algorithm: Integer factorization\n• Grover's Algorithm: Unstructured search\n• Quantum Fourier Transform\n• Variational Quantum Eigensolvers (VQE)",
-    timestamp: "00:08:15"
-  }
-];
-
 export const SlideEditor = () => {
-  const [slides, setSlides] = useState<Slide[]>(dummySlides);
+  const { id: projectId } = useParams<{ id: string }>();
+  const [slides, setSlides] = useState<Slide[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   const [editedTitle, setEditedTitle] = useState<string>("");
   const [editedContent, setEditedContent] = useState<string>("");
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [projectTitle, setProjectTitle] = useState<string>("");
+  
   const currentSlide = slides[currentSlideIndex];
+  
+  const loadProject = async () => {
+    if (!projectId) return;
+    
+    try {
+      setIsLoading(true);
+      const project = await fetchProjectById(projectId);
+      
+      if (!project) {
+        toast.error("Project not found");
+        return;
+      }
+
+      setProjectTitle(project.title || "Untitled Project");
+      
+      if (project.slides && Array.isArray(project.slides) && project.slides.length > 0) {
+        setSlides(project.slides);
+      } else {
+        // Default placeholder slide if no slides exist yet
+        setSlides([
+          {
+            id: "slide-placeholder",
+            title: "Generate Your Slides",
+            content: "Click the 'Generate Slides' button to process your content and create presentation slides."
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error("Error loading project slides:", error);
+      toast.error("Failed to load project");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    loadProject();
+  }, [projectId]);
   
   useEffect(() => {
     if (currentSlide) {
@@ -51,6 +75,53 @@ export const SlideEditor = () => {
       setEditedContent(currentSlide.content);
     }
   }, [currentSlide, currentSlideIndex]);
+  
+  const generateSlides = async () => {
+    if (!projectId) return;
+    
+    try {
+      setIsGenerating(true);
+      toast.loading("Generating slides...", { id: "generate-slides" });
+      
+      const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/generate-slides`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          projectId
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate slides");
+      }
+      
+      const { slides: generatedSlides } = await response.json();
+      
+      if (!generatedSlides || !Array.isArray(generatedSlides) || generatedSlides.length === 0) {
+        throw new Error("No slides were generated");
+      }
+      
+      setSlides(generatedSlides);
+      setCurrentSlideIndex(0);
+      
+      // Update edited fields with the first slide
+      if (generatedSlides[0]) {
+        setEditedTitle(generatedSlides[0].title);
+        setEditedContent(generatedSlides[0].content);
+      }
+      
+      toast.success("Slides generated successfully!", { id: "generate-slides" });
+    } catch (error) {
+      console.error("Error generating slides:", error);
+      toast.error(`Failed to generate slides: ${error.message}`, { id: "generate-slides" });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
   
   const goToNextSlide = () => {
     if (currentSlideIndex < slides.length - 1) {
@@ -75,8 +146,28 @@ export const SlideEditor = () => {
         content: editedContent,
       };
       setSlides(updatedSlides);
+      
+      // Also update in the database
+      updateSlidesInDatabase(updatedSlides);
+      
       setIsEditing(false);
       toast.success("Slide updated");
+    }
+  };
+  
+  const updateSlidesInDatabase = async (updatedSlides: Slide[]) => {
+    if (!projectId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ slides: updatedSlides })
+        .eq('id', projectId);
+        
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error updating slides in database:", error);
+      // We don't show a toast here since it's a background operation
     }
   };
   
@@ -105,17 +196,41 @@ export const SlideEditor = () => {
     // This would trigger CSV export
   };
   
+  if (isLoading) {
+    return (
+      <div className="h-full w-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
+          <p className="text-sm text-muted-foreground">Loading slides...</p>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="flex flex-col h-full">
       <div className="flex justify-between items-center p-4 border-b">
         <div className="text-sm text-muted-foreground flex items-center">
           <Clock className="h-4 w-4 mr-1" />
           <span>Slide {currentSlideIndex + 1} of {slides.length}</span>
-          {currentSlide.timestamp && (
+          {currentSlide?.timestamp && (
             <span className="ml-2">• Timestamp: {currentSlide.timestamp}</span>
           )}
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={generateSlides} 
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-1" />
+            )}
+            {slides.length <= 1 ? "Generate Slides" : "Regenerate Slides"}
+          </Button>
           <Button variant="outline" size="sm" onClick={copyToClipboard}>
             <Copy className="h-4 w-4 mr-1" />
             Copy
@@ -168,7 +283,7 @@ export const SlideEditor = () => {
             <h3 className="font-medium">Slide Visual</h3>
           </div>
           <div className="flex-1 flex items-center justify-center p-4">
-            {currentSlide.imageUrl ? (
+            {currentSlide?.imageUrl ? (
               <div className="relative w-full h-full">
                 <img 
                   src={currentSlide.imageUrl} 
@@ -222,8 +337,8 @@ export const SlideEditor = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                <h2 className="text-xl font-semibold">{currentSlide.title}</h2>
-                <div className="whitespace-pre-line">{currentSlide.content}</div>
+                <h2 className="text-xl font-semibold">{currentSlide?.title}</h2>
+                <div className="whitespace-pre-line">{currentSlide?.content}</div>
               </div>
             )}
           </div>
