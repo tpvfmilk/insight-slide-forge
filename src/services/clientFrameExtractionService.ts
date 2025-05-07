@@ -116,7 +116,8 @@ export const updateSlidesWithExtractedFrames = async (
     const updatedSlides = Array.isArray(project.slides) ? project.slides.map(slide => {
       if (!slide) return slide;
       
-      const updatedSlide = { ...slide };
+      // Create a copy of the slide to update
+      const updatedSlide = Object.assign({}, slide);
       
       // Handle single timestamp
       if (updatedSlide.timestamp && frameMap.has(updatedSlide.timestamp)) {
