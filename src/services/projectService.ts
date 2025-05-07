@@ -4,6 +4,11 @@ import { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
+// Define a helper type to ensure JSON compatibility
+export type JsonCompatibleFrame = ExtractedFrame & {
+  [key: string]: string | number | boolean | null | undefined | JsonCompatibleFrame[] | { [key: string]: any };
+};
+
 // Extend the Database Project type with our additional fields until Supabase types are regenerated
 export type Project = Database["public"]["Tables"]["projects"]["Row"] & {
   video_metadata?: {
@@ -79,9 +84,15 @@ export const fetchProjectById = async (id: string): Promise<Project | null> => {
  * @param projectData Project data
  */
 export const createProject = async (projectData: Omit<Project, 'id' | 'created_at' | 'updated_at'>): Promise<Project> => {
+  // Handle extracted_frames casting if present
+  const supabaseProjectData = { ...projectData };
+  if (supabaseProjectData.extracted_frames) {
+    supabaseProjectData.extracted_frames = supabaseProjectData.extracted_frames as unknown as Json;
+  }
+
   const { data, error } = await supabase
     .from('projects')
-    .insert(projectData)
+    .insert(supabaseProjectData)
     .select()
     .single();
 
@@ -108,34 +119,23 @@ export const createProject = async (projectData: Omit<Project, 'id' | 'created_a
  * @param projectData Updated project data
  */
 export const updateProject = async (id: string, projectData: Partial<Project>): Promise<void> => {
+  // Create a copy of projectData to avoid modifying the original
+  const updatedData = { ...projectData };
+  
   // If projectData contains extracted_frames, ensure it's cast correctly for Supabase
-  if (projectData.extracted_frames) {
-    // Create a copy of projectData to avoid modifying the original
-    const updatedData = {
-      ...projectData,
-      // Cast the extracted_frames to Json before sending to Supabase
-      extracted_frames: projectData.extracted_frames as unknown as Json
-    };
+  if (updatedData.extracted_frames) {
+    // Cast the extracted_frames to Json before sending to Supabase
+    updatedData.extracted_frames = updatedData.extracted_frames as unknown as Json;
+  }
     
-    const { error } = await supabase
-      .from('projects')
-      .update(updatedData)
-      .eq('id', id);
+  const { error } = await supabase
+    .from('projects')
+    .update(updatedData)
+    .eq('id', id);
 
-    if (error) {
-      console.error(`Error updating project with ID ${id}:`, error);
-      throw error;
-    }
-  } else {
-    const { error } = await supabase
-      .from('projects')
-      .update(projectData)
-      .eq('id', id);
-
-    if (error) {
-      console.error(`Error updating project with ID ${id}:`, error);
-      throw error;
-    }
+  if (error) {
+    console.error(`Error updating project with ID ${id}:`, error);
+    throw error;
   }
 };
 
