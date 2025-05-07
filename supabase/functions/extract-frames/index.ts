@@ -26,6 +26,8 @@ async function extractFrameWithFFmpeg(
   quality: number = 2 // Quality between 1-5 (1 best, 5 worst)
 ): Promise<Uint8Array | null> {
   try {
+    console.log(`Starting frame extraction for timestamp: ${timestamp}`);
+    
     // Create a command to extract a single frame at the given timestamp
     const ffmpegCommand = [
       "ffmpeg",
@@ -37,6 +39,8 @@ async function extractFrameWithFFmpeg(
       "-c:v", "mjpeg",           // Output codec
       "pipe:1"                   // Output to stdout
     ];
+
+    console.log(`Running FFmpeg command: ${ffmpegCommand.join(' ')}`);
 
     // Setup the ffmpeg process
     const ffmpegProcess = Deno.run({
@@ -52,15 +56,18 @@ async function extractFrameWithFFmpeg(
 
     // Get the frame data from stdout
     const outputData = await ffmpegProcess.output();
+    const stderrOutput = await ffmpegProcess.stderrOutput();
     const status = await ffmpegProcess.status();
+    
     ffmpegProcess.close();
 
     if (!status.success) {
-      const stderr = new TextDecoder().decode(await ffmpegProcess.stderrOutput());
+      const stderr = new TextDecoder().decode(stderrOutput);
       console.error(`FFmpeg error for timestamp ${timestamp}: ${stderr}`);
       return null;
     }
 
+    console.log(`Successfully extracted frame for timestamp ${timestamp}, output size: ${outputData.length} bytes`);
     return outputData;
   } catch (error) {
     console.error(`Error in FFmpeg process for timestamp ${timestamp}:`, error);
@@ -69,6 +76,8 @@ async function extractFrameWithFFmpeg(
 }
 
 serve(async (req) => {
+  console.log("Extract-frames function called");
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -76,6 +85,7 @@ serve(async (req) => {
 
   try {
     const { projectId, timestamps, videoPath } = await req.json();
+    console.log(`Request received with projectId: ${projectId}, timestamps count: ${timestamps?.length}, videoPath: ${videoPath}`);
 
     if (!projectId) {
       return new Response(
@@ -99,6 +109,7 @@ serve(async (req) => {
     }
 
     // Get project details from database
+    console.log(`Fetching project with ID: ${projectId}`);
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('*')
@@ -106,11 +117,14 @@ serve(async (req) => {
       .single();
 
     if (projectError || !project) {
+      console.error("Project fetch error:", projectError);
       return new Response(
         JSON.stringify({ error: "Project not found", details: projectError?.message }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log("Project found, checking slide_images bucket");
 
     // Check if slide_images bucket exists, create if it doesn't
     try {
@@ -120,6 +134,7 @@ serve(async (req) => {
       
       if (bucketError && bucketError.message === 'The resource was not found') {
         // Create the bucket if it doesn't exist
+        console.log("slide_images bucket not found, creating it now");
         const { error: createError } = await supabase
           .storage
           .createBucket('slide_images', { public: true });
@@ -129,24 +144,32 @@ serve(async (req) => {
         } else {
           console.log("Created slide_images bucket successfully");
         }
+      } else if (bucketError) {
+        console.error("Error checking slide_images bucket:", bucketError);
+      } else {
+        console.log("slide_images bucket exists");
       }
     } catch (bucketError) {
-      console.error("Error checking/creating slide_images bucket:", bucketError);
+      console.error("Exception checking/creating slide_images bucket:", bucketError);
       // Continue execution, we'll see if the upload works
     }
 
     // Download the video file from storage
+    console.log(`Downloading video from path: ${videoPath}`);
     const { data: fileData, error: fileError } = await supabase
       .storage
       .from('video_uploads')
       .download(videoPath);
     
     if (fileError || !fileData) {
+      console.error("Video download error:", fileError);
       return new Response(
         JSON.stringify({ error: "Failed to download video file", details: fileError?.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log(`Video downloaded successfully, size: ${fileData.size} bytes`);
 
     // Convert the blob to an array buffer that ffmpeg can work with
     const arrayBuffer = await fileData.arrayBuffer();
@@ -180,6 +203,8 @@ serve(async (req) => {
 
       // Upload the frame to storage
       const frameFileName = `${projectId}/${timestamp.replace(/:/g, '_')}.jpg`;
+      console.log(`Uploading frame to: slide_images/${frameFileName}`);
+      
       const { error: uploadError, data: uploadData } = await supabase
         .storage
         .from('slide_images')
@@ -193,17 +218,23 @@ serve(async (req) => {
         continue;
       }
 
+      console.log(`Frame uploaded successfully: ${frameFileName}`);
+
       // Get public URL for the uploaded frame
       const { data: urlData } = supabase
         .storage
         .from('slide_images')
         .getPublicUrl(frameFileName);
 
+      console.log(`Public URL generated: ${urlData.publicUrl}`);
+
       frameResults.push({
         timestamp,
         imageUrl: urlData.publicUrl
       });
     }
+
+    console.log(`Processed ${frameResults.length} frames successfully`);
 
     // Update slides with new image URLs (handle both the old and new format)
     const updatedSlides = slides.map(slide => {
@@ -214,6 +245,7 @@ serve(async (req) => {
         );
 
         if (matchingFrames.length > 0) {
+          console.log(`Slide ${slide.id}: Found ${matchingFrames.length} matching frames`);
           return {
             ...slide,
             imageUrls: matchingFrames.map(frame => frame.imageUrl)
@@ -224,6 +256,7 @@ serve(async (req) => {
       else if (slide.timestamp) {
         const matchingFrame = frameResults.find(frame => frame.timestamp === slide.timestamp);
         if (matchingFrame) {
+          console.log(`Slide ${slide.id}: Found matching frame for timestamp ${slide.timestamp}`);
           return {
             ...slide,
             imageUrl: matchingFrame.imageUrl
@@ -236,6 +269,7 @@ serve(async (req) => {
     });
 
     // Update the project with the updated slides
+    console.log(`Updating project ${projectId} with ${updatedSlides.length} slides containing images`);
     const { error: updateError } = await supabase
       .from('projects')
       .update({ 
@@ -245,6 +279,7 @@ serve(async (req) => {
       .eq('id', projectId);
 
     if (updateError) {
+      console.error("Project update error:", updateError);
       return new Response(
         JSON.stringify({ 
           error: "Failed to update project with frame images", 
@@ -255,6 +290,7 @@ serve(async (req) => {
       );
     }
 
+    console.log("Extract-frames function completed successfully");
     return new Response(
       JSON.stringify({ success: true, frames: frameResults }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

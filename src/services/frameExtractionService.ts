@@ -5,6 +5,7 @@ import { toast } from "sonner";
 interface FrameExtractionResult {
   success: boolean;
   frames?: Array<{ timestamp: string, imageUrl: string }>; 
+  error?: string;
 }
 
 /**
@@ -22,13 +23,14 @@ export const extractFramesFromVideo = async (
   try {
     if (!timestamps || timestamps.length === 0) {
       console.warn("No timestamps provided for frame extraction");
-      return { success: false };
+      return { success: false, error: "No timestamps provided" };
     }
     
     // Deduplicate timestamps to avoid extracting the same frame multiple times
     const uniqueTimestamps = [...new Set(timestamps)];
     
     toast.loading("Extracting video frames...", { id: "extract-frames" });
+    console.log(`Extracting ${uniqueTimestamps.length} frames for project ${projectId} from video: ${videoPath}`);
     
     // Check for local development vs production
     const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -45,7 +47,8 @@ export const extractFramesFromVideo = async (
       return { success: true, frames: placeholderFrames };
     }
     
-    console.log(`Extracting frames for project ${projectId} from ${videoPath} at timestamps:`, uniqueTimestamps);
+    // Call the edge function to extract frames
+    console.log(`Calling extract-frames edge function for project ${projectId} with ${uniqueTimestamps.length} timestamps`);
     
     const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/extract-frames', {
       method: "POST",
@@ -61,19 +64,48 @@ export const extractFramesFromVideo = async (
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to extract frames");
+      let errorMessage = "Failed to extract frames";
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+        console.error("Extract frames error response:", errorData);
+      } catch (e) {
+        // If we can't parse the error, use the status text
+        errorMessage = response.statusText || errorMessage;
+      }
+      
+      console.error(`Extract frames failed with status: ${response.status} ${response.statusText}`);
+      throw new Error(errorMessage);
     }
     
-    const { frames } = await response.json();
+    const data = await response.json();
+    const { frames, success } = data;
     
-    console.log("Frames extracted successfully:", frames);
-    toast.success("Frame extraction completed!", { id: "extract-frames" });
-    return { success: true, frames };
+    if (!success || !frames || !Array.isArray(frames)) {
+      console.error("Extract frames returned unexpected response:", data);
+      throw new Error("Invalid response from frame extraction service");
+    }
+    
+    console.log(`Frames extracted successfully: ${frames.length} frames`);
+    
+    // Validate that each frame has a timestamp and imageUrl
+    const validFrames = frames.filter(frame => frame.timestamp && frame.imageUrl);
+    
+    if (validFrames.length === 0 && frames.length > 0) {
+      console.error("No valid frames were returned");
+      throw new Error("No valid frames were extracted");
+    }
+    
+    if (validFrames.length < frames.length) {
+      console.warn(`Some frames were invalid: ${frames.length - validFrames.length} out of ${frames.length}`);
+    }
+    
+    toast.success(`Successfully extracted ${validFrames.length} frames`, { id: "extract-frames" });
+    return { success: true, frames: validFrames };
   } catch (error) {
     console.error("Error extracting frames:", error);
     toast.error(`Failed to extract frames: ${error.message}`, { id: "extract-frames" });
-    return { success: false };
+    return { success: false, error: error.message };
   }
 };
 
@@ -91,14 +123,28 @@ export const mapTimestampsToImages = (
     return [];
   }
   
+  console.log(`Mapping ${extractedFrames.length} frames to ${slideTimestamps.length} timestamps`);
+  
   // Create a map for quick lookup of timestamps to image URLs
   const frameMap = new Map<string, string>();
   extractedFrames.forEach(frame => {
-    frameMap.set(frame.timestamp, frame.imageUrl);
+    if (frame && frame.timestamp && frame.imageUrl) {
+      frameMap.set(frame.timestamp, frame.imageUrl);
+    }
   });
   
   // Map each timestamp to its corresponding image URL if available
-  return slideTimestamps
-    .map(timestamp => frameMap.get(timestamp))
-    .filter(Boolean) as string[]; // Remove any undefined values
+  const imageUrls = slideTimestamps
+    .map(timestamp => {
+      const url = frameMap.get(timestamp);
+      if (!url) {
+        console.warn(`No image found for timestamp: ${timestamp}`);
+      }
+      return url;
+    })
+    .filter(Boolean) as string[];
+    
+  console.log(`Mapped ${imageUrls.length} image URLs for ${slideTimestamps.length} timestamps`);
+  
+  return imageUrls;
 };

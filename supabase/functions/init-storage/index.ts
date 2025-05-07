@@ -35,33 +35,49 @@ serve(async (req) => {
       },
     ];
 
+    console.log("Starting storage initialization...");
+
     for (const bucket of buckets) {
       // Check if bucket exists
       const { data: existingBucket, error: getBucketError } = await supabase
         .storage
         .getBucket(bucket.id);
 
-      if (getBucketError && getBucketError.message !== 'The resource was not found') {
-        console.error(`Error checking bucket ${bucket.id}:`, getBucketError);
-        continue;
-      }
+      if (getBucketError) {
+        if (getBucketError.message === 'The resource was not found') {
+          console.log(`Bucket ${bucket.id} doesn't exist, creating...`);
+          // Create bucket if it doesn't exist
+          const { error: createBucketError } = await supabase
+            .storage
+            .createBucket(bucket.id, {
+              public: bucket.public,
+              fileSizeLimit: bucket.file_size_limit,
+            });
 
-      // Create bucket if it doesn't exist
-      if (!existingBucket) {
-        const { error: createBucketError } = await supabase
-          .storage
-          .createBucket(bucket.id, {
-            public: bucket.public,
-            fileSizeLimit: bucket.file_size_limit,
-          });
-
-        if (createBucketError) {
-          console.error(`Error creating bucket ${bucket.id}:`, createBucketError);
+          if (createBucketError) {
+            console.error(`Error creating bucket ${bucket.id}:`, createBucketError);
+          } else {
+            console.log(`Created bucket: ${bucket.id}`);
+          }
         } else {
-          console.log(`Created bucket: ${bucket.id}`);
+          console.error(`Error checking bucket ${bucket.id}:`, getBucketError);
         }
       } else {
         console.log(`Bucket already exists: ${bucket.id}`);
+        
+        // Update bucket settings to ensure they're correct
+        const { error: updateError } = await supabase
+          .storage
+          .updateBucket(bucket.id, {
+            public: bucket.public,
+            fileSizeLimit: bucket.file_size_limit,
+          });
+        
+        if (updateError) {
+          console.error(`Error updating bucket ${bucket.id}:`, updateError);
+        } else {
+          console.log(`Updated bucket settings: ${bucket.id}`);
+        }
       }
     }
 

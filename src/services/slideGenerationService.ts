@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Project } from "@/services/projectService";
@@ -30,6 +31,7 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       return { success: false };
     }
     
+    console.log("Calling generate-slides edge function");
     const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/generate-slides`, {
       method: "POST",
       headers: {
@@ -54,7 +56,8 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       throw new Error("No slides were generated");
     }
     
-    toast.success("Slides generated successfully!", { id: "generate-slides" });
+    console.log(`Generated ${generatedSlides.length} slides successfully`);
+    toast.success(`Generated ${generatedSlides.length} slides successfully!`, { id: "generate-slides" });
     
     // If this is a video source, extract frames for slides with timestamps
     if (project.source_type === 'video' && project.source_file_path) {
@@ -71,6 +74,7 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       
       if (allTimestamps.length > 0) {
         console.log("Extracting frames for timestamps:", allTimestamps);
+        toast.loading("Extracting video frames for slides...", { id: "extract-frames" });
         
         try {
           // Extract frames for all timestamps in one go
@@ -86,18 +90,25 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
                 ? slide.transcriptTimestamps 
                 : (slide.timestamp ? [slide.timestamp] : []);
               
+              if (slideTimestamps.length === 0) {
+                console.log(`Slide ${slide.id} has no timestamps`);
+                return slide;
+              }
+              
               // Map timestamps to images
               const imageUrls = mapTimestampsToImages(extractionResult.frames, slideTimestamps);
               
               // If we have new imageUrls array, use it, otherwise keep the existing imageUrl for backward compatibility
               if (imageUrls.length > 0) {
+                console.log(`Slide ${slide.id}: Adding ${imageUrls.length} images`);
                 return {
                   ...slide,
                   imageUrls
                 };
-              } else if (slide.timestamp && extractionResult.frames) {
+              } else if (slide.timestamp) {
                 const matchingFrame = extractionResult.frames.find(frame => frame.timestamp === slide.timestamp);
                 if (matchingFrame) {
+                  console.log(`Slide ${slide.id}: Adding single image for timestamp ${slide.timestamp}`);
                   return {
                     ...slide,
                     imageUrl: matchingFrame.imageUrl
@@ -109,6 +120,7 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
             
             // Store the updated slides with images in the database
             try {
+              console.log("Saving slides with images to database");
               const { error: updateError } = await supabase
                 .from('projects')
                 .update({ slides: slidesWithImages })
@@ -116,20 +128,27 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
                 
               if (updateError) {
                 console.error("Error updating slides with images:", updateError);
+                toast.error("Slides were generated but images couldn't be saved", { id: "extract-frames" });
               } else {
                 console.log("Successfully updated slides with images in database");
+                toast.success("Slides with images were created successfully", { id: "extract-frames" });
               }
             } catch (e) {
               console.error("Failed to save slides with images:", e);
+              toast.error("Failed to save slides with images", { id: "extract-frames" });
             }
             
             return { success: true, slides: slidesWithImages };
           } else {
             console.warn("No frames were extracted or extraction failed");
+            toast.warning("Slides were generated but frame extraction failed", { id: "extract-frames" });
           }
         } catch (extractionError) {
           console.error("Error during frame extraction:", extractionError);
+          toast.error("Slides were generated but frame extraction failed", { id: "extract-frames" });
         }
+      } else {
+        console.log("No timestamps found in slides, skipping frame extraction");
       }
     }
     
