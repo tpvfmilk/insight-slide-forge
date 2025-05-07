@@ -1,4 +1,4 @@
-# ![distill-logo](https://github.com/user-attachments/assets/5277f352-bd50-4a99-a5ba-90657802a74a) Insight Slide Forge
+# ![distill-logo](https://github.com/user-attachments/assets/5277f352-bd50-4a99-a5ba-90657802a74a) DISTILL
 
 Transform videos into structured, AI-powered slide decks for professional study, review, and licensing prep — all in your browser.
 
@@ -7,7 +7,7 @@ Transform videos into structured, AI-powered slide decks for professional study,
 
 ## 🚀 Overview
 
-Insight Slide Forge is a full-stack web app that lets users upload video content (or provide transcripts) and automatically generates slide presentations using OpenAI's GPT models. Built for professionals studying for certification exams — like architecture, law, medicine, or engineering — this tool saves time by turning dense spoken content into structured learning resources.
+Distill is a full-stack web app that lets users upload video content (or provide transcripts) and automatically generates slide presentations using OpenAI's GPT models. Built for professionals studying for certification exams — like architecture, law, medicine, or engineering — this tool saves time by turning dense spoken content into structured learning resources.
 
 - 🎞 Upload videos, YouTube/Vimeo links, or transcripts
 - 🧠 AI-generated slides based on actual content
