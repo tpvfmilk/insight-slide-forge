@@ -3,55 +3,51 @@ import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Clock, Download, FileText, Search, Trash } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-
-// Sample project data
-const projectsData = [
-  {
-    id: "1",
-    title: "Introduction to Quantum Computing",
-    created: "2025-05-07T08:30:00Z",
-    model: "gpt-4",
-    tokens: 8546,
-    expiresIn: 40, // hours remaining
-  },
-  {
-    id: "2",
-    title: "Advanced Machine Learning Techniques",
-    created: "2025-05-06T14:20:00Z",
-    model: "gpt-3.5-turbo",
-    tokens: 6238,
-    expiresIn: 22, // hours remaining
-  },
-  {
-    id: "3",
-    title: "Neuroscience and Consciousness",
-    created: "2025-05-05T09:45:00Z",
-    model: "gpt-4",
-    tokens: 9102,
-    expiresIn: 6, // hours remaining
-  },
-  {
-    id: "4",
-    title: "Statistical Methods in Research",
-    created: "2025-05-04T16:15:00Z",
-    model: "gpt-3.5-turbo",
-    tokens: 5238,
-    expiresIn: 1, // hours remaining
-  }
-];
+import { fetchRecentProjects, Project } from "@/services/projectService";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 const ProjectsPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  const filteredProjects = projectsData.filter(project => 
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setLoading(true);
+        // Get all projects, not just the limited number
+        const data = await fetchRecentProjects(100);
+        setProjects(data);
+      } catch (error) {
+        console.error("Failed to load projects:", error);
+        toast.error("Failed to load projects");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadProjects();
+  }, []);
+  
+  const filteredProjects = projects.filter(project => 
     project.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
   
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString();
+  };
+
+  // Calculate hours remaining until expiration
+  const calculateExpiresIn = (expiresAt: string) => {
+    const now = new Date();
+    const expiration = new Date(expiresAt);
+    const diffMs = expiration.getTime() - now.getTime();
+    const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
+    return Math.max(0, diffHours); // Ensure we don't return negative hours
   };
   
   return (
@@ -84,13 +80,44 @@ const ProjectsPage = () => {
                 <th className="text-left p-4 font-medium">Title</th>
                 <th className="text-left p-4 font-medium hidden md:table-cell">Created</th>
                 <th className="text-left p-4 font-medium hidden md:table-cell">Model</th>
-                <th className="text-left p-4 font-medium hidden lg:table-cell">Tokens</th>
+                <th className="text-left p-4 font-medium hidden lg:table-cell">Type</th>
                 <th className="text-left p-4 font-medium">Expires</th>
                 <th className="text-right p-4 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredProjects.length > 0 ? (
+              {loading ? (
+                // Loading state
+                [1, 2, 3, 4].map(i => (
+                  <tr key={i} className="border-t">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="h-10 w-10" />
+                        <Skeleton className="h-4 w-[200px]" />
+                      </div>
+                    </td>
+                    <td className="p-4 hidden md:table-cell">
+                      <Skeleton className="h-4 w-[100px]" />
+                    </td>
+                    <td className="p-4 hidden md:table-cell">
+                      <Skeleton className="h-4 w-[80px]" />
+                    </td>
+                    <td className="p-4 hidden lg:table-cell">
+                      <Skeleton className="h-4 w-[60px]" />
+                    </td>
+                    <td className="p-4">
+                      <Skeleton className="h-4 w-[100px]" />
+                    </td>
+                    <td className="p-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Skeleton className="h-8 w-8" />
+                        <Skeleton className="h-8 w-8" />
+                        <Skeleton className="h-8 w-8" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : filteredProjects.length > 0 ? (
                 filteredProjects.map((project) => (
                   <tr key={project.id} className="border-t hover:bg-muted/30">
                     <td className="p-4">
@@ -104,16 +131,16 @@ const ProjectsPage = () => {
                       </div>
                     </td>
                     <td className="p-4 hidden md:table-cell text-muted-foreground">
-                      {formatDate(project.created)}
+                      {formatDate(project.created_at)}
                     </td>
                     <td className="p-4 hidden md:table-cell text-muted-foreground">
-                      {project.model}
+                      {project.model_id || 'Not specified'}
                     </td>
                     <td className="p-4 hidden lg:table-cell text-muted-foreground">
-                      {project.tokens.toLocaleString()}
+                      {project.source_type}
                     </td>
                     <td className="p-4">
-                      <ExpirationBadge hours={project.expiresIn} />
+                      <ExpirationBadge hours={calculateExpiresIn(project.expires_at)} />
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex justify-end items-center gap-2">
