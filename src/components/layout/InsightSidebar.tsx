@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { Laptop, Home, UsersRound, FilePlus, AlignLeft, ChevronRight } from "lucide-react";
+import { Droplet, Home, UsersRound, FilePlus, AlignLeft, ChevronRight } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useEffect } from "react";
@@ -52,8 +52,10 @@ export function InsightSidebar({ isOpen, onClose }: SidebarProps) {
     >
       <div className="flex items-center justify-between h-14 px-4 border-b">
         <Link to="/" className="flex items-center gap-2">
-          <Laptop className="h-5 w-5" />
-          <span className="font-semibold">SlideCraft</span>
+          <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary text-primary-foreground">
+            <Droplet className="h-5 w-5" />
+          </div>
+          <span className="font-semibold">Distill</span>
         </Link>
         {isMobile && (
           <Button variant="ghost" size="sm" onClick={onClose}>
