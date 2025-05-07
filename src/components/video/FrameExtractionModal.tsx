@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 import { uploadSlideImage } from "@/services/imageService";
-import { RefreshCw, Check, X, Image, AlertTriangle } from "lucide-react";
+import { RefreshCw, Check, X, Image, AlertTriangle, Play, PauseIcon, SkipForward } from "lucide-react";
 
 interface FrameExtractionModalProps {
   open: boolean;
@@ -28,9 +28,10 @@ export const FrameExtractionModal = ({
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
   const [videoUrl, setVideoUrl] = useState<string>("");
-  const [extractedFrames, setExtractedFrames] = useState<Array<{ timestamp: string, frame: Blob, previewUrl?: string }>>([]);
+  const [extractedFrames, setExtractedFrames] = useState<Array<{ timestamp: string, frame: Blob, previewUrl?: string, status: 'success' | 'error' | 'pending' }>>([]);
   const [uploadedFrames, setUploadedFrames] = useState<Array<{ timestamp: string, imageUrl: string }>>([]);
   const [error, setError] = useState<string | null>(null);
+  const [videoReady, setVideoReady] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   
   // Step 1: Load the video when the component mounts
@@ -40,11 +41,17 @@ export const FrameExtractionModal = ({
       
       try {
         setError(null);
+        setVideoReady(false);
         // Generate the signed URL for the video
         const { supabase } = await import('@/integrations/supabase/client');
         const { data, error } = await supabase.storage
           .from('video_uploads')
-          .createSignedUrl(videoPath, 3600); // 1 hour expiry
+          .createSignedUrl(videoPath, 3600, {
+            download: false, // We need to stream, not download
+            transform: {
+              width: 1280, // Reasonable size limit to improve performance
+            }
+          });
           
         if (error || !data?.signedUrl) {
           console.error("Error getting video signed URL:", error);
@@ -64,10 +71,35 @@ export const FrameExtractionModal = ({
     loadVideo();
   }, [open, videoPath]);
   
+  // Handle video loaded data event
+  const handleVideoLoaded = () => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        setVideoReady(true);
+        console.log(`Video ready. Dimensions: ${video.videoWidth}x${video.videoHeight}, Duration: ${video.duration}s`);
+        // Preload by seeking to the first timestamp to warm up the video
+        if (timestamps.length > 0) {
+          try {
+            const firstSeconds = timestamps[0].split(':').reduce((acc, time) => (60 * acc) + +time, 0);
+            video.currentTime = Math.min(firstSeconds, Math.floor(video.duration - 1));
+          } catch (e) {
+            console.warn("Failed to seek to first timestamp", e);
+          }
+        }
+      }
+    }
+  };
+  
   // Extract frames from the video
   const startExtraction = async () => {
     if (!videoUrl || timestamps.length === 0) {
       toast.error("Video URL or timestamps are missing");
+      return;
+    }
+    
+    if (!videoReady) {
+      toast.error("Video is not ready for frame extraction yet");
       return;
     }
     
@@ -94,14 +126,19 @@ export const FrameExtractionModal = ({
       // Generate preview URLs for the extracted frames
       const framesWithPreviews = frames.map(({ timestamp, frame }) => {
         const previewUrl = URL.createObjectURL(frame);
-        return { timestamp, frame, previewUrl };
+        return { timestamp, frame, previewUrl, status: 'success' as const };
       });
       
       setExtractedFrames(framesWithPreviews);
       toast.success(`Extracted ${frames.length} frames`, { id: "extract-frames" });
       
-      // Start uploading the frames
-      await uploadFrames(framesWithPreviews);
+      // Start uploading the frames if we have any
+      if (frames.length > 0) {
+        await uploadFrames(framesWithPreviews);
+      } else {
+        toast.error("No frames were successfully extracted", { id: "extract-frames" });
+        setError("No frames could be extracted. Please try again or check the video format.");
+      }
     } catch (error) {
       console.error("Error extracting frames:", error);
       setError(`Frame extraction failed: ${(error as Error).message}`);
@@ -112,7 +149,7 @@ export const FrameExtractionModal = ({
   };
   
   // Upload the extracted frames
-  const uploadFrames = async (frames: Array<{ timestamp: string, frame: Blob, previewUrl?: string }>) => {
+  const uploadFrames = async (frames: Array<{ timestamp: string, frame: Blob, previewUrl?: string, status: 'success' | 'error' | 'pending' }>) => {
     if (frames.length === 0) {
       return;
     }
@@ -127,11 +164,11 @@ export const FrameExtractionModal = ({
       for (let i = 0; i < frames.length; i++) {
         const { timestamp, frame } = frames[i];
         
-        // Create a file from the blob
-        const file = new File([frame], `frame-${timestamp.replace(/:/g, '-')}-${projectId}.jpg`, { type: 'image/jpeg' });
-        
-        // Upload the file
         try {
+          // Create a file from the blob
+          const file = new File([frame], `frame-${timestamp.replace(/:/g, '-')}-${projectId}.jpg`, { type: 'image/jpeg' });
+          
+          // Upload the file
           const uploadResult = await uploadSlideImage(file);
           
           if (uploadResult) {
@@ -139,12 +176,37 @@ export const FrameExtractionModal = ({
               timestamp,
               imageUrl: uploadResult.url
             });
+            
+            // Update the status of this frame
+            setExtractedFrames(prev => 
+              prev.map(f => 
+                f.timestamp === timestamp 
+                  ? { ...f, status: 'success' as const } 
+                  : f
+              )
+            );
           } else {
             console.error(`Failed to upload frame at timestamp ${timestamp}`);
+            
+            // Update the status of this frame
+            setExtractedFrames(prev => 
+              prev.map(f => 
+                f.timestamp === timestamp 
+                  ? { ...f, status: 'error' as const } 
+                  : f
+              )
+            );
           }
         } catch (uploadError) {
           console.error(`Error uploading frame at timestamp ${timestamp}:`, uploadError);
-          // Continue with other frames even if one fails
+          // Update the status of this frame
+          setExtractedFrames(prev => 
+            prev.map(f => 
+              f.timestamp === timestamp 
+                ? { ...f, status: 'error' as const } 
+                : f
+            )
+          );
         }
         
         // Update progress
@@ -169,6 +231,73 @@ export const FrameExtractionModal = ({
       console.error("Error uploading frames:", error);
       setError(`Frame upload failed: ${(error as Error).message}`);
       toast.error(`Frame upload failed: ${(error as Error).message}`, { id: "upload-frames" });
+    }
+  };
+  
+  // Retry extraction for a specific timestamp
+  const retryFrame = async (timestamp: string) => {
+    if (!videoUrl || !videoReady) {
+      toast.error("Video is not ready");
+      return;
+    }
+    
+    try {
+      setExtractedFrames(prev => 
+        prev.map(f => 
+          f.timestamp === timestamp 
+            ? { ...f, status: 'pending' as const } 
+            : f
+        )
+      );
+      
+      toast.loading(`Retrying frame at ${timestamp}...`, { id: "retry-frame" });
+      
+      // Extract single frame
+      const frames = await extractFramesFromVideoUrl(videoUrl, [timestamp]);
+      
+      if (frames.length > 0) {
+        const frame = frames[0];
+        const previewUrl = URL.createObjectURL(frame.frame);
+        
+        // Update the frame in the state
+        setExtractedFrames(prev => 
+          prev.map(f => 
+            f.timestamp === timestamp 
+              ? { timestamp, frame: frame.frame, previewUrl, status: 'success' as const } 
+              : f
+          )
+        );
+        
+        // Upload the frame
+        const file = new File([frame.frame], `frame-${timestamp.replace(/:/g, '-')}-${projectId}.jpg`, { type: 'image/jpeg' });
+        const uploadResult = await uploadSlideImage(file);
+        
+        if (uploadResult) {
+          // Add to uploaded frames
+          setUploadedFrames(prev => {
+            const filteredPrev = prev.filter(f => f.timestamp !== timestamp);
+            return [...filteredPrev, { timestamp, imageUrl: uploadResult.url }];
+          });
+          
+          toast.success(`Successfully extracted and uploaded frame at ${timestamp}`, { id: "retry-frame" });
+        } else {
+          toast.error(`Failed to upload frame at ${timestamp}`, { id: "retry-frame" });
+        }
+      } else {
+        toast.error(`Failed to extract frame at ${timestamp}`, { id: "retry-frame" });
+      }
+    } catch (error) {
+      console.error(`Error retrying frame at ${timestamp}:`, error);
+      toast.error(`Retry failed: ${(error as Error).message}`, { id: "retry-frame" });
+      
+      // Update the status to error
+      setExtractedFrames(prev => 
+        prev.map(f => 
+          f.timestamp === timestamp 
+            ? { ...f, status: 'error' as const } 
+            : f
+        )
+      );
     }
   };
   
@@ -226,17 +355,33 @@ export const FrameExtractionModal = ({
                 src={videoUrl}
                 crossOrigin="anonymous"
                 controls
-                preload="metadata"
+                preload="auto"
                 className="w-full h-full object-contain"
                 onError={handleVideoError}
+                onLoadedData={handleVideoLoaded}
               />
             </div>
           )}
           
-          {/* Extraction Info */}
-          <div className="text-sm text-muted-foreground">
-            <p>Ready to extract {timestamps.length} frames from video</p>
-            <p className="mt-1">Frames will be saved for each timestamp in your slides</p>
+          {/* Video Readiness Indicator */}
+          <div className="flex justify-between items-center">
+            <div className="text-sm text-muted-foreground">
+              <p>Ready to extract {timestamps.length} frames from video</p>
+              <p className="mt-1">Frames will be saved for each timestamp in your slides</p>
+            </div>
+            <div className={`flex items-center gap-2 ${videoReady ? 'text-green-500' : 'text-amber-500'}`}>
+              {videoReady ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  <span className="text-sm font-medium">Video ready</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span className="text-sm font-medium">Preparing video...</span>
+                </>
+              )}
+            </div>
           </div>
           
           {/* Progress Indicator */}
@@ -257,20 +402,43 @@ export const FrameExtractionModal = ({
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                 {extractedFrames.map((frame, index) => (
                   <div key={index} className="aspect-video bg-muted rounded overflow-hidden relative">
-                    {frame.previewUrl && (
+                    {frame.previewUrl ? (
                       <img 
                         src={frame.previewUrl} 
                         alt={`Frame at ${frame.timestamp}`}
                         className="w-full h-full object-cover"
                       />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-muted">
+                        <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
                     )}
                     <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1">
                       {frame.timestamp}
                     </div>
                     
-                    {uploadedFrames.some(f => f.timestamp === frame.timestamp) && (
+                    {frame.status === 'success' && uploadedFrames.some(f => f.timestamp === frame.timestamp) && (
                       <div className="absolute top-1 right-1 bg-green-500 rounded-full p-1">
                         <Check className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                    
+                    {frame.status === 'error' && (
+                      <div className="absolute top-1 right-1 flex gap-1">
+                        <Button 
+                          size="icon" 
+                          variant="destructive" 
+                          className="h-6 w-6 rounded-full"
+                          onClick={() => retryFrame(frame.timestamp)}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {frame.status === 'pending' && (
+                      <div className="absolute top-1 right-1 bg-amber-500 rounded-full p-1">
+                        <RefreshCw className="h-3 w-3 text-white animate-spin" />
                       </div>
                     )}
                   </div>
@@ -287,7 +455,7 @@ export const FrameExtractionModal = ({
             </Button>
             
             {extractedFrames.length === 0 ? (
-              <Button onClick={startExtraction} disabled={isExtracting || !videoUrl}>
+              <Button onClick={startExtraction} disabled={isExtracting || !videoUrl || !videoReady}>
                 {isExtracting ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-1 animate-spin" />

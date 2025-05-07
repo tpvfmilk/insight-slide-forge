@@ -64,9 +64,14 @@ export const clientExtractFramesFromVideo = async (
       console.warn("Failed to verify slide_stills bucket:", bucketCheckError);
     }
     
-    // Generate a signed URL for the video with an expiration of 1 hour
+    // Generate a signed URL for the video with an expiration of 1 hour and CORS settings
     const { data, error } = await supabase.storage.from('video_uploads')
-      .createSignedUrl(videoPath, 3600);
+      .createSignedUrl(videoPath, 3600, {
+        download: false, // We need to stream, not download
+        transform: {
+          width: 1280, // Reasonable size limit to improve performance
+        }
+      });
       
     if (error || !data?.signedUrl) {
       console.error("Error creating signed URL:", error);
@@ -141,6 +146,7 @@ export const updateSlidesWithExtractedFrames = async (
       // Handle single timestamp
       if (typeof slide.timestamp === 'string' && frameMap.has(slide.timestamp)) {
         updatedSlide.imageUrl = frameMap.get(slide.timestamp);
+        console.log(`Updated slide ${slide.id} with image for timestamp ${slide.timestamp}`);
       }
       
       // Handle multiple timestamps
@@ -158,6 +164,7 @@ export const updateSlidesWithExtractedFrames = async (
         
         if (imageUrls.length > 0) {
           updatedSlide.imageUrls = imageUrls;
+          console.log(`Updated slide ${slide.id} with ${imageUrls.length} images for multiple timestamps`);
         }
       }
       

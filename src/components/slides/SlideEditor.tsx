@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -10,6 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProjectById } from "@/services/projectService";
 import { uploadSlideImage } from "@/services/imageService";
 import { exportToPDF, exportToCSV, exportToAnki, downloadFile } from "@/services/exportService";
+import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
+import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 
 interface Slide {
   id: string;
@@ -37,6 +39,10 @@ export const SlideEditor = () => {
     anki: false,
     csv: false
   });
+  const [isExtractingFrames, setIsExtractingFrames] = useState<boolean>(false);
+  const [isFrameExtractionModalOpen, setIsFrameExtractionModalOpen] = useState<boolean>(false);
+  const [videoPath, setVideoPath] = useState<string>("");
+  const [timestamps, setTimestamps] = useState<string[]>([]);
   
   const currentSlide = slides[currentSlideIndex];
   
@@ -54,11 +60,34 @@ export const SlideEditor = () => {
 
       setProjectTitle(project.title || "Untitled Project");
       
+      // Store video path for frame extraction
+      if (project.source_type === 'video' && project.source_file_path) {
+        setVideoPath(project.source_file_path);
+      }
+      
       if (project.slides && Array.isArray(project.slides)) {
         // Convert from Json to Slide array with proper type checking
         const slidesData = project.slides as unknown as Slide[];
         if (slidesData.length > 0) {
           setSlides(slidesData);
+          
+          // Collect all timestamps for potential frame extraction
+          const allTimestamps: string[] = [];
+          slidesData.forEach(slide => {
+            if (slide.timestamp) {
+              allTimestamps.push(slide.timestamp);
+            }
+            if (Array.isArray(slide.transcriptTimestamps)) {
+              slide.transcriptTimestamps.forEach(ts => {
+                if (typeof ts === 'string') {
+                  allTimestamps.push(ts);
+                }
+              });
+            }
+          });
+          
+          // Remove duplicates
+          setTimestamps([...new Set(allTimestamps)]);
         } else {
           // Default placeholder slide if slides array is empty
           setSlides([
@@ -143,6 +172,51 @@ export const SlideEditor = () => {
       toast.error(`Failed to generate slides: ${error.message}`, { id: "generate-slides" });
     } finally {
       setIsGenerating(false);
+    }
+  };
+  
+  const handleExtractFrames = async () => {
+    if (!projectId || !videoPath || isExtractingFrames || timestamps.length === 0) {
+      if (!videoPath) {
+        toast.error("No video available for this project");
+      } else if (timestamps.length === 0) {
+        toast.error("No timestamps found in slides");
+      }
+      return;
+    }
+    
+    setIsExtractingFrames(true);
+    
+    try {
+      const result = await clientExtractFramesFromVideo(projectId, videoPath, timestamps);
+      
+      if (result.success) {
+        setIsFrameExtractionModalOpen(true);
+      } else {
+        toast.error(`Failed to prepare frame extraction: ${result.error}`);
+      }
+    } finally {
+      setIsExtractingFrames(false);
+    }
+  };
+  
+  const handleFrameExtractionComplete = async (frames: Array<{ timestamp: string, imageUrl: string }>) => {
+    if (!projectId) return;
+    
+    setIsFrameExtractionModalOpen(false);
+    
+    if (frames.length === 0) {
+      toast.info("No frames were extracted");
+      return;
+    }
+    
+    // Update the project's slides with the extracted frames
+    const success = await updateSlidesWithExtractedFrames(projectId, frames);
+    
+    if (success) {
+      // Reload the project to get the updated slides with images
+      await loadProject();
+      toast.success("Frame extraction completed successfully");
     }
   };
   
@@ -444,6 +518,28 @@ export const SlideEditor = () => {
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Visual</h3>
             <div className="flex gap-2">
+              {/* Extract Frames Button - Added back */}
+              {videoPath && timestamps.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleExtractFrames} 
+                  disabled={isExtractingFrames}
+                >
+                  {isExtractingFrames ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      <FrameIcon className="h-4 w-4 mr-1" />
+                      Extract Frames
+                    </>
+                  )}
+                </Button>
+              )}
+              
               <label htmlFor="image-upload" className="flex">
                 <Button variant="outline" size="sm" disabled={isUploadingImage} className="cursor-pointer">
                   {isUploadingImage ? (
@@ -496,18 +592,32 @@ export const SlideEditor = () => {
               <div className="flex flex-col items-center justify-center text-muted-foreground h-full">
                 <ImageIcon className="h-10 w-10 mb-2" />
                 <p>No image available</p>
-                <label htmlFor="image-upload-empty" className="mt-4">
-                  <Button variant="outline" size="sm" className="cursor-pointer">
-                    Upload Image
-                  </Button>
-                  <input 
-                    id="image-upload-empty" 
-                    type="file" 
-                    accept="image/*"
-                    className="hidden" 
-                    onChange={handleImageUpload}
-                  />
-                </label>
+                <div className="flex gap-2 mt-4">
+                  {videoPath && timestamps.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleExtractFrames} 
+                      disabled={isExtractingFrames}
+                    >
+                      <FrameIcon className="h-4 w-4 mr-1" />
+                      Extract Frame
+                    </Button>
+                  )}
+                  <label htmlFor="image-upload-empty" className="">
+                    <Button variant="outline" size="sm" className="cursor-pointer">
+                      <Upload className="h-4 w-4 mr-1" />
+                      Upload Image
+                    </Button>
+                    <input 
+                      id="image-upload-empty" 
+                      type="file" 
+                      accept="image/*"
+                      className="hidden" 
+                      onChange={handleImageUpload}
+                    />
+                  </label>
+                </div>
               </div>
             )}
           </div>
@@ -597,3 +707,14 @@ export const SlideEditor = () => {
     </div>
   );
 };
+
+{videoPath && (
+  <FrameExtractionModal
+    open={isFrameExtractionModalOpen}
+    onClose={() => setIsFrameExtractionModalOpen(false)}
+    videoPath={videoPath}
+    projectId={projectId || ""}
+    timestamps={timestamps}
+    onComplete={handleFrameExtractionComplete}
+  />
+)}
