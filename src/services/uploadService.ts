@@ -48,12 +48,14 @@ export const uploadFile = async (file: File): Promise<{ path: string; url: strin
  * @param file Video file to be uploaded
  * @param title Project title
  * @param contextPrompt Optional context prompt to guide slide generation
+ * @param transcript Optional transcript text to enhance slide generation
  * @returns The created project
  */
 export const createProjectFromVideo = async (
   file: File, 
   title: string = 'New Project',
-  contextPrompt: string = ''
+  contextPrompt: string = '',
+  transcript: string = ''
 ): Promise<Project | null> => {
   try {
     // Upload the file
@@ -70,6 +72,7 @@ export const createProjectFromVideo = async (
       source_file_path: uploadResult.path,
       source_url: uploadResult.url,
       context_prompt: contextPrompt,
+      transcript: transcript || null, // Add transcript if provided
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 

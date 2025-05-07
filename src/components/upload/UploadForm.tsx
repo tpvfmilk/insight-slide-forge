@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Clock } from "lucide-react";
 import { VideoUpload } from "./VideoUpload";
 import { YoutubeUpload } from "./YoutubeUpload";
-import { TranscriptUpload } from "./TranscriptUpload";
+import { CombinedUpload } from "./CombinedUpload";
 
 export const UploadForm = () => {
   const [uploadMethod, setUploadMethod] = useState<string>("video");
@@ -24,7 +24,7 @@ export const UploadForm = () => {
           <TabsList className="grid grid-cols-3 mb-8">
             <TabsTrigger value="video">Video Upload</TabsTrigger>
             <TabsTrigger value="youtube">YouTube/Vimeo</TabsTrigger>
-            <TabsTrigger value="transcript">Direct Transcript</TabsTrigger>
+            <TabsTrigger value="combined">Combined Upload</TabsTrigger>
           </TabsList>
           
           <TabsContent value="video">
@@ -35,8 +35,8 @@ export const UploadForm = () => {
             <YoutubeUpload />
           </TabsContent>
           
-          <TabsContent value="transcript">
-            <TranscriptUpload />
+          <TabsContent value="combined">
+            <CombinedUpload />
           </TabsContent>
         </Tabs>
       </CardContent>
