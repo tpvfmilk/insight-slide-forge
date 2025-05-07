@@ -70,6 +70,15 @@ export const uploadSlideImage = async (file: File): Promise<{ path: string; url:
   }
 };
 
+// Define a type for slide to ensure type safety
+type Slide = {
+  transcriptTimestamps?: string[];
+  timestamp?: string;
+  imageUrls?: string[];
+  imageUrl?: string;
+  [key: string]: any;
+};
+
 /**
  * Checks if project slides have timestamps but no images
  * @param slides Array of slides to check
@@ -81,8 +90,11 @@ export const slidesNeedFrameExtraction = (slides: any[] | null): boolean => {
   }
   
   // Check if any slides have timestamps but no images
-  const slidesWithTimestamps = slides.filter(slide => {
-    if (!slide) return false;
+  const slidesWithTimestamps = slides.filter(slideJson => {
+    if (!slideJson) return false;
+    
+    // Cast to our slide type to access properties safely
+    const slide = slideJson as Slide;
     
     // Check if slide has timestamps (either as array or single timestamp)
     const hasTimestamps = 
@@ -100,4 +112,3 @@ export const slidesNeedFrameExtraction = (slides: any[] | null): boolean => {
   
   return slidesWithTimestamps.length > 0;
 };
-

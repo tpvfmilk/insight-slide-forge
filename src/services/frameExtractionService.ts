@@ -182,6 +182,13 @@ export const mapTimestampsToImages = (
   return imageUrls;
 };
 
+// Helper type to properly access slide properties
+type SlideType = {
+  transcriptTimestamps?: string[];
+  timestamp?: string;
+  [key: string]: any;
+};
+
 /**
  * Extract frames for an existing project that already has slides with timestamps
  * @param projectId ID of the project
@@ -225,8 +232,11 @@ export const manuallyExtractFramesForExistingProject = async (projectId: string)
       return false;
     }
     
-    project.slides.forEach(slide => {
-      if (slide) {
+    project.slides.forEach(slideJson => {
+      // Type guard to ensure we can safely access slide properties
+      if (slideJson && typeof slideJson === 'object') {
+        const slide = slideJson as SlideType;
+        
         // Collect timestamps from either transcriptTimestamps array or single timestamp
         if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
           timestamps.push(...slide.transcriptTimestamps);
