@@ -2,6 +2,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+interface FrameExtractionResult {
+  success: boolean;
+  frames?: Array<{ timestamp: string, imageUrl: string }>; 
+}
+
 /**
  * Extract frames from a video at specific timestamps
  * @param projectId ID of the project
@@ -13,8 +18,16 @@ export const extractFramesFromVideo = async (
   projectId: string,
   videoPath: string,
   timestamps: string[]
-): Promise<{ success: boolean; frames?: Array<{ timestamp: string, imageUrl: string }> }> => {
+): Promise<FrameExtractionResult> => {
   try {
+    if (!timestamps || timestamps.length === 0) {
+      console.warn("No timestamps provided for frame extraction");
+      return { success: false };
+    }
+    
+    // Deduplicate timestamps to avoid extracting the same frame multiple times
+    const uniqueTimestamps = [...new Set(timestamps)];
+    
     toast.loading("Extracting video frames...", { id: "extract-frames" });
     
     const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/extract-frames', {
@@ -26,7 +39,7 @@ export const extractFramesFromVideo = async (
       body: JSON.stringify({
         projectId,
         videoPath,
-        timestamps
+        timestamps: uniqueTimestamps
       })
     });
     
@@ -44,4 +57,30 @@ export const extractFramesFromVideo = async (
     toast.error(`Failed to extract frames: ${error.message}`, { id: "extract-frames" });
     return { success: false };
   }
+};
+
+/**
+ * Maps timestamps to their corresponding extracted frame images
+ * @param extractedFrames Array of extracted frames with timestamps and imageUrls
+ * @param slideTimestamps Array of timestamps associated with a specific slide
+ * @returns Array of image URLs for the matching timestamps
+ */
+export const mapTimestampsToImages = (
+  extractedFrames: Array<{ timestamp: string, imageUrl: string }> = [],
+  slideTimestamps: string[] = []
+): string[] => {
+  if (!extractedFrames || extractedFrames.length === 0 || !slideTimestamps || slideTimestamps.length === 0) {
+    return [];
+  }
+  
+  // Create a map for quick lookup of timestamps to image URLs
+  const frameMap = new Map<string, string>();
+  extractedFrames.forEach(frame => {
+    frameMap.set(frame.timestamp, frame.imageUrl);
+  });
+  
+  // Map each timestamp to its corresponding image URL if available
+  return slideTimestamps
+    .map(timestamp => frameMap.get(timestamp))
+    .filter(Boolean) as string[]; // Remove any undefined values
 };

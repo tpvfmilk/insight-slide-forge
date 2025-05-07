@@ -57,13 +57,13 @@ async function extractFrameWithFFmpeg(
 
     if (!status.success) {
       const stderr = new TextDecoder().decode(await ffmpegProcess.stderrOutput());
-      console.error(`FFmpeg error: ${stderr}`);
+      console.error(`FFmpeg error for timestamp ${timestamp}: ${stderr}`);
       return null;
     }
 
     return outputData;
   } catch (error) {
-    console.error("Error in FFmpeg process:", error);
+    console.error(`Error in FFmpeg process for timestamp ${timestamp}:`, error);
     return null;
   }
 }
@@ -112,6 +112,29 @@ serve(async (req) => {
       );
     }
 
+    // Check if slide_images bucket exists, create if it doesn't
+    try {
+      const { data: bucket, error: bucketError } = await supabase
+        .storage
+        .getBucket('slide_images');
+      
+      if (bucketError && bucketError.message === 'The resource was not found') {
+        // Create the bucket if it doesn't exist
+        const { error: createError } = await supabase
+          .storage
+          .createBucket('slide_images', { public: true });
+          
+        if (createError) {
+          console.error("Error creating slide_images bucket:", createError);
+        } else {
+          console.log("Created slide_images bucket successfully");
+        }
+      }
+    } catch (bucketError) {
+      console.error("Error checking/creating slide_images bucket:", bucketError);
+      // Continue execution, we'll see if the upload works
+    }
+
     // Download the video file from storage
     const { data: fileData, error: fileError } = await supabase
       .storage
@@ -133,11 +156,16 @@ serve(async (req) => {
     const frameResults = [];
     const slides = [...(project.slides || [])];
     
-    for (let i = 0; i < timestamps.length; i++) {
-      const timestamp = timestamps[i];
+    // Deduplicate timestamps to avoid extracting the same frame multiple times
+    const uniqueTimestamps = [...new Set(timestamps)];
+    console.log(`Processing ${uniqueTimestamps.length} unique timestamps out of ${timestamps.length} total`);
+    
+    for (let i = 0; i < uniqueTimestamps.length; i++) {
+      const timestamp = uniqueTimestamps[i];
       
       // Skip if timestamp is invalid
       if (!timestamp || typeof timestamp !== 'string') {
+        console.warn(`Skipping invalid timestamp at index ${i}`);
         continue;
       }
 
@@ -171,26 +199,47 @@ serve(async (req) => {
         .from('slide_images')
         .getPublicUrl(frameFileName);
 
-      // Find the corresponding slide and update its imageUrl
-      const slideIndex = slides.findIndex(slide => slide.timestamp === timestamp);
-      if (slideIndex >= 0) {
-        slides[slideIndex] = {
-          ...slides[slideIndex],
-          imageUrl: urlData.publicUrl
-        };
-      }
-
       frameResults.push({
         timestamp,
         imageUrl: urlData.publicUrl
       });
     }
 
+    // Update slides with new image URLs (handle both the old and new format)
+    const updatedSlides = slides.map(slide => {
+      // For slides with transcriptTimestamps array
+      if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
+        const matchingFrames = frameResults.filter(frame => 
+          slide.transcriptTimestamps.includes(frame.timestamp)
+        );
+
+        if (matchingFrames.length > 0) {
+          return {
+            ...slide,
+            imageUrls: matchingFrames.map(frame => frame.imageUrl)
+          };
+        }
+      } 
+      // For slides with single timestamp (backward compatibility)
+      else if (slide.timestamp) {
+        const matchingFrame = frameResults.find(frame => frame.timestamp === slide.timestamp);
+        if (matchingFrame) {
+          return {
+            ...slide,
+            imageUrl: matchingFrame.imageUrl
+          };
+        }
+      }
+      
+      // If no matches, return slide as is
+      return slide;
+    });
+
     // Update the project with the updated slides
     const { error: updateError } = await supabase
       .from('projects')
       .update({ 
-        slides,
+        slides: updatedSlides,
         updated_at: new Date().toISOString()
       })
       .eq('id', projectId);

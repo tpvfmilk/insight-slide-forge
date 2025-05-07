@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,8 @@ export interface Slide {
   content: string;
   timestamp?: string;
   imageUrl?: string;
+  imageUrls?: string[];
+  transcriptTimestamps?: string[];
   transitionType?: "fade" | "slide" | "zoom";
 }
 
@@ -21,7 +24,22 @@ type TransitionDirection = "next" | "prev" | "none";
 const SlideContent = ({ slide }: { slide: Slide }) => (
   <div className="space-y-6">
     <h2 className="text-4xl font-bold">{slide.title}</h2>
-    {slide.imageUrl && (
+    
+    {/* Display multiple images if available, otherwise fall back to single imageUrl */}
+    {slide.imageUrls && slide.imageUrls.length > 0 ? (
+      <div className="my-6">
+        <div className={`grid ${slide.imageUrls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
+          {slide.imageUrls.map((url, index) => (
+            <img 
+              key={`${slide.id}-image-${index}`}
+              src={url} 
+              alt={`${slide.title} - visual ${index + 1}`}
+              className="mx-auto max-h-[30vh] object-contain rounded-md"
+            />
+          ))}
+        </div>
+      </div>
+    ) : slide.imageUrl ? (
       <div className="my-8">
         <img 
           src={slide.imageUrl} 
@@ -29,7 +47,8 @@ const SlideContent = ({ slide }: { slide: Slide }) => (
           className="mx-auto max-h-[50vh] object-contain"
         />
       </div>
-    )}
+    ) : null}
+    
     <div className="text-xl whitespace-pre-line overflow-y-auto max-h-[60vh] px-2 md:px-0">
       {slide.content}
     </div>

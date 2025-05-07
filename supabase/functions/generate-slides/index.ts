@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -18,7 +17,9 @@ interface Slide {
   title: string;
   content: string;
   timestamp?: string;
+  transcriptTimestamps?: string[];
   imageUrl?: string;
+  imageUrls?: string[];
 }
 
 serve(async (req) => {
@@ -116,13 +117,6 @@ serve(async (req) => {
       );
     }
 
-    // If it's a video, extract still images for each slide with a timestamp
-    if (project.source_type === 'video' && project.source_file_path) {
-      // This would be implemented with ffmpeg
-      // For now, we'll skip this part as it requires more complex edge function capabilities
-      // and will be handled in a separate function call
-    }
-
     return new Response(
       JSON.stringify({ success: true, slides: slideDeck }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -154,7 +148,7 @@ async function generateSlidesWithAI(content: string, title: string, contextPromp
     - id (string): a unique identifier like "slide-1"
     - title (string): a concise, informative title
     - content (string): bullet points separated by '\\n• ' (newline and bullet)
-    - timestamp (optional string): if applicable, in format "00:05:32"
+    - transcriptTimestamps (array of strings): include 1-4 timestamps from the transcript that this slide covers, in "00:05:32" format
     
     For the main title slide, use the title: "${title}"
     
@@ -165,6 +159,15 @@ async function generateSlidesWithAI(content: string, title: string, contextPromp
     ${contextInfo}
     
     Create ${targetSlideCount} slides total that capture the key points. Structure should follow a logical flow with introduction, main points, and conclusion.
+    
+    IMPORTANT INSTRUCTIONS FOR TIMESTAMPS:
+    - For each slide, identify 1-4 key moments from the transcript that the slide content references
+    - Include timestamps for these moments in the "transcriptTimestamps" array
+    - For longer, content-rich slides, include more timestamps (up to 4)
+    - For simpler slides, 1-2 timestamps is sufficient
+    - If timestamps are explicitly mentioned in the transcript (like "at 00:05:32"), use those exact timestamps
+    - Otherwise, make your best estimation of where in the transcript the content appears
+    - The goal is to extract frames from these timestamps to provide visual context for each slide
     `;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -178,7 +181,7 @@ async function generateSlidesWithAI(content: string, title: string, contextPromp
         messages: [
           {
             role: "system",
-            content: "You are a professional presentation creator specialized in creating well-organized slide decks."
+            content: "You are a professional presentation creator specialized in creating well-organized slide decks with visual context."
           },
           {
             role: "user",
@@ -208,7 +211,25 @@ async function generateSlidesWithAI(content: string, title: string, contextPromp
     // Parse JSON safely
     try {
       const slides: Slide[] = JSON.parse(slidesContent);
-      return slides;
+      
+      // Process each slide to ensure it has the expected format
+      const processedSlides = slides.map((slide, index) => {
+        // Ensure transcriptTimestamps is an array
+        const transcriptTimestamps = Array.isArray(slide.transcriptTimestamps) 
+          ? slide.transcriptTimestamps 
+          : (slide.timestamp ? [slide.timestamp] : []);
+          
+        // Limit to max 4 timestamps to keep things manageable
+        const limitedTimestamps = transcriptTimestamps.slice(0, 4);
+        
+        return {
+          ...slide,
+          id: slide.id || `slide-${index + 1}`,
+          transcriptTimestamps: limitedTimestamps
+        };
+      });
+      
+      return processedSlides;
     } catch (e) {
       console.error("Failed to parse AI response as JSON:", e);
       console.log("Raw response:", slidesContent);

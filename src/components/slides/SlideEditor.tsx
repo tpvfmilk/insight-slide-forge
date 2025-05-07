@@ -17,6 +17,8 @@ interface Slide {
   content: string;
   timestamp?: string;
   imageUrl?: string;
+  imageUrls?: string[];
+  transcriptTimestamps?: string[];
 }
 
 export const SlideEditor = () => {
@@ -306,17 +308,18 @@ export const SlideEditor = () => {
   };
   
   const removeImage = () => {
-    if (currentSlide?.imageUrl) {
+    if (currentSlide?.imageUrl || (currentSlide?.imageUrls && currentSlide.imageUrls.length > 0)) {
       const updatedSlides = [...slides];
       updatedSlides[currentSlideIndex] = {
         ...updatedSlides[currentSlideIndex],
-        imageUrl: undefined
+        imageUrl: undefined,
+        imageUrls: []
       };
       
       setSlides(updatedSlides);
       updateSlidesInDatabase(updatedSlides);
       
-      toast.success("Image removed");
+      toast.success("Images removed");
     }
   };
   
@@ -462,7 +465,7 @@ export const SlideEditor = () => {
                   disabled={isUploadingImage}
                 />
               </label>
-              {currentSlide?.imageUrl && (
+              {(currentSlide?.imageUrl || (currentSlide?.imageUrls && currentSlide.imageUrls.length > 0)) && (
                 <Button variant="outline" size="sm" onClick={removeImage}>
                   <Trash2 className="h-4 w-4 mr-1" />
                   Remove
@@ -471,7 +474,20 @@ export const SlideEditor = () => {
             </div>
           </div>
           <div className="flex-1 flex items-center justify-center p-4">
-            {currentSlide?.imageUrl ? (
+            {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? (
+              <div className="relative w-full h-full">
+                <div className={`grid ${currentSlide.imageUrls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
+                  {currentSlide.imageUrls.map((url, index) => (
+                    <img 
+                      key={`slide-image-${index}`}
+                      src={url} 
+                      alt={`Slide visual ${index + 1}`} 
+                      className="w-full object-contain rounded-md"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : currentSlide?.imageUrl ? (
               <div className="relative w-full h-full">
                 <img 
                   src={currentSlide.imageUrl} 

@@ -1,8 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Project } from "@/services/projectService";
-import { extractFramesFromVideo } from "@/services/frameExtractionService";
+import { extractFramesFromVideo, mapTimestampsToImages } from "@/services/frameExtractionService";
 
 /**
  * Initiates the slide generation process for a project
@@ -59,23 +58,56 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
     
     // If this is a video source, extract frames for slides with timestamps
     if (project.source_type === 'video' && project.source_file_path) {
-      // Filter out slides with valid timestamps
-      const slidesWithTimestamps = generatedSlides.filter(slide => slide.timestamp && typeof slide.timestamp === 'string');
+      // Collect all timestamps from all slides
+      const allTimestamps = generatedSlides.reduce((timestamps, slide) => {
+        // Use either transcriptTimestamps array or single timestamp 
+        if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
+          return [...timestamps, ...slide.transcriptTimestamps];
+        } else if (slide.timestamp && typeof slide.timestamp === 'string') {
+          return [...timestamps, slide.timestamp];
+        }
+        return timestamps;
+      }, []);
       
-      if (slidesWithTimestamps.length > 0) {
-        const timestamps = slidesWithTimestamps.map(slide => slide.timestamp);
-        console.log("Extracting frames for timestamps:", timestamps);
+      if (allTimestamps.length > 0) {
+        console.log("Extracting frames for timestamps:", allTimestamps);
         
-        // Extract frames in the background without waiting
-        extractFramesFromVideo(projectId, project.source_file_path, timestamps)
-          .then(result => {
-            if (result.success) {
-              console.log("Frames extracted successfully:", result.frames);
+        // Extract frames for all timestamps in one go
+        const extractionResult = await extractFramesFromVideo(projectId, project.source_file_path, allTimestamps);
+        
+        if (extractionResult.success && extractionResult.frames) {
+          console.log("Frames extracted successfully:", extractionResult.frames);
+          
+          // Map timestamps to images for each slide
+          const slidesWithImages = generatedSlides.map(slide => {
+            // Determine which timestamps to use for this slide
+            const slideTimestamps = slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps) 
+              ? slide.transcriptTimestamps 
+              : (slide.timestamp ? [slide.timestamp] : []);
+            
+            // Map timestamps to images
+            const imageUrls = mapTimestampsToImages(extractionResult.frames, slideTimestamps);
+            
+            // If we have new imageUrls array, use it, otherwise keep the existing imageUrl for backward compatibility
+            if (imageUrls.length > 0) {
+              return {
+                ...slide,
+                imageUrls
+              };
+            } else if (slide.timestamp && extractionResult.frames) {
+              const matchingFrame = extractionResult.frames.find(frame => frame.timestamp === slide.timestamp);
+              if (matchingFrame) {
+                return {
+                  ...slide,
+                  imageUrl: matchingFrame.imageUrl
+                };
+              }
             }
-          })
-          .catch(error => {
-            console.error("Error extracting frames:", error);
+            return slide;
           });
+          
+          return { success: true, slides: slidesWithImages };
+        }
       }
     }
     
