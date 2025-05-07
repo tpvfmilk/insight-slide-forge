@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, FrameSelector } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -12,6 +12,7 @@ import { uploadSlideImage } from "@/services/imageService";
 import { exportToPDF, exportToCSV, exportToAnki, downloadFile } from "@/services/exportService";
 import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
+import { FrameSelector } from "@/components/slides/FrameSelector";
 
 interface Slide {
   id: string;
