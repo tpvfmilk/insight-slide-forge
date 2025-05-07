@@ -47,11 +47,13 @@ export const uploadFile = async (file: File): Promise<{ path: string; url: strin
  * Creates a new project from an uploaded video file
  * @param file Video file to be uploaded
  * @param title Project title
+ * @param contextPrompt Optional context prompt to guide slide generation
  * @returns The created project
  */
 export const createProjectFromVideo = async (
   file: File, 
-  title: string = 'New Project'
+  title: string = 'New Project',
+  contextPrompt: string = ''
 ): Promise<Project | null> => {
   try {
     // Upload the file
@@ -67,6 +69,7 @@ export const createProjectFromVideo = async (
       source_type: 'video',
       source_file_path: uploadResult.path,
       source_url: uploadResult.url,
+      context_prompt: contextPrompt,
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 
@@ -85,11 +88,13 @@ export const createProjectFromVideo = async (
  * Creates a new project from a YouTube/Vimeo URL
  * @param url Video URL (YouTube or Vimeo)
  * @param title Project title
+ * @param contextPrompt Optional context prompt to guide slide generation
  * @returns The created project
  */
 export const createProjectFromUrl = async (
   url: string, 
-  title: string = 'New Project'
+  title: string = 'New Project',
+  contextPrompt: string = ''
 ): Promise<Project | null> => {
   try {
     // Create a new project
@@ -97,6 +102,7 @@ export const createProjectFromUrl = async (
       title: title || `Project from URL`,
       source_type: 'url',
       source_url: url,
+      context_prompt: contextPrompt,
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 
@@ -116,12 +122,14 @@ export const createProjectFromUrl = async (
  * @param transcript Transcript text
  * @param title Project title
  * @param imageFile Optional image file to include with the transcript
+ * @param contextPrompt Optional context prompt to guide slide generation
  * @returns The created project
  */
 export const createProjectFromTranscript = async (
   transcript: string, 
   title: string = 'New Project',
-  imageFile: File | null = null
+  imageFile: File | null = null,
+  contextPrompt: string = ''
 ): Promise<Project | null> => {
   try {
     // Upload image if provided
@@ -140,6 +148,7 @@ export const createProjectFromTranscript = async (
       transcript: transcript,
       source_file_path: imageUploadResult?.path || null,
       source_url: imageUploadResult?.url || null,
+      context_prompt: contextPrompt,
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 

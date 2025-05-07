@@ -6,9 +6,11 @@ import { ArrowRight, Image, Loader2 } from "lucide-react";
 import { createProjectFromTranscript, uploadFile } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { ContextPromptInput } from "./ContextPromptInput";
 
 export const TranscriptUpload = () => {
   const [transcriptText, setTranscriptText] = useState<string>("");
+  const [contextPrompt, setContextPrompt] = useState<string>("");
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -24,8 +26,14 @@ export const TranscriptUpload = () => {
     }
     
     try {
-      // Create project from transcript text
-      const project = await createProjectFromTranscript(transcriptText, undefined, imageFile);
+      setIsUploading(true);
+      // Create project from transcript text - now with context prompt
+      const project = await createProjectFromTranscript(
+        transcriptText, 
+        undefined, 
+        imageFile, 
+        contextPrompt
+      );
       
       if (project) {
         toast.success("Transcript received. Processing...");
@@ -34,6 +42,8 @@ export const TranscriptUpload = () => {
     } catch (error) {
       toast.error("Failed to process transcript");
       console.error("Transcript processing error:", error);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -95,6 +105,13 @@ export const TranscriptUpload = () => {
           value={transcriptText}
           onChange={(e) => setTranscriptText(e.target.value)}
           className="min-h-[200px]"
+        />
+      </div>
+      
+      <div className="w-full mt-4">
+        <ContextPromptInput 
+          value={contextPrompt}
+          onChange={setContextPrompt}
         />
       </div>
       

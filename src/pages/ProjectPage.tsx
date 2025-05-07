@@ -1,13 +1,15 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Project, fetchProjectById } from "@/services/projectService";
+import { Project, fetchProjectById, updateProject } from "@/services/projectService";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings2 } from "lucide-react";
 import { generateSlidesForProject, hasValidSlides } from "@/services/slideGenerationService";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -15,6 +17,9 @@ const ProjectPage = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [contextPrompt, setContextPrompt] = useState<string>("");
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
   
   const loadProject = async () => {
     if (!projectId) return;
@@ -30,6 +35,7 @@ const ProjectPage = () => {
       }
       
       setProject(projectData);
+      setContextPrompt(projectData.context_prompt || "");
       
       // For new projects, automatically trigger slide generation if no slides exist
       const isNewlyCreated = Date.now() - new Date(projectData.created_at).getTime() < 60000; // Within a minute
@@ -72,6 +78,35 @@ const ProjectPage = () => {
       setIsGenerating(false);
     }
   };
+
+  const handleSaveContext = async () => {
+    if (!projectId || !project) return;
+    
+    setIsSaving(true);
+    
+    try {
+      await updateProject(projectId, {
+        context_prompt: contextPrompt
+      });
+      
+      toast.success("Context prompt saved");
+      setIsDialogOpen(false);
+      
+      // Update the project in state with the new context
+      setProject(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          context_prompt: contextPrompt
+        };
+      });
+    } catch (error) {
+      console.error("Error saving context:", error);
+      toast.error("Failed to save context prompt");
+    } finally {
+      setIsSaving(false);
+    }
+  };
   
   return (
     <InsightLayout>
@@ -97,24 +132,67 @@ const ProjectPage = () => {
             </div>
           </div>
           
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleGenerateSlides} 
-            disabled={isGenerating}
-          >
-            {isGenerating ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-1" />
-                Generate Slides
-              </>
-            )}
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings2 className="h-4 w-4 mr-1" />
+                  Context Settings
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Slide Generation Context</DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                  <ContextPromptInput 
+                    value={contextPrompt}
+                    onChange={setContextPrompt}
+                  />
+                  
+                  <div className="flex justify-end mt-4 space-x-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsDialogOpen(false)}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSaveContext}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                          Saving...
+                        </>
+                      ) : "Save Context"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleGenerateSlides} 
+              disabled={isGenerating}
+            >
+              {isGenerating ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  Generate Slides
+                </>
+              )}
+            </Button>
+          </div>
         </div>
         
         <div className="flex-1 overflow-hidden">

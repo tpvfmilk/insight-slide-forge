@@ -12,6 +12,17 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
   try {
     toast.loading("Generating slides...", { id: "generate-slides" });
     
+    // Fetch the project to get context_prompt if available
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('context_prompt')
+      .eq('id', projectId)
+      .single();
+      
+    if (projectError) {
+      console.error('Error fetching project context:', projectError);
+    }
+    
     const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/generate-slides`, {
       method: "POST",
       headers: {
@@ -19,7 +30,8 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
         "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
       },
       body: JSON.stringify({
-        projectId
+        projectId,
+        contextPrompt: project?.context_prompt || ''
       })
     });
     

@@ -28,7 +28,7 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId } = await req.json();
+    const { projectId, contextPrompt } = await req.json();
 
     if (!projectId) {
       return new Response(
@@ -66,8 +66,11 @@ serve(async (req) => {
       );
     }
 
+    // Use either contextPrompt passed in the request or the one stored in the project
+    const finalContextPrompt = contextPrompt || project.context_prompt || '';
+
     // Process with AI
-    const slideDeck: Slide[] = await generateSlidesWithAI(contentForProcessing, project.title);
+    const slideDeck: Slide[] = await generateSlidesWithAI(contentForProcessing, project.title, finalContextPrompt);
     
     // Update project with generated slides
     const { error: updateError } = await supabase
@@ -98,12 +101,18 @@ serve(async (req) => {
   }
 });
 
-async function generateSlidesWithAI(content: string, title: string): Promise<Slide[]> {
+async function generateSlidesWithAI(content: string, title: string, contextPrompt: string = ''): Promise<Slide[]> {
   if (!openAIKey) {
     throw new Error("OpenAI API key not configured");
   }
 
   try {
+    // Incorporate the contextPrompt into the system prompt if provided
+    let contextInfo = '';
+    if (contextPrompt && contextPrompt.trim()) {
+      contextInfo = `\nAdditional context from the user:\n${contextPrompt.trim()}\n\nUse this context to guide your slide creation. The context may include instructions on what to focus on, what to skip, or how to maintain consistency with other content.`;
+    }
+
     const prompt = `
     You are a professional presentation creator. Create a well-structured slide deck based on the following content.
     Format the output as a JSON array of slide objects, where each slide has:
@@ -116,6 +125,7 @@ async function generateSlidesWithAI(content: string, title: string): Promise<Sli
     
     Here's the content to transform into slides:
     ${content}
+    ${contextInfo}
     
     Create 5-7 slides total that capture the key points. Structure should follow a logical flow with introduction, main points, and conclusion.
     `;

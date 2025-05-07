@@ -6,10 +6,12 @@ import { Progress } from "@/components/ui/progress";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { ContextPromptInput } from "./ContextPromptInput";
 
 export const VideoUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [contextPrompt, setContextPrompt] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -51,8 +53,8 @@ export const VideoUpload = () => {
     }, 300);
     
     try {
-      // Perform the actual upload
-      const project = await createProjectFromVideo(file);
+      // Perform the actual upload - now with context prompt
+      const project = await createProjectFromVideo(file, undefined, contextPrompt);
       
       clearInterval(interval);
       setUploadProgress(100);
@@ -80,6 +82,14 @@ export const VideoUpload = () => {
       <p className="text-sm text-muted-foreground mb-4 text-center">
         MP4 or WebM format, up to 100MB
       </p>
+      
+      <div className="w-full mb-6">
+        <ContextPromptInput 
+          value={contextPrompt}
+          onChange={setContextPrompt}
+        />
+      </div>
+      
       <input 
         type="file" 
         ref={fileInputRef}

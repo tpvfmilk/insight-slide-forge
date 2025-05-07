@@ -7,9 +7,11 @@ import { Progress } from "@/components/ui/progress";
 import { createProjectFromUrl } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { ContextPromptInput } from "./ContextPromptInput";
 
 export const YoutubeUpload = () => {
   const [videoUrl, setVideoUrl] = useState<string>("");
+  const [contextPrompt, setContextPrompt] = useState<string>("");
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const navigate = useNavigate();
@@ -49,8 +51,8 @@ export const YoutubeUpload = () => {
     }, 300);
     
     try {
-      // Create project from URL
-      const project = await createProjectFromUrl(videoUrl);
+      // Create project from URL - now with context prompt
+      const project = await createProjectFromUrl(videoUrl, undefined, contextPrompt);
       
       clearInterval(interval);
       setUploadProgress(100);
@@ -98,6 +100,13 @@ export const YoutubeUpload = () => {
             Process
           </Button>
         </div>
+      </div>
+
+      <div className="w-full mt-4">
+        <ContextPromptInput 
+          value={contextPrompt}
+          onChange={setContextPrompt}
+        />
       </div>
       
       {isUploading && (

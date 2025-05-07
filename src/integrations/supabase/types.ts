@@ -112,6 +112,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          context_prompt: string | null
           created_at: string
           description: string | null
           expires_at: string
@@ -127,6 +128,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          context_prompt?: string | null
           created_at?: string
           description?: string | null
           expires_at?: string
@@ -142,6 +144,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          context_prompt?: string | null
           created_at?: string
           description?: string | null
           expires_at?: string
