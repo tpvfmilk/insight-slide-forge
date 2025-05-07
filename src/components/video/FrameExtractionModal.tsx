@@ -442,19 +442,14 @@ export const FrameExtractionModal = ({
         </DialogHeader>
         
         <div className="p-4 space-y-6">
-          {/* Video Details Card - Added from sidebar */}
+          {/* Video Details Card - Fixed prop passing to match the component's interface */}
           {videoMetadata && (
             <div className="mb-6">
-              <VideoDetailsCard
-                fileName={videoMetadata.original_file_name}
-                duration={videoMetadata.duration}
-                fileType={videoMetadata.file_type}
-                fileSize={videoMetadata.fileSize || videoMetadata.file_size}
-              />
+              <VideoDetailsCard videoMetadata={videoMetadata} />
             </div>
           )}
           
-          {/* Previously Extracted Frames - Added from sidebar */}
+          {/* Previously Extracted Frames */}
           {previouslyExtractedFrames && previouslyExtractedFrames.length > 0 && (
             <div className="mb-6">
               <h3 className="text-sm font-medium mb-2">Previously Extracted Frames</h3>

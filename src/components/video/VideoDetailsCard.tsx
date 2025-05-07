@@ -8,7 +8,7 @@ interface VideoDetailsCardProps {
     duration?: number;
     original_file_name?: string;
     file_type?: string;
-    file_size?: number; // Corrected property name to match
+    file_size?: number;
   };
 }
 
