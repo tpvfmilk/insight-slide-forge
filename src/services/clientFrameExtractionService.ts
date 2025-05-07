@@ -2,7 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { uploadSlideImage } from "@/services/imageService";
 import { timestampToSeconds, formatDuration } from "@/utils/formatUtils";
-import { extractFrameFromVideo } from "@/utils/videoFrameExtractor";
+import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 
 export interface ExtractedFrame {
   timestamp: string;
@@ -59,7 +59,8 @@ export const clientExtractFramesFromVideo = async (
     
     // Get a signed URL for the video
     const { data: urlData, error: urlError } = await supabase
-      .from("videos")
+      .storage
+      .from('videos')
       .createSignedUrl(videoPath, 3600); // 1 hour expiry
     
     if (urlError || !urlData?.signedUrl) {
@@ -91,12 +92,41 @@ export const clientExtractFramesFromVideo = async (
               // Convert timestamp to seconds
               const seconds = timestampToSeconds(timestamp);
               
-              // Extract frame from video
-              const frameBlob = await extractFrameFromVideo(video, seconds);
+              // Extract frame from video by seeking to position and capturing
+              video.currentTime = seconds;
+              
+              // Wait for video to seek to the position
+              await new Promise<void>((seekResolve) => {
+                const handleSeeked = () => {
+                  video.removeEventListener('seeked', handleSeeked);
+                  seekResolve();
+                };
+                video.addEventListener('seeked', handleSeeked);
+              });
+              
+              // Create a canvas to capture the frame
+              const canvas = document.createElement('canvas');
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                throw new Error("Failed to get canvas context");
+              }
+              
+              // Draw the video frame to the canvas
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              
+              // Convert the canvas to a blob
+              const blob = await new Promise<Blob>((blobResolve) => {
+                canvas.toBlob((blob) => {
+                  if (blob) blobResolve(blob);
+                  else reject(new Error("Failed to create blob"));
+                }, 'image/jpeg', 0.95);
+              });
               
               // Create a file from the blob
               const filename = `frame-${timestamp.replace(/:/g, "-")}.jpg`;
-              const file = new File([frameBlob], filename, { type: 'image/jpeg' });
+              const file = new File([blob], filename, { type: 'image/jpeg' });
               
               // Upload the file
               const uploadResult = await uploadSlideImage(file);

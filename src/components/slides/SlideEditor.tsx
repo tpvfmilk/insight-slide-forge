@@ -75,7 +75,7 @@ export const SlideEditor = () => {
       
       // Load all extracted frames
       if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
-        setAllExtractedFrames(project.extracted_frames);
+        setAllExtractedFrames(project.extracted_frames as unknown as ExtractedFrame[]);
       }
       
       if (project.slides && Array.isArray(project.slides)) {
