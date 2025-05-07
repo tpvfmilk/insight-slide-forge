@@ -1,8 +1,9 @@
-# 🧠 Insight Slide Forge
+# ![distill-logo](https://github.com/user-attachments/assets/5277f352-bd50-4a99-a5ba-90657802a74a) Insight Slide Forge
 
 Transform videos into structured, AI-powered slide decks for professional study, review, and licensing prep — all in your browser.
 
-![Distill Logo](public/logo.png)
+
+
 
 ## 🚀 Overview
 
