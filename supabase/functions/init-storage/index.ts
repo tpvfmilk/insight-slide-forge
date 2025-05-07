@@ -7,58 +7,70 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
-  
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Create video_uploads bucket if it doesn't exist
-    const { data: buckets, error: bucketsError } = await supabase
-      .storage
-      .listBuckets();
-      
-    if (bucketsError) {
-      throw new Error(`Failed to list buckets: ${bucketsError.message}`);
-    }
-    
-    const videoBucketExists = buckets.some(bucket => bucket.name === 'video_uploads');
-    
-    if (!videoBucketExists) {
-      const { error: createError } = await supabase
+    // Create buckets if they don't exist
+    const buckets = [
+      {
+        id: 'video_uploads',
+        name: 'Video Uploads',
+        public: false,
+        file_size_limit: 104857600, // 100MB
+      },
+      {
+        id: 'slide_images',
+        name: 'Slide Images',
+        public: true,
+        file_size_limit: 5242880, // 5MB
+      },
+    ];
+
+    for (const bucket of buckets) {
+      // Check if bucket exists
+      const { data: existingBucket, error: getBucketError } = await supabase
         .storage
-        .createBucket('video_uploads', {
-          public: false,  // Not public by default for security
-          fileSizeLimit: 104857600,  // 100MB limit
-        });
-        
-      if (createError) {
-        throw new Error(`Failed to create video_uploads bucket: ${createError.message}`);
+        .getBucket(bucket.id);
+
+      if (getBucketError && getBucketError.message !== 'The resource was not found') {
+        console.error(`Error checking bucket ${bucket.id}:`, getBucketError);
+        continue;
       }
-      
-      // Set RLS policies for the bucket to allow authenticated users to upload/download videos
-      const { error: policyError } = await supabase.rpc('create_video_storage_policies');
-      
-      if (policyError) {
-        console.warn(`Failed to set policies for video_uploads bucket: ${policyError.message}`);
-        console.warn('You may need to manually set the policies in the Supabase dashboard.');
+
+      // Create bucket if it doesn't exist
+      if (!existingBucket) {
+        const { error: createBucketError } = await supabase
+          .storage
+          .createBucket(bucket.id, {
+            public: bucket.public,
+            fileSizeLimit: bucket.file_size_limit,
+          });
+
+        if (createBucketError) {
+          console.error(`Error creating bucket ${bucket.id}:`, createBucketError);
+        } else {
+          console.log(`Created bucket: ${bucket.id}`);
+        }
+      } else {
+        console.log(`Bucket already exists: ${bucket.id}`);
       }
     }
-    
+
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: 'Storage initialized successfully'
-      }),
+      JSON.stringify({ success: true, message: "Storage initialization completed" }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error initializing storage:', error);
+    console.error("Error in init-storage function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
