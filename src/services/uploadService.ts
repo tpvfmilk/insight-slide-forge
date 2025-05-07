@@ -115,18 +115,31 @@ export const createProjectFromUrl = async (
  * Creates a new project from transcript text
  * @param transcript Transcript text
  * @param title Project title
+ * @param imageFile Optional image file to include with the transcript
  * @returns The created project
  */
 export const createProjectFromTranscript = async (
   transcript: string, 
-  title: string = 'New Project'
+  title: string = 'New Project',
+  imageFile: File | null = null
 ): Promise<Project | null> => {
   try {
+    // Upload image if provided
+    let imageUploadResult = null;
+    if (imageFile) {
+      imageUploadResult = await uploadFile(imageFile);
+      if (!imageUploadResult) {
+        console.warn('Failed to upload image, continuing with transcript only');
+      }
+    }
+    
     // Create a new project
     const projectData = {
       title: title || 'Project from transcript',
       source_type: 'transcript',
       transcript: transcript,
+      source_file_path: imageUploadResult?.path || null,
+      source_url: imageUploadResult?.url || null,
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 

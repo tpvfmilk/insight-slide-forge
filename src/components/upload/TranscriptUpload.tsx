@@ -1,14 +1,18 @@
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowRight, Image } from "lucide-react";
-import { createProjectFromTranscript } from "@/services/uploadService";
+import { ArrowRight, Image, Loader2 } from "lucide-react";
+import { createProjectFromTranscript, uploadFile } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 export const TranscriptUpload = () => {
   const [transcriptText, setTranscriptText] = useState<string>("");
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
   const handleTranscriptSubmit = async (e: React.FormEvent) => {
@@ -21,7 +25,7 @@ export const TranscriptUpload = () => {
     
     try {
       // Create project from transcript text
-      const project = await createProjectFromTranscript(transcriptText);
+      const project = await createProjectFromTranscript(transcriptText, undefined, imageFile);
       
       if (project) {
         toast.success("Transcript received. Processing...");
@@ -30,6 +34,52 @@ export const TranscriptUpload = () => {
     } catch (error) {
       toast.error("Failed to process transcript");
       console.error("Transcript processing error:", error);
+    }
+  };
+
+  const handleFileButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    
+    if (!file) return;
+    
+    // Check file type
+    if (!file.type.includes('image/')) {
+      toast.error("Please upload an image file");
+      return;
+    }
+    
+    // Check file size (limit to 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File size must be less than 10MB");
+      return;
+    }
+    
+    setIsUploading(true);
+    
+    try {
+      setImageFile(file);
+      
+      // Create a preview URL for the image
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+      toast.success("Image uploaded successfully");
+    } catch (error) {
+      toast.error("Failed to upload image");
+      console.error("Upload error:", error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -48,12 +98,48 @@ export const TranscriptUpload = () => {
         />
       </div>
       
+      {imagePreview && (
+        <div className="relative mt-4 border rounded-md overflow-hidden">
+          <img 
+            src={imagePreview} 
+            alt="Uploaded preview" 
+            className="w-full max-h-64 object-contain" 
+          />
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="absolute top-2 right-2"
+            onClick={removeImage}
+          >
+            Remove
+          </Button>
+        </div>
+      )}
+      
       <div className="flex gap-4">
-        <Button type="button" variant="outline" className="flex-1">
-          <Image className="h-4 w-4 mr-2" />
-          Upload Image
+        <input 
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="sr-only"
+          accept="image/*"
+        />
+        <Button 
+          type="button" 
+          variant="outline" 
+          className="flex-1"
+          onClick={handleFileButtonClick}
+          disabled={isUploading}
+        >
+          {isUploading ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Image className="h-4 w-4 mr-2" />
+          )}
+          {imageFile ? "Change Image" : "Upload Image"}
         </Button>
-        <Button type="submit" className="flex-1">
+        <Button type="submit" className="flex-1" disabled={isUploading}>
           <ArrowRight className="h-4 w-4 mr-2" />
           Process Transcript
         </Button>
