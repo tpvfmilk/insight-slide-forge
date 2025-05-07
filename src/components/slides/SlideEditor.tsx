@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Copy, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -348,23 +348,6 @@ export const SlideEditor = () => {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={generateSlides} 
-            disabled={isGenerating}
-          >
-            {isGenerating ? (
-              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-1" />
-            )}
-            {slides.length <= 1 ? "Generate Slides" : "Regenerate Slides"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={copyToClipboard}>
-            <Copy className="h-4 w-4 mr-1" />
-            Copy
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
             asChild
             disabled={slides.length <= 1 || slides[0].id === "slide-placeholder"}
           >
@@ -383,7 +366,21 @@ export const SlideEditor = () => {
             <DialogContent>
               <div className="space-y-4 p-4">
                 <h3 className="text-lg font-semibold">Export Options</h3>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Button 
+                    onClick={generateSlides} 
+                    variant="outline" 
+                    className="justify-start"
+                    disabled={isGenerating}
+                  >
+                    {isGenerating ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    {slides.length <= 1 ? "Generate Slides" : "Regenerate Slides"}
+                  </Button>
+                  
                   <Button 
                     onClick={exportPDF} 
                     variant="outline" 
