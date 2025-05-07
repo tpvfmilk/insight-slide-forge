@@ -61,7 +61,7 @@ export const VideoUpload = () => {
         setIsUploading(false);
         
         if (project) {
-          toast.success("Upload complete! Processing video...");
+          toast.success("Upload complete! Redirecting to slide editor...");
           navigate(`/projects/${project.id}`);
         }
       }, 500);
