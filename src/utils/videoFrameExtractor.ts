@@ -212,12 +212,15 @@ export const createVideoElement = (videoUrl: string): Promise<HTMLVideoElement> 
     video.preload = 'auto';
     video.muted = true;
     
+    // Enhanced CORS handling
+    video.setAttribute('crossOrigin', 'anonymous');
+    
     // Enable cors mode and prevent caching
     const corsUrl = new URL(videoUrl);
     corsUrl.searchParams.append('cors', 'true');
     corsUrl.searchParams.append('_cache', Date.now().toString());
     
-    console.log(`Loading video from ${corsUrl.toString()}`);
+    console.log(`Loading video from ${corsUrl.toString()} with enhanced CORS handling`);
     
     // Set up event handlers
     const loadTimeout = setTimeout(() => {

@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "./storageService";
@@ -49,12 +50,11 @@ export const clientExtractFramesFromVideo = async (
     await initializeStorage();
     
     // Generate a signed URL for the video with an expiration of 1 hour and CORS settings
+    // REMOVED the transform property to avoid any format compatibility issues
     const { data, error } = await supabase.storage.from('video_uploads')
       .createSignedUrl(videoPath, 3600, {
-        download: false, // We need to stream, not download
-        transform: {
-          width: 1280, // Reasonable size limit to improve performance
-        }
+        download: false // We need to stream, not download
+        // Transformation options removed to fix format errors
       });
       
     if (error || !data?.signedUrl) {
@@ -64,7 +64,7 @@ export const clientExtractFramesFromVideo = async (
     }
     
     const videoUrl = data.signedUrl;
-    console.log("Generated secure video URL for extraction");
+    console.log("Generated secure video URL for extraction without transformations");
     
     return {
       success: true,

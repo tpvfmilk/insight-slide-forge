@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -42,15 +41,13 @@ export const FrameExtractionModal = ({
       try {
         setError(null);
         setVideoReady(false);
-        // Generate the signed URL for the video
+        // Generate the signed URL for the video - removing transformations
         const { supabase } = await import('@/integrations/supabase/client');
         const { data, error } = await supabase.storage
           .from('video_uploads')
           .createSignedUrl(videoPath, 3600, {
-            download: false, // We need to stream, not download
-            transform: {
-              width: 1280, // Reasonable size limit to improve performance
-            }
+            download: false // We need to stream, not download
+            // Transformation removed to fix format errors
           });
           
         if (error || !data?.signedUrl) {
@@ -64,7 +61,7 @@ export const FrameExtractionModal = ({
         videoUrlWithCache.searchParams.append('_cache', Date.now().toString());
         
         setVideoUrl(videoUrlWithCache.toString());
-        console.log("Successfully loaded video with secure URL");
+        console.log("Successfully loaded video with secure URL (no transformations)");
       } catch (error) {
         console.error("Error loading video:", error);
         setError(`Failed to load video: ${(error as Error).message}`);
