@@ -17,7 +17,7 @@ export type Project = Database["public"]["Tables"]["projects"]["Row"] & {
     file_type?: string;
     file_size?: number;
   };
-  extracted_frames?: ExtractedFrame[];
+  extracted_frames?: ExtractedFrame[] | null;
 };
 
 /**
@@ -43,7 +43,7 @@ export const fetchRecentProjects = async (limit: number = 3): Promise<Project[]>
       // Cast video_metadata JSON to the correct type if present
       video_metadata: project.video_metadata as Project['video_metadata'],
       // Cast extracted_frames JSON to the correct type if present
-      extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | undefined
+      extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | null
     };
     return typedProject;
   });
@@ -73,7 +73,7 @@ export const fetchProjectById = async (id: string): Promise<Project | null> => {
     // Cast video_metadata JSON to the correct type if present
     video_metadata: data.video_metadata as Project['video_metadata'],
     // Cast extracted_frames JSON to the correct type if present
-    extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | undefined
+    extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | null
   };
   
   return typedProject;
@@ -107,7 +107,7 @@ export const createProject = async (projectData: Omit<Project, 'id' | 'created_a
     // Cast video_metadata JSON to the correct type if present
     video_metadata: data.video_metadata as Project['video_metadata'],
     // Cast extracted_frames JSON to the correct type if present
-    extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | undefined
+    extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | null
   };
   
   return typedProject;
