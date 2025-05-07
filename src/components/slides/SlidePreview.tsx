@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,31 @@ interface Slide {
   content: string;
   timestamp?: string;
   imageUrl?: string;
+}
+
+const SlideContent = ({ slide }: { slide: Slide }) => (
+  <div className="space-y-6">
+    <h2 className="text-4xl font-bold">{slide.title}</h2>
+    {slide.imageUrl && (
+      <div className="my-8">
+        <img 
+          src={slide.imageUrl} 
+          alt={slide.title}
+          className="mx-auto max-h-[50vh] object-contain"
+        />
+      </div>
+    )}
+    <div className="text-xl whitespace-pre-line overflow-y-auto max-h-[60vh] px-2 md:px-0">
+      {slide.content}
+    </div>
+  </div>
+);
+
+function isValidSlideArray(data: any): data is Slide[] {
+  return Array.isArray(data) && data.every(slide =>
+    typeof slide.title === 'string' &&
+    typeof slide.content === 'string'
+  );
 }
 
 export const SlidePreview = () => {
@@ -65,17 +91,15 @@ export const SlidePreview = () => {
         const projectData = await fetchProjectById(projectId);
         setProject(projectData);
         
-        if (projectData?.slides && Array.isArray(projectData.slides)) {
-          // Convert from Json to Slide array with proper type checking
-          const slidesData = projectData.slides as unknown as Slide[];
-          if (slidesData.length > 0) {
-            setSlides(slidesData);
+        if (projectData?.slides && isValidSlideArray(projectData.slides)) {
+          if (projectData.slides.length > 0) {
+            setSlides(projectData.slides);
           } else {
             toast.error("No slides available for presentation");
             exitPresentation();
           }
         } else {
-          toast.error("No slides available for presentation");
+          toast.error("Invalid slide format");
           exitPresentation();
         }
       } catch (error) {
@@ -117,21 +141,7 @@ export const SlidePreview = () => {
       {/* Slide content */}
       <div className="flex-1 flex items-center justify-center p-8 animate-fade-in">
         <div className="max-w-4xl w-full">
-          {currentSlide && (
-            <div className="space-y-6">
-              <h2 className="text-4xl font-bold">{currentSlide.title}</h2>
-              {currentSlide.imageUrl && (
-                <div className="my-8">
-                  <img 
-                    src={currentSlide.imageUrl} 
-                    alt={currentSlide.title}
-                    className="mx-auto max-h-[50vh] object-contain"
-                  />
-                </div>
-              )}
-              <div className="text-xl whitespace-pre-line">{currentSlide.content}</div>
-            </div>
-          )}
+          {currentSlide && <SlideContent slide={currentSlide} />}
         </div>
       </div>
       
