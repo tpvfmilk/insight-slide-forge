@@ -7,7 +7,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useEffect } from "react";
-import { initializeStorage } from "@/services/storageService";
 
 // Pages
 import LandingPage from "./pages/LandingPage";
@@ -28,20 +27,7 @@ import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  // Initialize storage when the app loads
-  useEffect(() => {
-    const setupStorage = async () => {
-      try {
-        await initializeStorage();
-        console.log("Storage initialization complete");
-      } catch (error) {
-        console.error("Failed to initialize storage:", error);
-      }
-    };
-    
-    setupStorage();
-  }, []);
-  
+  // No longer initializing storage here, as it will be done after authentication
   return (
     <>
       <Toaster />

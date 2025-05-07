@@ -23,6 +23,16 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error("Missing or invalid authorization header");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized", message: "Missing or invalid authorization header" }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     // Create buckets if they don't exist
     const buckets = [
       {
@@ -32,8 +42,8 @@ serve(async (req) => {
         file_size_limit: 104857600, // 100MB
       },
       {
-        id: 'slide_images',
-        name: 'Slide Images',
+        id: 'slide_stills',
+        name: 'Slide Stills',
         public: true,
         file_size_limit: 5242880, // 5MB
       },

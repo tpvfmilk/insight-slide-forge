@@ -12,6 +12,13 @@ import { initializeStorage } from "@/services/storageService";
  */
 export const generateSlidesForProject = async (projectId: string): Promise<{ success: boolean; slides?: any[] }> => {
   try {
+    // Verify user is authenticated
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.access_token) {
+      toast.error("You need to be logged in to generate slides", { id: "generate-slides" });
+      return { success: false };
+    }
+    
     toast.loading("Generating slides...", { id: "generate-slides" });
     
     // Ensure storage buckets are initialized before generating slides
@@ -40,7 +47,7 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        "Authorization": `Bearer ${session.session.access_token}`
       },
       body: JSON.stringify({
         projectId,

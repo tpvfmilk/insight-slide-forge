@@ -4,6 +4,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { initializeStorage } from '@/services/storageService';
 
 interface AuthContextType {
   user: User | null;
@@ -26,13 +27,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
+      async (event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
         if (event === 'SIGNED_IN') {
-          // Don't do any fetch operations here to avoid deadlocks
-          // Just update the state
+          // Initialize storage after successful sign in
+          setTimeout(async () => {
+            try {
+              const success = await initializeStorage();
+              if (!success) {
+                console.warn("Storage initialization after sign-in was not successful");
+              }
+            } catch (error) {
+              console.error("Error initializing storage after sign-in:", error);
+            }
+          }, 0);
+          
           toast.success('Successfully signed in!');
         } else if (event === 'SIGNED_OUT') {
           toast.info('You have been signed out');
@@ -41,9 +52,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      
+      // Initialize storage if user is already signed in
+      if (currentSession?.user) {
+        setTimeout(async () => {
+          try {
+            const success = await initializeStorage();
+            if (!success) {
+              console.warn("Storage initialization at session check was not successful");
+            }
+          } catch (error) {
+            console.error("Error initializing storage at session check:", error);
+          }
+        }, 0);
+      }
+      
       setLoading(false);
     });
 

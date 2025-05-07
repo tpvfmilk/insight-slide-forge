@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { initializeStorage } from "./storageService";
+import { toast } from "sonner";
 
 /**
  * Uploads an image file to Supabase storage for slides
@@ -11,7 +12,10 @@ import { initializeStorage } from "./storageService";
 export const uploadSlideImage = async (file: File): Promise<{ path: string; url: string } | null> => {
   try {
     // Ensure storage buckets are initialized before uploading
-    await initializeStorage();
+    const initialized = await initializeStorage();
+    if (!initialized) {
+      toast.error("Failed to initialize storage. Please check your connection and try again.");
+    }
     
     // Check if it's a valid image file
     if (!file.type.startsWith('image/')) {
@@ -23,25 +27,25 @@ export const uploadSlideImage = async (file: File): Promise<{ path: string; url:
     const fileName = `${uuidv4()}.${fileExt}`;
     const filePath = `slides/${fileName}`;
 
-    // Check if slide_images bucket exists
+    // Check if slide_stills bucket exists
     try {
       const { data: bucket, error: bucketError } = await supabase
         .storage
-        .getBucket('slide_images');
+        .getBucket('slide_stills');
         
       if (bucketError) {
-        console.error('Error checking slide_images bucket:', bucketError);
+        console.error('Error checking slide_stills bucket:', bucketError);
         // We'll continue anyway since initializeStorage should have created it
       }
     } catch (bucketError) {
-      console.error('Exception checking slide_images bucket:', bucketError);
+      console.error('Exception checking slide_stills bucket:', bucketError);
       // Continue with upload attempt
     }
 
     // Upload file to Supabase storage
     const { data, error } = await supabase
       .storage
-      .from('slide_images')
+      .from('slide_stills')
       .upload(filePath, file);
 
     if (error) {
@@ -52,7 +56,7 @@ export const uploadSlideImage = async (file: File): Promise<{ path: string; url:
     // Get the public URL for the file
     const { data: { publicUrl } } = supabase
       .storage
-      .from('slide_images')
+      .from('slide_stills')
       .getPublicUrl(data.path);
 
     return {
@@ -61,6 +65,7 @@ export const uploadSlideImage = async (file: File): Promise<{ path: string; url:
     };
   } catch (error) {
     console.error('Error in uploadSlideImage:', error);
+    toast.error(`Failed to upload image: ${error.message}`);
     return null;
   }
 };

@@ -75,60 +75,60 @@ async function extractFrameWithFFmpeg(
   }
 }
 
-// Function to ensure the slide_images bucket exists
-async function ensureSlideImagesBucketExists(): Promise<boolean> {
+// Function to ensure the slide_stills bucket exists
+async function ensureSlideStillsBucketExists(): Promise<boolean> {
   try {
-    console.log("Checking if slide_images bucket exists");
+    console.log("Checking if slide_stills bucket exists");
     
     // Try to get the bucket
     const { data: bucket, error: getBucketError } = await supabase
       .storage
-      .getBucket('slide_images');
+      .getBucket('slide_stills');
       
     if (getBucketError) {
       if (getBucketError.message === 'The resource was not found') {
-        console.log("slide_images bucket doesn't exist, creating it now");
+        console.log("slide_stills bucket doesn't exist, creating it now");
         
         // Create the bucket
         const { error: createError } = await supabase
           .storage
-          .createBucket('slide_images', {
+          .createBucket('slide_stills', {
             public: true,
             fileSizeLimit: 5242880 // 5MB
           });
           
         if (createError) {
-          console.error("Error creating slide_images bucket:", createError);
+          console.error("Error creating slide_stills bucket:", createError);
           return false;
         } else {
-          console.log("Created slide_images bucket successfully");
+          console.log("Created slide_stills bucket successfully");
           return true;
         }
       } else {
-        console.error("Error checking slide_images bucket:", getBucketError);
+        console.error("Error checking slide_stills bucket:", getBucketError);
         return false;
       }
     } else {
-      console.log("slide_images bucket already exists");
+      console.log("slide_stills bucket already exists");
       
       // Ensure the bucket is public
       const { error: updateError } = await supabase
         .storage
-        .updateBucket('slide_images', {
+        .updateBucket('slide_stills', {
           public: true,
           fileSizeLimit: 5242880 // 5MB
         });
         
       if (updateError) {
-        console.error("Error updating slide_images bucket:", updateError);
+        console.error("Error updating slide_stills bucket:", updateError);
       } else {
-        console.log("Updated slide_images bucket to ensure it's public");
+        console.log("Updated slide_stills bucket to ensure it's public");
       }
       
       return true;
     }
   } catch (bucketError) {
-    console.error("Exception checking/creating slide_images bucket:", bucketError);
+    console.error("Exception checking/creating slide_stills bucket:", bucketError);
     return false;
   }
 }
@@ -182,10 +182,10 @@ serve(async (req) => {
       );
     }
 
-    // Ensure slide_images bucket exists
-    const bucketExists = await ensureSlideImagesBucketExists();
+    // Ensure slide_stills bucket exists
+    const bucketExists = await ensureSlideStillsBucketExists();
     if (!bucketExists) {
-      console.warn("Could not verify slide_images bucket, will attempt to continue anyway");
+      console.warn("Could not verify slide_stills bucket, will attempt to continue anyway");
     }
 
     // Download the video file from storage
@@ -237,11 +237,11 @@ serve(async (req) => {
 
       // Upload the frame to storage
       const frameFileName = `${projectId}/${timestamp.replace(/:/g, '_')}.jpg`;
-      console.log(`Uploading frame to: slide_images/${frameFileName}`);
+      console.log(`Uploading frame to: slide_stills/${frameFileName}`);
       
       const { error: uploadError, data: uploadData } = await supabase
         .storage
-        .from('slide_images')
+        .from('slide_stills')
         .upload(frameFileName, frameData, {
           contentType: 'image/jpeg',
           upsert: true
@@ -257,7 +257,7 @@ serve(async (req) => {
       // Get public URL for the uploaded frame
       const { data: urlData } = supabase
         .storage
-        .from('slide_images')
+        .from('slide_stills')
         .getPublicUrl(frameFileName);
 
       console.log(`Public URL generated: ${urlData.publicUrl}`);

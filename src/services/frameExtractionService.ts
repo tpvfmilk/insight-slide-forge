@@ -48,24 +48,32 @@ export const extractFramesFromVideo = async (
       return { success: true, frames: placeholderFrames };
     }
     
+    // Ensure user is authenticated and storage buckets are initialized before proceeding
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.access_token) {
+      console.error("Cannot extract frames: User not authenticated");
+      toast.error("Cannot extract frames: You need to be logged in", { id: "extract-frames" });
+      return { success: false, error: "User not authenticated" };
+    }
+    
     // Ensure storage buckets are initialized before proceeding
     await initializeStorage();
     
-    // Verify slide_images bucket exists
+    // Verify slide_stills bucket exists
     try {
       const { data: bucketData, error: bucketError } = await supabase
         .storage
-        .getBucket('slide_images');
+        .getBucket('slide_stills');
         
       if (bucketError) {
-        console.error("Error checking slide_images bucket:", bucketError);
+        console.error("Error checking slide_stills bucket:", bucketError);
         // We'll continue anyway because the init-storage function should have created it
         // and the extract-frames function will also try to create it if needed
       } else {
-        console.log("Verified slide_images bucket exists:", bucketData);
+        console.log("Verified slide_stills bucket exists:", bucketData);
       }
     } catch (bucketCheckError) {
-      console.warn("Failed to verify slide_images bucket:", bucketCheckError);
+      console.warn("Failed to verify slide_stills bucket:", bucketCheckError);
       // Continue with frame extraction attempt
     }
     
@@ -76,7 +84,7 @@ export const extractFramesFromVideo = async (
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        "Authorization": `Bearer ${session.session.access_token}`
       },
       body: JSON.stringify({
         projectId,
