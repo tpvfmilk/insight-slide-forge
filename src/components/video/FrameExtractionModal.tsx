@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
 export interface ExtractedFrame {
   timestamp: string;
   imageUrl: string;
+  isPlaceholder?: boolean;
 }
 
 interface FrameExtractionModalProps {
@@ -51,6 +53,7 @@ export const FrameExtractionModal = ({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [timestampDistribution, setTimestampDistribution] = useState<Array<{time: number, position: number}>>([]);
   
   // Step 1: Load the video when the component mounts
   useEffect(() => {
@@ -146,6 +149,21 @@ export const FrameExtractionModal = ({
     loadVideo();
   }, [open, videoPath, projectId]);
   
+  // Generate timestamp distribution visualization when video is ready or timestamps change
+  useEffect(() => {
+    if (!videoDuration || !timestamps.length) return;
+    
+    // Convert timestamps to seconds and positions
+    const distribution = timestamps.map(timestamp => {
+      const seconds = timestampToSeconds(timestamp);
+      // Calculate position as percentage of video duration
+      const position = Math.min(100, Math.max(0, (seconds / videoDuration) * 100));
+      return { time: seconds, position };
+    });
+    
+    setTimestampDistribution(distribution);
+  }, [videoDuration, timestamps]);
+  
   // Filter out timestamps that exceed video duration
   const validTimestamps = timestamps.filter(timestamp => {
     if (!videoDuration) return true; // Keep all if we don't know duration yet
@@ -210,10 +228,24 @@ export const FrameExtractionModal = ({
     try {
       toast.loading("Extracting frames from video...", { id: "extract-frames" });
       
+      // Sort timestamps chronologically to optimize seeking
+      const sortedTimestamps = [...validTimestamps].sort((a, b) => 
+        timestampToSeconds(a) - timestampToSeconds(b)
+      );
+      
+      console.log(`Extracting frames at timestamps (sorted): ${sortedTimestamps.join(', ')}`);
+      
+      // Add debug info for each timestamp
+      sortedTimestamps.forEach((timestamp, i) => {
+        const seconds = timestampToSeconds(timestamp);
+        const percentage = (seconds / videoDuration * 100).toFixed(1);
+        console.log(`Timestamp ${i+1}: ${timestamp} (${seconds}s, ${percentage}% into video)`);
+      });
+      
       // Start the extraction process with only valid timestamps
       const frames = await extractFramesFromVideoUrl(
         videoUrl,
-        validTimestamps,
+        sortedTimestamps,
         (completed, total) => {
           // Update progress
           const progressPercentage = Math.floor((completed / total) * 100);
@@ -400,6 +432,19 @@ export const FrameExtractionModal = ({
     }
   };
   
+  // Test seek to timestamp - useful for debugging
+  const testSeekToTimestamp = (timestamp: string) => {
+    if (!videoRef.current || !videoReady) {
+      toast.error("Video is not ready");
+      return;
+    }
+    
+    const seconds = timestampToSeconds(timestamp);
+    console.log(`Seeking to timestamp ${timestamp} (${seconds}s)`);
+    
+    videoRef.current.currentTime = seconds;
+  };
+  
   // Clean up URL objects when the component is unmounted
   useEffect(() => {
     return () => {
@@ -464,8 +509,57 @@ export const FrameExtractionModal = ({
                     <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1">
                       {frame.timestamp}
                     </div>
+                    {frame.isPlaceholder && (
+                      <div className="absolute top-0 left-0 right-0 bg-amber-500/90 text-white text-xs p-1">
+                        Placeholder
+                      </div>
+                    )}
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Timestamp Distribution Visualization */}
+          {timestampDistribution.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium mb-2">Timestamp Distribution</h3>
+              <div className="w-full h-8 bg-muted rounded-md relative">
+                {/* Video timeline */}
+                <div className="absolute top-0 left-0 w-full h-full border border-muted-foreground/20 rounded-md"></div>
+                
+                {/* Timestamp markers */}
+                {timestampDistribution.map((item, i) => (
+                  <div 
+                    key={i}
+                    className="absolute top-0 h-full w-0.5 bg-primary hover:bg-primary-foreground cursor-pointer"
+                    style={{ left: `${item.position}%` }}
+                    title={`${item.time.toFixed(2)}s (${(item.position).toFixed(1)}%)`}
+                    onClick={() => testSeekToTimestamp(timestamps[i])}
+                  />
+                ))}
+                
+                {/* Current video position marker if video is loaded */}
+                {videoReady && videoDuration > 0 && videoRef.current && (
+                  <div 
+                    className="absolute top-0 h-full w-1 bg-red-500"
+                    style={{ 
+                      left: `${(videoRef.current.currentTime / videoDuration) * 100}%`,
+                      transition: 'left 0.5s' 
+                    }}
+                  />
+                )}
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                <span>0:00</span>
+                <span>{Math.floor(videoDuration / 60)}:{(videoDuration % 60).toString().padStart(2, '0')}</span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                <p>Click on a timestamp marker to test seeking to that position in the video.</p>
+                <p className="mt-1">
+                  {timestampDistribution.length} timestamps, ranging from {timestampDistribution[0]?.time.toFixed(1)}s
+                  to {timestampDistribution[timestampDistribution.length - 1]?.time.toFixed(1)}s
+                </p>
               </div>
             </div>
           )}

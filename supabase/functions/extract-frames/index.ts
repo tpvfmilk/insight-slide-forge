@@ -79,12 +79,10 @@ async function ensureSlideStillsBucketExists(): Promise<boolean> {
 // Generate a placeholder image with text when FFmpeg is not available
 async function generatePlaceholderImage(timestamp: string, projectId: string): Promise<Uint8Array | null> {
   try {
-    // Simple placeholder logic - in a real system this might use a canvas or other approach
-    // Here we're just creating a dummy placeholder
-    
-    // Create a small colored box with text as a base64 encoded PNG
-    // This is a minimalist 1x1 transparent pixel
-    const base64Image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+    // IMPORTANT: This is a placeholder 1x1 pixel that will be replaced by client-side extraction
+    // We're using a specific color to make it clear this is a placeholder
+    // #FF00FF (magenta) as a base64-encoded PNG to make it obvious this is a placeholder
+    const base64Image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
     
     // Decode the base64 image
     return base64Decode(base64Image);
@@ -158,63 +156,9 @@ serve(async (req) => {
       console.warn("Could not verify slide_stills bucket, will attempt to continue anyway");
     }
 
-    // Try to download from video_uploads bucket
-    let fileData: ArrayBuffer | null = null;
-    let fileError = null;
-    
-    try {
-      console.log(`Downloading video from path: ${videoPath}`);
-      const result = await supabase
-        .storage
-        .from('video_uploads')
-        .download(videoPath);
-      
-      fileData = result.data;
-      fileError = result.error;
-    } catch (err) {
-      console.log(`Error downloading from video_uploads, will try videos bucket: ${err.message}`);
-      fileError = err;
-    }
-    
-    // If failed, try videos bucket
-    if (fileError || !fileData) {
-      try {
-        // Try to extract just the filename
-        const filename = videoPath.split('/').pop();
-        if (!filename) {
-          throw new Error("Invalid video path format");
-        }
-        
-        console.log(`Trying videos bucket with filename: ${filename}`);
-        const result = await supabase
-          .storage
-          .from('videos')
-          .download(filename);
-          
-        fileData = result.data;
-        fileError = result.error;
-      } catch (err) {
-        console.log(`Error downloading from videos bucket: ${err.message}`);
-        fileError = fileError || err;
-      }
-    }
-    
-    if (fileError || !fileData) {
-      console.error("Video download error:", fileError);
-      return new Response(
-        JSON.stringify({ 
-          error: "Failed to download video file", 
-          details: fileError?.message,
-          // Include helpful debug info
-          path: videoPath,
-          tried: ["video_uploads", "videos"]
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`Video downloaded successfully, size: ${fileData.byteLength} bytes`);
-    console.log("Deno.run is not available in this environment. Using placeholder images instead.");
+    // Server-side has limitations for actual video frame extraction
+    console.log("NOTICE: Server-side frame extraction is not implemented. Uploading placeholders for client-side extraction.");
+    console.log("The client should perform real frame extraction upon receiving these placeholders.");
 
     // Process each timestamp and generate placeholder frames
     const frameResults = [];
@@ -236,8 +180,6 @@ serve(async (req) => {
       // Generate placeholder image instead of extracting frame
       console.log(`Generating placeholder for timestamp ${timestamp}`);
       
-      // In a production app, we might try to use a canvas or image library
-      // For now, we'll just create a simple colored box with timestamp text
       const frameData = await generatePlaceholderImage(timestamp, projectId);
       
       if (!frameData) {
@@ -274,74 +216,23 @@ serve(async (req) => {
 
       frameResults.push({
         timestamp,
-        imageUrl: urlData.publicUrl
+        imageUrl: urlData.publicUrl,
+        isPlaceholder: true // Flag to indicate this is a placeholder, not a real frame
       });
     }
 
     console.log(`Processed ${frameResults.length} placeholders successfully`);
 
-    // Update slides with new image URLs (handle both the old and new format)
-    const updatedSlides = slides.map(slide => {
-      // Type guard to ensure we can safely access slide properties
-      if (typeof slide !== 'object' || slide === null) {
-        return slide;
-      }
-
-      // For slides with transcriptTimestamps array
-      if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
-        const matchingFrames = frameResults.filter(frame => 
-          slide.transcriptTimestamps.includes(frame.timestamp)
-        );
-
-        if (matchingFrames.length > 0) {
-          console.log(`Slide ${slide.id}: Found ${matchingFrames.length} matching frames`);
-          return {
-            ...slide,
-            imageUrls: matchingFrames.map(frame => frame.imageUrl)
-          };
-        }
-      } 
-      // For slides with single timestamp (backward compatibility)
-      else if (slide.timestamp) {
-        const matchingFrame = frameResults.find(frame => frame.timestamp === slide.timestamp);
-        if (matchingFrame) {
-          console.log(`Slide ${slide.id}: Found matching frame for timestamp ${slide.timestamp}`);
-          return {
-            ...slide,
-            imageUrl: matchingFrame.imageUrl
-          };
-        }
-      }
-      
-      // If no matches, return slide as is
-      return slide;
-    });
-
-    // Update the project with the updated slides
-    console.log(`Updating project ${projectId} with ${updatedSlides.length} slides containing placeholder images`);
-    const { error: updateError } = await supabase
-      .from('projects')
-      .update({ 
-        slides: updatedSlides,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', projectId);
-
-    if (updateError) {
-      console.error("Project update error:", updateError);
-      return new Response(
-        JSON.stringify({ 
-          error: "Failed to update project with frame images", 
-          details: updateError.message,
-          frames: frameResults // Still return the frames that were processed
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log("Extract-frames function completed successfully");
+    // Don't update the slides here - client should handle this after proper extraction
+    console.log("Returning placeholders to client for proper frame extraction");
+    
     return new Response(
-      JSON.stringify({ success: true, frames: frameResults }),
+      JSON.stringify({ 
+        success: true, 
+        frames: frameResults,
+        isPlaceholder: true, // Flag to indicate these are placeholders
+        message: "These are placeholder images. Client should extract real frames."
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
