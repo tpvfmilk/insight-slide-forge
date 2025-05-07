@@ -45,8 +45,21 @@ export const SlideEditor = () => {
 
       setProjectTitle(project.title || "Untitled Project");
       
-      if (project.slides && Array.isArray(project.slides) && project.slides.length > 0) {
-        setSlides(project.slides);
+      if (project.slides && Array.isArray(project.slides)) {
+        // Convert from Json to Slide array with proper type checking
+        const slidesData = project.slides as unknown as Slide[];
+        if (slidesData.length > 0) {
+          setSlides(slidesData);
+        } else {
+          // Default placeholder slide if slides array is empty
+          setSlides([
+            {
+              id: "slide-placeholder",
+              title: "Generate Your Slides",
+              content: "Click the 'Generate Slides' button to process your content and create presentation slides."
+            }
+          ]);
+        }
       } else {
         // Default placeholder slide if no slides exist yet
         setSlides([
@@ -105,7 +118,8 @@ export const SlideEditor = () => {
         throw new Error("No slides were generated");
       }
       
-      setSlides(generatedSlides);
+      // Type assertion to ensure we're setting the proper Slide[] type
+      setSlides(generatedSlides as Slide[]);
       setCurrentSlideIndex(0);
       
       // Update edited fields with the first slide
@@ -159,9 +173,10 @@ export const SlideEditor = () => {
     if (!projectId) return;
     
     try {
+      // Ensure we're passing the slides in a format compatible with Json type
       const { error } = await supabase
         .from('projects')
-        .update({ slides: updatedSlides })
+        .update({ slides: updatedSlides as any })
         .eq('id', projectId);
         
       if (error) throw error;

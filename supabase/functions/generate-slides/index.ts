@@ -67,7 +67,7 @@ serve(async (req) => {
     }
 
     // Process with AI
-    const slideDeck = await generateSlidesWithAI(contentForProcessing, project.title);
+    const slideDeck: Slide[] = await generateSlidesWithAI(contentForProcessing, project.title);
     
     // Update project with generated slides
     const { error: updateError } = await supabase
