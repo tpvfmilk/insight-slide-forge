@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProjectById } from "@/services/projectService";
 import { uploadSlideImage } from "@/services/imageService";
 import { exportToPDF, exportToCSV, exportToAnki, downloadFile } from "@/services/exportService";
-import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
+import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FrameSelector } from "@/components/slides/FrameSelector";
 
@@ -24,10 +24,11 @@ interface Slide {
   transcriptTimestamps?: string[];
 }
 
-interface ExtractedFrame {
-  id: string;
+// For local components we need a compatible interface
+interface LocalExtractedFrame {
   imageUrl: string;
   timestamp: string;
+  id: string;
 }
 
 export const SlideEditor = () => {
@@ -49,7 +50,7 @@ export const SlideEditor = () => {
   const [isExtractingFrames, setIsExtractingFrames] = useState<boolean>(false);
   const [isFrameExtractionModalOpen, setIsFrameExtractionModalOpen] = useState<boolean>(false);
   const [isFrameSelectorOpen, setIsFrameSelectorOpen] = useState<boolean>(false);
-  const [allExtractedFrames, setAllExtractedFrames] = useState<ExtractedFrame[]>([]);
+  const [allExtractedFrames, setAllExtractedFrames] = useState<LocalExtractedFrame[]>([]);
   const [videoPath, setVideoPath] = useState<string>("");
   const [timestamps, setTimestamps] = useState<string[]>([]);
   
@@ -76,7 +77,13 @@ export const SlideEditor = () => {
       
       // Load all extracted frames
       if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
-        setAllExtractedFrames(project.extracted_frames as unknown as ExtractedFrame[]);
+        // Transform the API ExtractedFrame format to our local format
+        const frames = (project.extracted_frames as unknown as ExtractedFrame[]).map(frame => ({
+          imageUrl: frame.imageUrl,
+          timestamp: frame.timestamp,
+          id: `frame-${frame.timestamp.replace(/:/g, "-")}` // Generate a unique ID
+        }));
+        setAllExtractedFrames(frames);
       }
       
       if (project.slides && Array.isArray(project.slides)) {
@@ -264,7 +271,7 @@ export const SlideEditor = () => {
     setIsFrameSelectorOpen(true);
   };
   
-  const handleFrameSelection = (selectedFrames: ExtractedFrame[]) => {
+  const handleFrameSelection = (selectedFrames: LocalExtractedFrame[]) => {
     if (!selectedFrames.length) return;
     
     // Update current slide with selected frames
@@ -787,7 +794,7 @@ export const SlideEditor = () => {
         selectedFrames={currentSlide?.imageUrls?.map(url => {
           // Find frame with matching URL
           const frame = allExtractedFrames.find(f => f.imageUrl === url);
-          return frame || { imageUrl: url, timestamp: "unknown" };
+          return frame || { imageUrl: url, timestamp: "unknown", id: `unknown-${url}` };
         }) || []}
         onSelect={handleFrameSelection}
       />

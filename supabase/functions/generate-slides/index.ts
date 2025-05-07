@@ -78,25 +78,20 @@ serve(async (req) => {
     // Use either contextPrompt passed in the request or the one stored in the project
     const finalContextPrompt = contextPrompt || project.context_prompt || '';
 
-    // Calculate target slide count based on content length or slides_per_minute
-    // Estimate 150 words per minute for transcript text
-    let targetSlideCount = 6; // Default
-
-    if (project.slides_per_minute) {
-      // Calculate from transcript length (estimate 150 words per minute)
-      const wordCount = contentForProcessing.split(/\s+/).length;
-      const estimatedMinutes = wordCount / 150;
-      targetSlideCount = Math.round(estimatedMinutes * project.slides_per_minute);
-      
-      // Ensure reasonable limits
-      targetSlideCount = Math.max(3, Math.min(20, targetSlideCount));
-    }
+    // Extract a rough word count for reference
+    const wordCount = contentForProcessing.split(/\s+/).length;
+    
+    // If the slides_per_minute is set in the project and > 0, use it as an override (for developer mode)
+    // Otherwise, let the AI decide based on content
+    const targetSlideCount = project.slides_per_minute && project.slides_per_minute > 0
+      ? Math.round((wordCount / 150) * project.slides_per_minute) // 150 words per minute is a rough estimate
+      : 0; // 0 means AI decides
 
     // Process with AI
     const slideDeck: Slide[] = await generateSlidesWithAI(
       contentForProcessing, 
       project.title, 
-      finalContextPrompt, 
+      finalContextPrompt,
       targetSlideCount
     );
     
@@ -105,7 +100,7 @@ serve(async (req) => {
       .from('projects')
       .update({ 
         slides: slideDeck,
-        target_slide_count: targetSlideCount,
+        target_slide_count: slideDeck.length, // Store the actual number of slides created
         updated_at: new Date().toISOString()
       })
       .eq('id', projectId);
@@ -130,7 +125,12 @@ serve(async (req) => {
   }
 });
 
-async function generateSlidesWithAI(content: string, title: string, contextPrompt: string = '', targetSlideCount: number = 6): Promise<Slide[]> {
+async function generateSlidesWithAI(
+  content: string, 
+  title: string, 
+  contextPrompt: string = '', 
+  targetSlideCount: number = 0
+): Promise<Slide[]> {
   if (!openAIKey) {
     throw new Error("OpenAI API key not configured");
   }
@@ -142,6 +142,12 @@ async function generateSlidesWithAI(content: string, title: string, contextPromp
       contextInfo = `\nAdditional context from the user:\n${contextPrompt.trim()}\n\nUse this context to guide your slide creation. The context may include instructions on what to focus on, what to skip, or how to maintain consistency with other content.`;
     }
 
+    // Create a prompt that asks AI to determine the optimal slide count
+    // unless a specific targetSlideCount is provided (for developer override)
+    const optimalSlideInstructions = targetSlideCount > 0 
+      ? `The user wants approximately ${targetSlideCount} slides in total. Adjust your content grouping accordingly.`
+      : `Generate the optimal number of slides for effective studying. Segment the video into logical ideas, transitions, and key points. Avoid creating slides for filler content or repetitive information. Ensure the final slideset is concise, focused, and ideal for exam preparation or deep learning.`;
+
     const prompt = `
     You are a professional presentation creator. Create a well-structured slide deck based on the following content.
     Format the output as a JSON array of slide objects, where each slide has:
@@ -152,13 +158,11 @@ async function generateSlidesWithAI(content: string, title: string, contextPromp
     
     For the main title slide, use the title: "${title}"
     
-    The user wants approximately ${targetSlideCount} slides in total. Adjust your content grouping accordingly.
+    ${optimalSlideInstructions}
     
     Here's the content to transform into slides:
     ${content}
     ${contextInfo}
-    
-    Create ${targetSlideCount} slides total that capture the key points. Structure should follow a logical flow with introduction, main points, and conclusion.
     
     IMPORTANT INSTRUCTIONS FOR TIMESTAMPS:
     - For each slide, identify 1-4 key moments from the transcript that the slide content references

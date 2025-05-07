@@ -59,18 +59,73 @@ export const FramePickerModal = ({
       setError(null);
       
       try {
-        // Get a signed URL for the video
-        const { data, error } = await supabase.storage
-          .from("videos")
-          .createSignedUrl(videoPath, 3600); // 1 hour expiry
-        
-        if (error) throw error;
-        
-        if (!data || !data.signedUrl) {
-          throw new Error("Failed to get video URL");
+        // First try with 'video_uploads' bucket
+        try {
+          const { data, error } = await supabase.storage
+            .from("video_uploads")
+            .createSignedUrl(videoPath, 3600); // 1 hour expiry
+          
+          if (error) throw error;
+          
+          if (!data || !data.signedUrl) {
+            throw new Error("Failed to get video URL from video_uploads");
+          }
+          
+          setVideoUrl(data.signedUrl);
+          console.log("Successfully loaded video from video_uploads bucket");
+          setIsLoading(false);
+          return;
+        } catch (videoUploadsError) {
+          console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...");
+          
+          // Try with 'videos' bucket as alternative
+          try {
+            // Extract just the filename from the path
+            const filename = videoPath.split('/').pop();
+            if (!filename) {
+              throw new Error("Invalid video path format");
+            }
+            
+            const { data, error } = await supabase.storage
+              .from('videos')
+              .createSignedUrl(filename, 3600);
+            
+            if (error || !data?.signedUrl) {
+              throw new Error(`Error from videos bucket: ${error?.message}`);
+            }
+            
+            setVideoUrl(data.signedUrl);
+            console.log("Successfully loaded video from videos bucket");
+            setIsLoading(false);
+            return;
+          } catch (videosBucketError) {
+            console.error("Error creating signed URL for video:", { 
+              videoUploadsError, 
+              videosBucketError 
+            });
+            
+            // Try to check if the video exists in the database but with a different path
+            const { data: projectData, error: projectPathError } = await supabase
+              .from('projects')
+              .select('source_url')
+              .eq('id', projectId)
+              .maybeSingle();
+              
+            if (projectPathError) {
+              console.error("Error fetching project source URL:", projectPathError);
+            }
+            
+            // If we have a source URL in the project, try that instead
+            if (projectData?.source_url) {
+              console.log("Found source URL in project, trying that instead:", projectData.source_url);
+              setVideoUrl(projectData.source_url);
+              setIsLoading(false);
+              return;
+            }
+            
+            throw new Error("Failed to get video URL. Please check if the video file exists in storage.");
+          }
         }
-        
-        setVideoUrl(data.signedUrl);
       } catch (err) {
         console.error("Error fetching video:", err);
         setError(err instanceof Error ? err.message : "Failed to load video");
@@ -85,7 +140,7 @@ export const FramePickerModal = ({
     if (existingFrames && existingFrames.length > 0) {
       setCapturedFrames(existingFrames);
     }
-  }, [open, videoPath, existingFrames]);
+  }, [open, videoPath, existingFrames, projectId]);
   
   // Update currentTime when the video plays
   useEffect(() => {
@@ -193,9 +248,8 @@ export const FramePickerModal = ({
       });
       
       // Create a file from the blob
-      const timestamp = video.currentTime;
-      const formattedTime = formatDuration(timestamp);
-      const file = new File([blob], `frame-${formattedTime.replace(":", "-")}.jpg`, { type: 'image/jpeg' });
+      const timestamp = formatDuration(video.currentTime);
+      const file = new File([blob], `frame-${timestamp.replace(/:/g, "-")}.jpg`, { type: 'image/jpeg' });
       
       // Upload to storage
       const uploadResult = await uploadSlideImage(file);
@@ -206,17 +260,17 @@ export const FramePickerModal = ({
       
       // Add to captured frames
       const newFrame: ExtractedFrame = {
-        timestamp: formattedTime,
+        timestamp,
         imageUrl: uploadResult.url
       };
       
       setCapturedFrames(prev => {
         // Check if we already have a frame with this timestamp
-        const exists = prev.some(frame => frame.timestamp === formattedTime);
+        const exists = prev.some(frame => frame.timestamp === timestamp);
         if (exists) {
           // Replace the existing frame
           return prev.map(frame => 
-            frame.timestamp === formattedTime ? newFrame : frame
+            frame.timestamp === timestamp ? newFrame : frame
           );
         } else {
           // Add new frame
@@ -224,7 +278,7 @@ export const FramePickerModal = ({
         }
       });
       
-      toast.success(`Frame at ${formattedTime} captured!`);
+      toast.success(`Frame at ${timestamp} captured!`);
     } catch (err) {
       console.error("Error capturing frame:", err);
       toast.error(`Failed to capture frame: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -270,6 +324,7 @@ export const FramePickerModal = ({
                 onLoadedMetadata={handleVideoLoaded}
                 onLoadedData={handleVideoLoaded}
                 controls={false}
+                crossOrigin="anonymous"
               />
               
               {/* Hidden canvas for frame capture */}

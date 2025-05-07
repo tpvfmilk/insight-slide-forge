@@ -50,6 +50,7 @@ export const FrameExtractionModal = ({
   const [videoReady, setVideoReady] = useState<boolean>(false);
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   
   // Step 1: Load the video when the component mounts
   useEffect(() => {
@@ -62,25 +63,79 @@ export const FrameExtractionModal = ({
         
         // Generate the signed URL for the video - removing transformations
         const { supabase } = await import('@/integrations/supabase/client');
-        const { data, error } = await supabase.storage
-          .from('video_uploads')
-          .createSignedUrl(videoPath, 3600, {
-            download: false // We need to stream, not download
-            // Transformation removed to fix format errors
-          });
+        
+        // First try with 'video_uploads' bucket
+        try {
+          const { data, error } = await supabase.storage
+            .from('video_uploads')
+            .createSignedUrl(videoPath, 3600, {
+              download: false // We need to stream, not download
+            });
+            
+          if (error || !data?.signedUrl) {
+            throw new Error(`Error from video_uploads bucket: ${error?.message}`);
+          }
           
-        if (error || !data?.signedUrl) {
-          console.error("Error getting video signed URL:", error);
-          setError("Could not access the video. Please check permissions.");
+          // Add a cache-busting parameter to prevent caching issues
+          const videoUrlWithCache = new URL(data.signedUrl);
+          videoUrlWithCache.searchParams.append('_cache', Date.now().toString());
+          
+          setVideoUrl(videoUrlWithCache.toString());
+          console.log("Successfully loaded video from video_uploads bucket");
           return;
+        } catch (videoUploadsError) {
+          console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...");
+          
+          // Try with 'videos' bucket as alternative
+          try {
+            // Extract just the filename from the path
+            const filename = videoPath.split('/').pop();
+            if (!filename) {
+              throw new Error("Invalid video path format");
+            }
+            
+            const { data, error } = await supabase.storage
+              .from('videos')
+              .createSignedUrl(filename, 3600);
+            
+            if (error || !data?.signedUrl) {
+              throw new Error(`Error from videos bucket: ${error?.message}`);
+            }
+            
+            // Add a cache-busting parameter
+            const videoUrlWithCache = new URL(data.signedUrl);
+            videoUrlWithCache.searchParams.append('_cache', Date.now().toString());
+            
+            setVideoUrl(videoUrlWithCache.toString());
+            console.log("Successfully loaded video from videos bucket");
+            return;
+          } catch (videosBucketError) {
+            console.error("Error creating signed URL for video:", { 
+              videoUploadsError, 
+              videosBucketError 
+            });
+            
+            // Try to check if the video exists in the database but with a different path
+            const { data: projectData, error: projectPathError } = await supabase
+              .from('projects')
+              .select('source_url')
+              .eq('id', projectId)
+              .maybeSingle();
+              
+            if (projectPathError) {
+              console.error("Error fetching project source URL:", projectPathError);
+            }
+            
+            // If we have a source URL in the project, try that instead
+            if (projectData?.source_url) {
+              console.log("Found source URL in project, trying that instead:", projectData.source_url);
+              setVideoUrl(projectData.source_url);
+              return;
+            }
+            
+            throw new Error("Failed to get video URL. Please check if the video file exists in storage.");
+          }
         }
-        
-        // Add a cache-busting parameter to prevent caching issues
-        const videoUrlWithCache = new URL(data.signedUrl);
-        videoUrlWithCache.searchParams.append('_cache', Date.now().toString());
-        
-        setVideoUrl(videoUrlWithCache.toString());
-        console.log("Successfully loaded video with secure URL (no transformations)");
       } catch (error) {
         console.error("Error loading video:", error);
         setError(`Failed to load video: ${(error as Error).message}`);
@@ -89,7 +144,7 @@ export const FrameExtractionModal = ({
     };
     
     loadVideo();
-  }, [open, videoPath]);
+  }, [open, videoPath, projectId]);
   
   // Filter out timestamps that exceed video duration
   const validTimestamps = timestamps.filter(timestamp => {

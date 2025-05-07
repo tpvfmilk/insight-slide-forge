@@ -8,7 +8,6 @@ import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
-import { SliderControl } from "./SliderControl";
 
 export const CombinedUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -17,7 +16,8 @@ export const CombinedUpload = () => {
   const [transcriptText, setTranscriptText] = useState<string>("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>("");
-  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
+  const [showDeveloperOptions, setShowDeveloperOptions] = useState<boolean>(false);
+  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(0); // Only used in dev mode
   const videoFileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -70,13 +70,18 @@ export const CombinedUpload = () => {
     }, 300);
     
     try {
-      // Create project from video, passing the transcript text and slides per minute
+      // Only pass slidesPerMinute if we're in developer mode and it's set
+      const slidesPerMinuteValue = showDeveloperOptions && slidesPerMinute > 0 
+        ? slidesPerMinute
+        : undefined;
+
+      // Create project from video, passing the transcript text
       const project = await createProjectFromVideo(
         videoFile, 
         undefined, 
         contextPrompt,
         transcriptText,
-        slidesPerMinute
+        slidesPerMinuteValue // Will be undefined unless in dev mode
       );
       
       clearInterval(interval);
@@ -97,9 +102,17 @@ export const CombinedUpload = () => {
       console.error("Upload error:", error);
     }
   };
+  
+  // Toggle developer options with a secret key combination (Shift+Alt+D)
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.shiftKey && e.altKey && e.key === 'D') {
+      setShowDeveloperOptions(!showDeveloperOptions);
+      toast.success(showDeveloperOptions ? "Developer options disabled" : "Developer options enabled");
+    }
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" tabIndex={0} onKeyDown={handleKeyDown}>
       <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/50">
         <FileVideo className="h-8 w-8 text-muted-foreground mb-4" />
         <h3 className="font-medium mb-1">Upload a video file</h3>
@@ -130,12 +143,34 @@ export const CombinedUpload = () => {
         )}
       </div>
 
-      <div className="space-y-4">
-        <SliderControl 
-          value={slidesPerMinute}
-          onChange={setSlidesPerMinute}
-        />
+      <div className="p-4 border rounded-lg bg-muted/20">
+        <p className="text-sm text-muted-foreground mb-2">
+          Slide count will be intelligently determined based on video content
+        </p>
+      </div>
 
+      {/* Developer Options - hidden by default */}
+      {showDeveloperOptions && (
+        <div className="p-4 border border-amber-300 rounded-lg bg-amber-50 dark:bg-amber-950/20">
+          <h3 className="text-sm font-semibold mb-2 flex items-center gap-1">
+            <span className="bg-amber-200 dark:bg-amber-800 px-1 text-xs rounded">DEV</span>
+            Override Slides Per Minute
+          </h3>
+          <div className="flex gap-2 items-center">
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={slidesPerMinute}
+              onChange={(e) => setSlidesPerMinute(parseInt(e.target.value) || 0)}
+              className="w-16 px-2 py-1 border rounded"
+            />
+            <span className="text-xs text-muted-foreground">(1-20, 0 for auto)</span>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="transcript-text" className="text-sm font-medium flex items-center gap-2">
             <FileText className="h-4 w-4" />

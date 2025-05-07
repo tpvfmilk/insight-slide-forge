@@ -1,11 +1,15 @@
 
-import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ExtractedFrame } from "@/services/clientFrameExtractionService";
-import { Check, CheckCircle2, Image as ImageIcon, X } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Check, Search, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+
+interface ExtractedFrame {
+  imageUrl: string;
+  timestamp: string;
+  id: string;
+}
 
 interface FrameSelectorProps {
   open: boolean;
@@ -15,215 +19,119 @@ interface FrameSelectorProps {
   onSelect: (frames: ExtractedFrame[]) => void;
 }
 
-export const FrameSelector = ({
+export const FrameSelector: React.FC<FrameSelectorProps> = ({
   open,
   onClose,
   availableFrames,
   selectedFrames,
-  onSelect,
-}: FrameSelectorProps) => {
-  const [selection, setSelection] = useState<ExtractedFrame[]>(selectedFrames);
+  onSelect
+}) => {
+  const [search, setSearch] = useState("");
+  const [localSelected, setLocalSelected] = useState<ExtractedFrame[]>([]);
   
-  // Group frames by timestamp
-  const framesGroupedByTime = availableFrames.reduce((acc, frame) => {
-    // Extract minutes from timestamp (e.g. "5:20" -> "5")
-    const minute = frame.timestamp.split(':')[0];
-    const group = minute ? `${minute} min` : "0 min";
-    
-    if (!acc[group]) {
-      acc[group] = [];
-    }
-    acc[group].push(frame);
-    return acc;
-  }, {} as Record<string, ExtractedFrame[]>);
-  
-  // Sort the time groups
-  const sortedTimeGroups = Object.keys(framesGroupedByTime).sort((a, b) => {
-    const minA = parseInt(a);
-    const minB = parseInt(b);
-    return minA - minB;
-  });
-  
-  const isSelected = (frame: ExtractedFrame) => {
-    return selection.some(f => f.timestamp === frame.timestamp);
-  };
-  
+  // Initialize with the provided selected frames
+  useEffect(() => {
+    setLocalSelected(selectedFrames);
+  }, [selectedFrames, open]);
+
+  // Filter frames based on search query
+  const filteredFrames = availableFrames.filter(frame => 
+    frame.timestamp.toLowerCase().includes(search.toLowerCase())
+  );
+
   const toggleFrameSelection = (frame: ExtractedFrame) => {
-    if (isSelected(frame)) {
-      setSelection(selection.filter(f => f.timestamp !== frame.timestamp));
-    } else {
-      setSelection([...selection, frame]);
-    }
+    setLocalSelected(prev => {
+      const isSelected = prev.some(f => f.id === frame.id);
+      
+      if (isSelected) {
+        // Remove the frame
+        return prev.filter(f => f.id !== frame.id);
+      } else {
+        // Add the frame
+        return [...prev, frame];
+      }
+    });
   };
-  
-  const handleApplySelection = () => {
-    onSelect(selection);
+
+  const handleConfirm = () => {
+    onSelect(localSelected);
     onClose();
   };
-  
-  const clearSelection = () => {
-    setSelection([]);
+
+  const isSelected = (frame: ExtractedFrame) => {
+    return localSelected.some(f => f.id === frame.id);
   };
-  
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Select Frame{selection.length !== 1 ? 's' : ''} for Slide</DialogTitle>
+          <DialogTitle>Select Frames</DialogTitle>
         </DialogHeader>
         
-        {availableFrames.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
-            <ImageIcon className="h-10 w-10 mb-2" />
-            <p>No extracted frames available for this project</p>
-            <p className="text-sm mt-1">Try extracting frames automatically or using the manual frame picker</p>
+        <div className="flex items-center space-x-2 py-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by timestamp..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-sm">
-                  {selection.length} frame{selection.length !== 1 ? 's' : ''} selected
-                </span>
-                {selection.length > 0 && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={clearSelection}
-                    className="ml-2 h-7 text-xs"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-              
-              <div className="text-sm text-muted-foreground">
-                {availableFrames.length} total frames available
-              </div>
+          <Button variant="outline" size="sm" onClick={() => setLocalSelected([])}>
+            Clear
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {filteredFrames.length === 0 ? (
+            <div className="flex items-center justify-center h-64">
+              <p className="text-muted-foreground">No frames match your search.</p>
             </div>
-            
-            <Tabs defaultValue={sortedTimeGroups[0] || "all"}>
-              <TabsList className="mb-4">
-                <TabsTrigger value="all">All Frames</TabsTrigger>
-                {sortedTimeGroups.slice(0, 5).map(group => (
-                  <TabsTrigger key={group} value={group}>{group}</TabsTrigger>
-                ))}
-                {sortedTimeGroups.length > 5 && (
-                  <TabsTrigger value="more">More...</TabsTrigger>
-                )}
-              </TabsList>
-              
-              <TabsContent value="all">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {availableFrames.map((frame) => (
-                    <FrameItem 
-                      key={frame.timestamp}
-                      frame={frame}
-                      isSelected={isSelected(frame)}
-                      onToggleSelect={() => toggleFrameSelection(frame)}
-                    />
-                  ))}
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-1 py-2">
+              {filteredFrames.map((frame) => (
+                <div 
+                  key={frame.id}
+                  className={`relative rounded-md border overflow-hidden cursor-pointer transition-all ${
+                    isSelected(frame) ? 'ring-2 ring-primary' : 'hover:opacity-90'
+                  }`}
+                  onClick={() => toggleFrameSelection(frame)}
+                >
+                  <img
+                    src={frame.imageUrl}
+                    alt={`Frame at ${frame.timestamp}`}
+                    className="w-full aspect-video object-cover"
+                  />
+                  <div className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm p-2 flex justify-between items-center">
+                    <span className="text-xs font-mono">{frame.timestamp}</span>
+                    {isSelected(frame) && (
+                      <Check className="h-4 w-4 text-primary" />
+                    )}
+                  </div>
                 </div>
-              </TabsContent>
-              
-              {sortedTimeGroups.map(group => (
-                <TabsContent key={group} value={group}>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {framesGroupedByTime[group].map((frame) => (
-                      <FrameItem 
-                        key={frame.timestamp}
-                        frame={frame}
-                        isSelected={isSelected(frame)}
-                        onToggleSelect={() => toggleFrameSelection(frame)}
-                      />
-                    ))}
-                  </div>
-                </TabsContent>
               ))}
-              
-              {sortedTimeGroups.length > 5 && (
-                <TabsContent value="more">
-                  <div className="grid grid-cols-2 gap-4">
-                    {sortedTimeGroups.slice(5).map(group => (
-                      <div key={group} className="border rounded-lg p-4">
-                        <h3 className="font-medium mb-2">{group}</h3>
-                        <div className="grid grid-cols-2 gap-2">
-                          {framesGroupedByTime[group].slice(0, 4).map((frame) => (
-                            <FrameItem 
-                              key={frame.timestamp}
-                              frame={frame}
-                              isSelected={isSelected(frame)}
-                              onToggleSelect={() => toggleFrameSelection(frame)}
-                              compact
-                            />
-                          ))}
-                          {framesGroupedByTime[group].length > 4 && (
-                            <div className="flex items-center justify-center border rounded h-16 text-sm text-muted-foreground">
-                              +{framesGroupedByTime[group].length - 4} more
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </TabsContent>
-              )}
-            </Tabs>
-            
-            <Separator />
-            
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose}>
-                <X className="h-4 w-4 mr-2" />
-                Cancel
-              </Button>
-              <Button 
-                disabled={selection.length === 0} 
-                onClick={handleApplySelection}
-              >
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                Apply to Slide
-              </Button>
             </div>
+          )}
+        </div>
+        
+        <div className="flex justify-between items-center pt-2 border-t mt-2">
+          <div className="text-sm text-muted-foreground">
+            {localSelected.length} frame(s) selected
           </div>
-        )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            <Button onClick={handleConfirm}>
+              <Check className="h-4 w-4 mr-2" />
+              Confirm Selection
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
-  );
-};
-
-interface FrameItemProps {
-  frame: ExtractedFrame;
-  isSelected: boolean;
-  onToggleSelect: () => void;
-  compact?: boolean;
-}
-
-const FrameItem = ({ frame, isSelected, onToggleSelect, compact }: FrameItemProps) => {
-  return (
-    <div 
-      className={`relative border rounded-md overflow-hidden ${
-        isSelected ? 'ring-2 ring-primary' : ''
-      } ${compact ? 'aspect-video' : ''}`}
-      onClick={onToggleSelect}
-    >
-      <img 
-        src={frame.imageUrl} 
-        alt={`Frame at ${frame.timestamp}`} 
-        className={`w-full ${compact ? '' : 'aspect-video'} object-cover cursor-pointer`}
-      />
-      
-      {/* Selection indicator */}
-      {isSelected && (
-        <div className="absolute top-1 right-1 bg-primary rounded-full p-1">
-          <Check className="h-3 w-3 text-primary-foreground" />
-        </div>
-      )}
-      
-      {/* Timestamp badge */}
-      <div className="absolute inset-x-0 bottom-0 bg-background/80 backdrop-blur-sm p-1 text-center">
-        <span className="text-xs font-mono">{frame.timestamp}</span>
-      </div>
-    </div>
   );
 };
