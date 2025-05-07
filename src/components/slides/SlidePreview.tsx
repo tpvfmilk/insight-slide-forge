@@ -1,10 +1,12 @@
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Fullscreen, FullscreenExit, Sun, Moon, Timer } from "lucide-react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
 
 export interface Slide {
   id: string;
@@ -12,7 +14,10 @@ export interface Slide {
   content: string;
   timestamp?: string;
   imageUrl?: string;
+  transitionType?: "fade" | "slide" | "zoom";
 }
+
+type TransitionDirection = "next" | "prev" | "none";
 
 const SlideContent = ({ slide }: { slide: Slide }) => (
   <div className="space-y-6">
@@ -46,18 +51,82 @@ export const SlidePreview = () => {
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [project, setProject] = useState<Project | null>(null);
+  // New state variables for enhancements
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [showMetadata, setShowMetadata] = useState<boolean>(true);
+  const [transitionDirection, setTransitionDirection] = useState<TransitionDirection>("none");
+  const [transitionType, setTransitionType] = useState<"fade" | "slide" | "zoom">("fade");
+  const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number>(0);
+  const slideContainerRef = useRef<HTMLDivElement>(null);
+  const [isDarkTheme, setIsDarkTheme] = useState(() => {
+    return document.documentElement.classList.contains('dark');
+  });
 
   const currentSlide = slides[currentSlideIndex];
+  const SECONDS_PER_SLIDE = 30; // Default estimate: 30 seconds per slide
   
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.key === 'ArrowRight' || event.key === ' ') {
-      goToNextSlide();
-    } else if (event.key === 'ArrowLeft') {
-      goToPrevSlide();
-    } else if (event.key === 'Escape') {
-      exitPresentation();
+  useEffect(() => {
+    // Calculate estimated time remaining
+    if (slides.length) {
+      const slidesRemaining = slides.length - currentSlideIndex - 1;
+      setEstimatedTimeRemaining(slidesRemaining * SECONDS_PER_SLIDE);
     }
   }, [currentSlideIndex, slides.length]);
+  
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        toast.error("Could not enable fullscreen mode");
+      });
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    }
+  };
+  
+  const toggleTheme = () => {
+    document.documentElement.classList.toggle('dark');
+    setIsDarkTheme(!isDarkTheme);
+    toast.success(`${isDarkTheme ? "Light" : "Dark"} mode activated`);
+  };
+  
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    switch (event.key) {
+      case 'ArrowRight':
+      case ' ':
+        goToNextSlide();
+        break;
+      case 'ArrowLeft':
+        goToPrevSlide();
+        break;
+      case 'Escape':
+        if (isFullscreen) {
+          document.exitFullscreen();
+          setIsFullscreen(false);
+        } else {
+          exitPresentation();
+        }
+        break;
+      case 'f':
+      case 'F':
+        toggleFullscreen();
+        toast.success(isFullscreen ? "Exited fullscreen" : "Entered fullscreen mode");
+        break;
+      case 't':
+      case 'T':
+        toggleTheme();
+        break;
+      case 'h':
+      case 'H':
+        setShowMetadata(!showMetadata);
+        toast.success(`${showMetadata ? "Hidden" : "Showing"} slide metadata`);
+        break;
+    }
+  }, [currentSlideIndex, slides.length, isFullscreen, showMetadata, isDarkTheme]);
   
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -66,19 +135,45 @@ export const SlidePreview = () => {
     };
   }, [handleKeyDown]);
   
+  useEffect(() => {
+    // Handle fullscreen change event
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+  
   const exitPresentation = () => {
     navigate(`/projects/${projectId}`);
   };
   
   const goToNextSlide = () => {
-    if (currentSlideIndex < slides.length - 1) {
-      setCurrentSlideIndex(prev => prev + 1);
+    if (currentSlideIndex < slides.length - 1 && !isTransitioning) {
+      setTransitionDirection("next");
+      setIsTransitioning(true);
+      
+      // Delay the actual slide change to allow for animation
+      setTimeout(() => {
+        setCurrentSlideIndex(prev => prev + 1);
+        setIsTransitioning(false);
+      }, 300); // Match this with the animation duration
     }
   };
   
   const goToPrevSlide = () => {
-    if (currentSlideIndex > 0) {
-      setCurrentSlideIndex(prev => prev - 1);
+    if (currentSlideIndex > 0 && !isTransitioning) {
+      setTransitionDirection("prev");
+      setIsTransitioning(true);
+      
+      // Delay the actual slide change to allow for animation
+      setTimeout(() => {
+        setCurrentSlideIndex(prev => prev - 1);
+        setIsTransitioning(false);
+      }, 300); // Match this with the animation duration
     }
   };
   
@@ -93,6 +188,9 @@ export const SlidePreview = () => {
         
         if (projectData?.slides && isValidSlideArray(projectData.slides)) {
           if (projectData.slides.length > 0) {
+            // Set transition type if available in project
+            const projectTransitionType = projectData.transitionType || "fade";
+            setTransitionType(projectTransitionType as "fade" | "slide" | "zoom");
             setSlides(projectData.slides);
           } else {
             toast.error("No slides available for presentation");
@@ -114,6 +212,44 @@ export const SlidePreview = () => {
     loadProject();
   }, [projectId]);
   
+  // Get animation classes based on transition settings
+  const getSlideAnimationClasses = () => {
+    // Base positioning classes
+    let classes = "absolute inset-0 w-full h-full transition-all duration-300 ";
+    
+    if (isTransitioning) {
+      if (transitionType === "fade") {
+        classes += transitionDirection === "next" ? "animate-fade-out" : "animate-fade-in";
+      } else if (transitionType === "slide") {
+        classes += transitionDirection === "next" ? "translate-x-full opacity-0" : "-translate-x-full opacity-0";
+      } else if (transitionType === "zoom") {
+        classes += transitionDirection === "next" ? "scale-95 opacity-0" : "scale-105 opacity-0";
+      }
+    } else {
+      classes += "opacity-100 translate-x-0 scale-100";
+      
+      // Add entry animation when not transitioning
+      if (transitionDirection !== "none") {
+        if (transitionType === "fade") {
+          classes += " animate-fade-in";
+        } else if (transitionType === "slide") {
+          classes += " animate-slide-in";
+        } else if (transitionType === "zoom") {
+          classes += " animate-scale-in";
+        }
+      }
+    }
+    
+    return classes;
+  };
+  
+  // Format time remaining as MM:SS
+  const formatTimeRemaining = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+  
   if (isLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-black">
@@ -126,50 +262,94 @@ export const SlidePreview = () => {
   }
   
   return (
-    <div className="h-screen w-screen bg-black text-white overflow-hidden flex flex-col">
-      {/* Header with controls */}
-      <div className="p-4 absolute top-0 left-0 right-0 z-10 flex justify-between items-center transition-opacity duration-300 bg-gradient-to-b from-black/70 to-transparent">
+    <div className="h-screen w-screen bg-background text-foreground overflow-hidden flex flex-col">
+      {/* Header with controls - visible only when showMetadata is true */}
+      <div className={`p-4 absolute top-0 left-0 right-0 z-10 flex justify-between items-center transition-opacity duration-300 bg-gradient-to-b from-black/70 to-transparent ${showMetadata ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="text-sm opacity-70">
           {project?.title} • Slide {currentSlideIndex + 1} of {slides.length}
         </div>
-        <Button variant="ghost" size="icon" onClick={exitPresentation} className="text-white hover:bg-white/10">
-          <X className="h-5 w-5" />
-          <span className="sr-only">Exit presentation</span>
-        </Button>
+        
+        <div className="flex gap-2">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={toggleTheme} 
+            className="text-white hover:bg-white/10"
+          >
+            {isDarkTheme ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            <span className="sr-only">Toggle theme</span>
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={toggleFullscreen} 
+            className="text-white hover:bg-white/10"
+          >
+            {isFullscreen ? <FullscreenExit className="h-5 w-5" /> : <Fullscreen className="h-5 w-5" />}
+            <span className="sr-only">Toggle fullscreen</span>
+          </Button>
+          
+          <Button variant="ghost" size="icon" onClick={exitPresentation} className="text-white hover:bg-white/10">
+            <X className="h-5 w-5" />
+            <span className="sr-only">Exit presentation</span>
+          </Button>
+        </div>
       </div>
       
       {/* Slide content */}
-      <div className="flex-1 flex items-center justify-center p-8 animate-fade-in">
-        <div className="max-w-4xl w-full">
-          {currentSlide && <SlideContent slide={currentSlide} />}
+      <div className="flex-1 flex items-center justify-center p-8 relative" ref={slideContainerRef}>
+        <div className={getSlideAnimationClasses()}>
+          <div className="max-w-4xl w-full mx-auto h-full flex items-center justify-center">
+            {currentSlide && <SlideContent slide={currentSlide} />}
+          </div>
         </div>
       </div>
       
-      {/* Navigation controls */}
-      <div className="p-6 absolute bottom-0 left-0 right-0 flex justify-between items-center transition-opacity duration-300 bg-gradient-to-t from-black/70 to-transparent">
-        <Button 
-          variant="ghost" 
-          onClick={goToPrevSlide} 
-          disabled={currentSlideIndex === 0}
-          className="text-white disabled:opacity-30 hover:bg-white/10"
-        >
-          <ChevronLeft className="h-5 w-5 mr-1" />
-          Previous
-        </Button>
-        
-        <div className="text-sm">
-          {currentSlideIndex + 1} / {slides.length}
+      {/* Navigation controls and progress bar */}
+      <div className={`absolute bottom-0 left-0 right-0 flex flex-col transition-opacity duration-300 ${showMetadata ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        {/* Progress bar */}
+        <div className="w-full">
+          <Progress value={((currentSlideIndex + 1) / slides.length) * 100} className="h-1 rounded-none bg-white/10" />
         </div>
         
-        <Button 
-          variant="ghost" 
-          onClick={goToNextSlide} 
-          disabled={currentSlideIndex === slides.length - 1}
-          className="text-white disabled:opacity-30 hover:bg-white/10"
-        >
-          Next
-          <ChevronRight className="h-5 w-5 ml-1" />
-        </Button>
+        {/* Controls */}
+        <div className="p-6 flex justify-between items-center bg-gradient-to-t from-black/70 to-transparent">
+          <Button 
+            variant="ghost" 
+            onClick={goToPrevSlide} 
+            disabled={currentSlideIndex === 0 || isTransitioning}
+            className="text-white disabled:opacity-30 hover:bg-white/10"
+          >
+            <ChevronLeft className="h-5 w-5 mr-1" />
+            Previous
+          </Button>
+          
+          <div className="flex flex-col items-center text-sm">
+            <div className="flex items-center gap-2">
+              <span>{currentSlideIndex + 1} / {slides.length}</span>
+              <Timer className="h-4 w-4 opacity-70" />
+              <span>{formatTimeRemaining(estimatedTimeRemaining)}</span>
+            </div>
+          </div>
+          
+          <Button 
+            variant="ghost" 
+            onClick={goToNextSlide} 
+            disabled={currentSlideIndex === slides.length - 1 || isTransitioning}
+            className="text-white disabled:opacity-30 hover:bg-white/10"
+          >
+            Next
+            <ChevronRight className="h-5 w-5 ml-1" />
+          </Button>
+        </div>
+      </div>
+      
+      {/* Floating help tooltip - shown briefly when presentation starts */}
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black/80 text-white text-xs rounded-full px-4 py-2 animate-fade-in">
+        Press <kbd className="px-1 py-0.5 bg-white/20 rounded">H</kbd> to toggle UI • 
+        <kbd className="px-1 py-0.5 bg-white/20 rounded ml-1">F</kbd> for fullscreen • 
+        <kbd className="px-1 py-0.5 bg-white/20 rounded ml-1">T</kbd> for theme
       </div>
     </div>
   );
