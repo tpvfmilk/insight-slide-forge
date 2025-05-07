@@ -1,9 +1,9 @@
+
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Laptop, Home, UsersRound, FilePlus, AlignLeft, ChevronRight } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -16,23 +16,13 @@ interface SidebarProps {
 export function InsightSidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation();
   const isMobile = useIsMobile();
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    projects: true,
-  });
-
+  
   useEffect(() => {
     if (isMobile && isOpen) {
       // Close sidebar on mobile after navigation
       onClose();
     }
   }, [location.pathname, isMobile, isOpen, onClose]);
-
-  const toggleSection = (section: string) => {
-    setOpenSections(prev => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
-  };
 
   const navItems = [
     {
@@ -92,37 +82,6 @@ export function InsightSidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         <Separator className="my-4" />
-
-        <Collapsible
-          open={openSections.projects}
-          onOpenChange={() => toggleSection("projects")}
-        >
-          <CollapsibleTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="justify-start w-full font-medium text-sm"
-            >
-              <ChevronRight
-                className={cn(
-                  "h-4 w-4 mr-1 transition-transform",
-                  openSections.projects ? "transform rotate-90" : ""
-                )}
-              />
-              Recent Projects
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pl-5 mt-1 space-y-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="justify-start w-full text-sm"
-              asChild
-            >
-              <Link to="/projects/new">Create New</Link>
-            </Button>
-          </CollapsibleContent>
-        </Collapsible>
       </div>
 
       <div className="p-4 border-t flex justify-between items-center">
