@@ -1,13 +1,16 @@
+
 // This file is responsible for client-side frame extraction from videos
 
 import { supabase } from "@/integrations/supabase/client";
 import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 import { toast } from "sonner";
 
-interface ExtractedFrame {
+// Make the interface public by exporting it
+export interface ExtractedFrame {
   timestamp: string;
   imageUrl: string;
   isPlaceholder?: boolean;
+  id?: string;
 }
 
 interface ClientFrameExtractionResult {
