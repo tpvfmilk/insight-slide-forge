@@ -85,7 +85,12 @@ const ProjectPage = () => {
               timestamps.push(slide.timestamp);
             }
             if ('transcriptTimestamps' in slide && Array.isArray(slide.transcriptTimestamps)) {
-              timestamps.push(...slide.transcriptTimestamps);
+              // Make sure we only push string values to the timestamps array
+              slide.transcriptTimestamps.forEach(timestamp => {
+                if (typeof timestamp === 'string') {
+                  timestamps.push(timestamp);
+                }
+              });
             }
           }
         });

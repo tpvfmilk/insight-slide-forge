@@ -66,8 +66,8 @@ export const clientExtractFramesFromVideo = async (
     
   } catch (error) {
     console.error("Error in client frame extraction:", error);
-    toast.error(`Failed to prepare frame extraction: ${error.message}`);
-    return { success: false, error: error.message };
+    toast.error(`Failed to prepare frame extraction: ${(error as Error).message}`);
+    return { success: false, error: (error as Error).message };
   }
 };
 
@@ -123,9 +123,11 @@ export const updateSlidesWithExtractedFrames = async (
         const imageUrls: string[] = [];
         
         updatedSlide.transcriptTimestamps.forEach(timestamp => {
-          const imageUrl = frameMap.get(timestamp);
-          if (imageUrl) {
-            imageUrls.push(imageUrl);
+          if (typeof timestamp === 'string') {
+            const imageUrl = frameMap.get(timestamp);
+            if (imageUrl) {
+              imageUrls.push(imageUrl);
+            }
           }
         });
         
@@ -153,7 +155,7 @@ export const updateSlidesWithExtractedFrames = async (
     return true;
   } catch (error) {
     console.error("Error updating slides with extracted frames:", error);
-    toast.error(`Failed to update slides: ${error.message}`, { id: "update-slides" });
+    toast.error(`Failed to update slides: ${(error as Error).message}`, { id: "update-slides" });
     return false;
   }
 };
