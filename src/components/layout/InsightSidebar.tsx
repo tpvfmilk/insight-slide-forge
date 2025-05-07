@@ -36,7 +36,7 @@ export const InsightSidebar = () => {
           <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary text-primary-foreground">
             <Layout className="h-5 w-5" />
           </div>
-          <span className="font-semibold text-lg">InsightSlide</span>
+          <span className="font-semibold text-lg">Distill</span>
         </Link>
         <div className="flex-1" />
         <SidebarTrigger />

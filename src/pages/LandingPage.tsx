@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Layout, CheckCircle, Key, FileText, Upload } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -15,7 +16,7 @@ const LandingPage = () => {
             <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary text-primary-foreground">
               <Layout className="h-5 w-5" />
             </div>
-            <span className="font-semibold text-lg">InsightSlide</span>
+            <span className="font-semibold text-lg">Distill</span>
           </div>
           
           <nav className="hidden md:flex gap-6">
@@ -52,7 +53,7 @@ const LandingPage = () => {
                 Transform video content into structured slide decks
               </h1>
               <p className="text-xl text-muted-foreground">
-                InsightSlide uses AI to analyze educational videos and create comprehensive, editable slide decks for study, review, and teaching.
+                Distill uses AI to analyze educational videos and create comprehensive, editable slide decks for study, review, and teaching.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="gap-2">
@@ -72,7 +73,7 @@ const LandingPage = () => {
             <div className="relative aspect-video rounded-xl overflow-hidden shadow-xl border">
               <img
                 src="/lovable-uploads/eabb2f69-00a5-4556-860a-ac4b00284a5d.png"
-                alt="InsightSlide Interface"
+                alt="Distill Interface"
                 className="w-full h-full object-cover"
               />
             </div>
@@ -144,7 +145,7 @@ const LandingPage = () => {
       <section className="py-20">
         <div className="container">
           <div className="text-center mb-16 max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold mb-4">Who Uses InsightSlide?</h2>
+            <h2 className="text-3xl font-bold mb-4">Who Uses Distill?</h2>
             <p className="text-muted-foreground">
               Designed for academic professionals and knowledge workers who need to process educational content efficiently.
             </p>
@@ -179,7 +180,7 @@ const LandingPage = () => {
           <div className="max-w-3xl mx-auto text-center space-y-6">
             <h2 className="text-3xl font-bold">Ready to transform your video content?</h2>
             <p className="text-xl opacity-90">
-              Join InsightSlide today and start creating structured, accessible slide decks from your educational videos.
+              Join Distill today and start creating structured, accessible slide decks from your educational videos.
             </p>
             <Button asChild size="lg" variant="secondary">
               <Link to="/register">
@@ -201,7 +202,7 @@ const LandingPage = () => {
                 <div className="flex items-center justify-center h-8 w-8 rounded-md bg-primary text-primary-foreground">
                   <Layout className="h-5 w-5" />
                 </div>
-                <span className="font-semibold text-lg">InsightSlide</span>
+                <span className="font-semibold text-lg">Distill</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 Transform video content into structured slide decks with AI.
@@ -236,7 +237,7 @@ const LandingPage = () => {
           </div>
           
           <div className="border-t mt-12 pt-6 text-center text-sm text-muted-foreground">
-            &copy; 2025 InsightSlide. All rights reserved.
+            &copy; 2025 Distill. All rights reserved.
           </div>
         </div>
       </footer>
