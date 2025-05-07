@@ -49,20 +49,33 @@ export const uploadFile = async (file: File): Promise<{ path: string; url: strin
  * @param title Project title
  * @param contextPrompt Optional context prompt to guide slide generation
  * @param transcript Optional transcript text to enhance slide generation
+ * @param captionImage Optional image file containing captions for OCR processing
  * @returns The created project
  */
 export const createProjectFromVideo = async (
   file: File, 
   title: string = 'New Project',
   contextPrompt: string = '',
-  transcript: string = ''
+  transcript: string = '',
+  captionImage: File | null = null
 ): Promise<Project | null> => {
   try {
-    // Upload the file
+    // Upload the video file
     const uploadResult = await uploadFile(file);
     
     if (!uploadResult) {
-      throw new Error('Failed to upload file');
+      throw new Error('Failed to upload video file');
+    }
+    
+    // Upload caption image if provided
+    let captionImageResult = null;
+    if (captionImage) {
+      console.log('Uploading caption image for OCR...');
+      captionImageResult = await uploadFile(captionImage);
+      
+      if (!captionImageResult) {
+        console.warn('Failed to upload caption image, continuing with video only');
+      }
     }
     
     // Create a new project
@@ -73,6 +86,8 @@ export const createProjectFromVideo = async (
       source_url: uploadResult.url,
       context_prompt: contextPrompt,
       transcript: transcript || null, // Add transcript if provided
+      caption_image_path: captionImageResult?.path || null, // Add caption image path if provided
+      caption_image_url: captionImageResult?.url || null, // Add caption image URL if provided
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 

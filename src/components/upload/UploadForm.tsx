@@ -9,7 +9,7 @@ import { YoutubeUpload } from "./YoutubeUpload";
 import { CombinedUpload } from "./CombinedUpload";
 
 export const UploadForm = () => {
-  const [uploadMethod, setUploadMethod] = useState<string>("video");
+  const [uploadMethod, setUploadMethod] = useState<string>("combined");
   
   return (
     <Card className="max-w-3xl mx-auto">

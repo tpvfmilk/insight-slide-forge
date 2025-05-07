@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { FileVideo, Upload, RefreshCw, FileText } from "lucide-react";
+import { FileVideo, Upload, RefreshCw, FileText, Image } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
@@ -16,14 +16,21 @@ export const CombinedUpload = () => {
   const [transcriptText, setTranscriptText] = useState<string>("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
-  const handleFileButtonClick = () => {
-    fileInputRef.current?.click();
+  const handleVideoButtonClick = () => {
+    videoFileInputRef.current?.click();
+  };
+
+  const handleImageButtonClick = () => {
+    imageFileInputRef.current?.click();
   };
   
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     
     if (!file) return;
@@ -43,6 +50,39 @@ export const CombinedUpload = () => {
     setVideoFile(file);
     setVideoFileName(file.name);
     toast.success("Video file selected successfully");
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    
+    if (!file) return;
+    
+    // Check file type
+    if (!file.type.includes('image/')) {
+      toast.error("Please upload an image file");
+      return;
+    }
+    
+    // Check file size (limit to 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File size must be less than 10MB");
+      return;
+    }
+    
+    setImageFile(file);
+    
+    // Create a preview URL for the image
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+    toast.success("Caption image uploaded successfully");
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (imageFileInputRef.current) {
+      imageFileInputRef.current.value = '';
+    }
   };
 
   const handleSubmit = async () => {
@@ -68,12 +108,13 @@ export const CombinedUpload = () => {
     }, 300);
     
     try {
-      // Create project from video, but include transcript text
+      // Create project from video, passing the image file for OCR processing
       const project = await createProjectFromVideo(
         videoFile, 
         undefined, 
         contextPrompt,
-        transcriptText // Pass the transcript text
+        transcriptText, // Pass the transcript text
+        imageFile      // Pass the image file for OCR
       );
       
       clearInterval(interval);
@@ -106,8 +147,8 @@ export const CombinedUpload = () => {
         
         <input 
           type="file" 
-          ref={fileInputRef}
-          onChange={handleFileChange}
+          ref={videoFileInputRef}
+          onChange={handleVideoFileChange}
           className="sr-only" 
           accept="video/*"
         />
@@ -115,12 +156,12 @@ export const CombinedUpload = () => {
         {videoFileName ? (
           <div className="flex items-center gap-2 mb-4">
             <span className="text-sm font-medium">{videoFileName}</span>
-            <Button size="sm" variant="outline" onClick={handleFileButtonClick}>
+            <Button size="sm" variant="outline" onClick={handleVideoButtonClick}>
               Change
             </Button>
           </div>
         ) : (
-          <Button onClick={handleFileButtonClick} disabled={isUploading}>
+          <Button onClick={handleVideoButtonClick} disabled={isUploading}>
             <Upload className="h-4 w-4 mr-2" />
             Choose Video File
           </Button>
@@ -141,6 +182,56 @@ export const CombinedUpload = () => {
             className="min-h-[120px]"
             disabled={isUploading}
           />
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="caption-image" className="text-sm font-medium flex items-center gap-2">
+            <Image className="h-4 w-4" />
+            Caption Image for OCR (optional)
+          </label>
+          <p className="text-xs text-muted-foreground mb-2">
+            Upload an image of captions or subtitles to extract text using OCR
+          </p>
+
+          <input 
+            type="file"
+            id="caption-image"
+            ref={imageFileInputRef}
+            onChange={handleImageFileChange}
+            className="sr-only"
+            accept="image/*"
+          />
+
+          {imagePreview && (
+            <div className="relative mt-4 border rounded-md overflow-hidden">
+              <img 
+                src={imagePreview} 
+                alt="Caption preview" 
+                className="w-full max-h-64 object-contain" 
+              />
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="absolute top-2 right-2"
+                onClick={removeImage}
+                disabled={isUploading}
+              >
+                Remove
+              </Button>
+            </div>
+          )}
+
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={handleImageButtonClick}
+            disabled={isUploading}
+            className="w-full"
+          >
+            <Image className="h-4 w-4 mr-2" />
+            {imageFile ? "Change Caption Image" : "Upload Caption Image"}
+          </Button>
         </div>
       </div>
       
