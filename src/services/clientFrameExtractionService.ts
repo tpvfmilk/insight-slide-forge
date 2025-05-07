@@ -51,13 +51,18 @@ export const clientExtractFramesFromVideo = async (
       console.warn("Failed to verify slide_stills bucket:", bucketCheckError);
     }
     
-    // Generate the public URL for the video
-    const { data } = supabase.storage.from('video_uploads').getPublicUrl(videoPath);
-    const videoUrl = data.publicUrl;
-    
-    if (!videoUrl) {
-      throw new Error("Failed to get video URL");
+    // Generate a signed URL for the video with an expiration of 1 hour
+    const { data, error } = await supabase.storage.from('video_uploads')
+      .createSignedUrl(videoPath, 3600);
+      
+    if (error || !data?.signedUrl) {
+      console.error("Error creating signed URL:", error);
+      toast.error("Could not access the video file. Please check permissions.");
+      return { success: false, error: error?.message || "Failed to get secure video URL" };
     }
+    
+    const videoUrl = data.signedUrl;
+    console.log("Generated secure video URL for extraction");
     
     return {
       success: true,

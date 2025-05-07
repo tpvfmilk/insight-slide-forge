@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 import { uploadSlideImage } from "@/services/imageService";
-import { RefreshCw, Check, X, Image } from "lucide-react";
+import { RefreshCw, Check, X, Image, AlertTriangle } from "lucide-react";
 
 interface FrameExtractionModalProps {
   open: boolean;
@@ -30,6 +30,7 @@ export const FrameExtractionModal = ({
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [extractedFrames, setExtractedFrames] = useState<Array<{ timestamp: string, frame: Blob, previewUrl?: string }>>([]);
   const [uploadedFrames, setUploadedFrames] = useState<Array<{ timestamp: string, imageUrl: string }>>([]);
+  const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   
   // Step 1: Load the video when the component mounts
@@ -38,14 +39,25 @@ export const FrameExtractionModal = ({
       if (!open || !videoPath) return;
       
       try {
-        // Generate the public URL for the video
+        setError(null);
+        // Generate the signed URL for the video
         const { supabase } = await import('@/integrations/supabase/client');
-        const { data } = supabase.storage.from('video_uploads').getPublicUrl(videoPath);
-        setVideoUrl(data.publicUrl);
+        const { data, error } = await supabase.storage
+          .from('video_uploads')
+          .createSignedUrl(videoPath, 3600); // 1 hour expiry
+          
+        if (error || !data?.signedUrl) {
+          console.error("Error getting video signed URL:", error);
+          setError("Could not access the video. Please check permissions.");
+          return;
+        }
+        
+        setVideoUrl(data.signedUrl);
+        console.log("Successfully loaded video with secure URL");
       } catch (error) {
         console.error("Error loading video:", error);
+        setError(`Failed to load video: ${(error as Error).message}`);
         toast.error("Failed to load video");
-        onClose();
       }
     };
     
@@ -63,6 +75,7 @@ export const FrameExtractionModal = ({
     setProgress(0);
     setExtractedFrames([]);
     setUploadedFrames([]);
+    setError(null);
     
     try {
       toast.loading("Extracting frames from video...", { id: "extract-frames" });
@@ -91,7 +104,8 @@ export const FrameExtractionModal = ({
       await uploadFrames(framesWithPreviews);
     } catch (error) {
       console.error("Error extracting frames:", error);
-      toast.error(`Frame extraction failed: ${error.message}`, { id: "extract-frames" });
+      setError(`Frame extraction failed: ${(error as Error).message}`);
+      toast.error(`Frame extraction failed: ${(error as Error).message}`, { id: "extract-frames" });
     } finally {
       setIsExtracting(false);
     }
@@ -105,6 +119,7 @@ export const FrameExtractionModal = ({
     
     toast.loading("Uploading extracted frames...", { id: "upload-frames" });
     setProgress(0);
+    setError(null);
     
     try {
       const uploadedResults: Array<{ timestamp: string, imageUrl: string }> = [];
@@ -113,16 +128,23 @@ export const FrameExtractionModal = ({
         const { timestamp, frame } = frames[i];
         
         // Create a file from the blob
-        const file = new File([frame], `frame-${timestamp.replace(/:/g, '-')}.jpg`, { type: 'image/jpeg' });
+        const file = new File([frame], `frame-${timestamp.replace(/:/g, '-')}-${projectId}.jpg`, { type: 'image/jpeg' });
         
         // Upload the file
-        const uploadResult = await uploadSlideImage(file);
-        
-        if (uploadResult) {
-          uploadedResults.push({
-            timestamp,
-            imageUrl: uploadResult.url
-          });
+        try {
+          const uploadResult = await uploadSlideImage(file);
+          
+          if (uploadResult) {
+            uploadedResults.push({
+              timestamp,
+              imageUrl: uploadResult.url
+            });
+          } else {
+            console.error(`Failed to upload frame at timestamp ${timestamp}`);
+          }
+        } catch (uploadError) {
+          console.error(`Error uploading frame at timestamp ${timestamp}:`, uploadError);
+          // Continue with other frames even if one fails
         }
         
         // Update progress
@@ -130,14 +152,23 @@ export const FrameExtractionModal = ({
         setProgress(progressPercentage);
       }
       
+      if (uploadedResults.length === 0) {
+        setError("Failed to upload any frames. Please try again.");
+        toast.error("Frame upload failed", { id: "upload-frames" });
+        return;
+      }
+      
       setUploadedFrames(uploadedResults);
       toast.success(`Uploaded ${uploadedResults.length} frames`, { id: "upload-frames" });
       
       // Call the completion handler with the uploaded frames
-      onComplete(uploadedResults);
+      if (uploadedResults.length > 0) {
+        onComplete(uploadedResults);
+      }
     } catch (error) {
       console.error("Error uploading frames:", error);
-      toast.error(`Frame upload failed: ${error.message}`, { id: "upload-frames" });
+      setError(`Frame upload failed: ${(error as Error).message}`);
+      toast.error(`Frame upload failed: ${(error as Error).message}`, { id: "upload-frames" });
     }
   };
   
@@ -152,6 +183,14 @@ export const FrameExtractionModal = ({
     };
   }, [extractedFrames]);
   
+  // Handle video loading error
+  const handleVideoError = () => {
+    if (videoRef.current) {
+      setError(`Video failed to load: ${videoRef.current.error?.message || "Unknown error"}`);
+      console.error("Video error:", videoRef.current.error);
+    }
+  };
+  
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -160,6 +199,25 @@ export const FrameExtractionModal = ({
         </DialogHeader>
         
         <div className="p-4 space-y-6">
+          {/* Error Message */}
+          {error && (
+            <div className="bg-destructive/10 text-destructive p-4 rounded-md flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium">Error</p>
+                <p>{error}</p>
+                <p className="mt-2">
+                  Common issues:
+                  <ul className="list-disc list-inside ml-2 mt-1">
+                    <li>Browser security restrictions for video access</li>
+                    <li>Video storage bucket permissions</li>
+                    <li>Network connectivity issues</li>
+                  </ul>
+                </p>
+              </div>
+            </div>
+          )}
+          
           {/* Video Preview */}
           {videoUrl && (
             <div className="aspect-video bg-black rounded-md overflow-hidden">
@@ -170,6 +228,7 @@ export const FrameExtractionModal = ({
                 controls
                 preload="metadata"
                 className="w-full h-full object-contain"
+                onError={handleVideoError}
               />
             </div>
           )}

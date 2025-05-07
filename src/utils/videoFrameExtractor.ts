@@ -42,8 +42,14 @@ export const extractFrameFromVideo = (
     // Set the current time of the video to the requested timestamp
     videoElement.currentTime = timestamp;
     
+    const seekTimeout = setTimeout(() => {
+      reject(new Error(`Seek timeout at timestamp ${timestamp}s`));
+    }, 10000); // 10 second timeout for seeking
+    
     // Wait for the video to seek to the specified timestamp
     videoElement.onseeked = () => {
+      clearTimeout(seekTimeout);
+      
       try {
         // Create a canvas element with the same dimensions as the video
         const canvas = document.createElement('canvas');
@@ -57,7 +63,13 @@ export const extractFrameFromVideo = (
           return;
         }
         
-        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        // Try to draw the frame to canvas
+        try {
+          ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        } catch (drawError) {
+          reject(new Error(`CORS error or failed to draw video frame: ${drawError.message}`));
+          return;
+        }
         
         // Convert the canvas to a blob
         canvas.toBlob((blob) => {
@@ -74,7 +86,8 @@ export const extractFrameFromVideo = (
     
     // Handle errors
     videoElement.onerror = () => {
-      reject(new Error(`Video error at timestamp ${timestamp}`));
+      clearTimeout(seekTimeout);
+      reject(new Error(`Video error at timestamp ${timestamp}s: ${videoElement.error?.message || 'Unknown error'}`));
     };
   });
 };
@@ -93,73 +106,75 @@ export const createVideoElement = (videoUrl: string): Promise<HTMLVideoElement> 
     
     // Set up event handlers
     video.onloadedmetadata = () => {
-      // Once metadata is loaded, seek to beginning to ensure it's ready
-      video.currentTime = 0;
-    };
-    
-    video.oncanplay = () => {
       resolve(video);
     };
     
     video.onerror = () => {
-      reject(new Error(`Failed to load video from ${videoUrl}`));
+      reject(new Error(`Failed to load video: ${video.error?.message || 'Unknown error'}`));
     };
     
-    // Start loading the video
+    // Set a timeout in case the video never loads
+    const timeout = setTimeout(() => {
+      reject(new Error('Video loading timeout'));
+    }, 30000); // 30 second timeout
+    
+    // Add the loaded event handler to clear the timeout
+    video.addEventListener('loadeddata', () => {
+      clearTimeout(timeout);
+    });
+    
+    // Set the source and start loading
     video.src = videoUrl;
+    video.load();
   });
 };
 
 /**
- * Generates a public URL for a video file in Supabase storage
- * @param path Storage path to the video file
- * @returns Public URL for the video
- */
-export const getVideoPublicUrl = async (path: string): Promise<string> => {
-  const { supabase } = await import('@/integrations/supabase/client');
-  const { data } = supabase.storage.from('video_uploads').getPublicUrl(path);
-  return data.publicUrl;
-};
-
-/**
- * Extract multiple frames from a video at specified timestamps
- * @param videoUrl URL of the video to process
- * @param timestamps Array of timestamps (HH:MM:SS format)
- * @param onProgress Optional callback for reporting progress
- * @returns Array of objects containing timestamp and frame blob
+ * Extract frames from a video URL at specific timestamps
+ * @param videoUrl URL of the video to extract frames from
+ * @param timestamps Array of timestamps in format "HH:MM:SS"
+ * @param onProgress Optional callback for progress updates
+ * @returns Promise resolving to an array of extracted frames with timestamps
  */
 export const extractFramesFromVideoUrl = async (
   videoUrl: string,
   timestamps: string[],
   onProgress?: (completed: number, total: number) => void
 ): Promise<Array<{ timestamp: string, frame: Blob }>> => {
-  try {
-    // Create and load the video element
-    const video = await createVideoElement(videoUrl);
-    
-    const results: Array<{ timestamp: string, frame: Blob }> = [];
-    
-    // Process each timestamp
-    for (let i = 0; i < timestamps.length; i++) {
-      const timestamp = timestamps[i];
-      const seconds = timestampToSeconds(timestamp);
+  // Create and load the video element
+  const video = await createVideoElement(videoUrl);
+  
+  // Convert timestamps to seconds
+  const timestampsInSeconds = timestamps.map(t => ({
+    original: t,
+    seconds: timestampToSeconds(t)
+  }));
+  
+  // Sort timestamps to process them in order
+  timestampsInSeconds.sort((a, b) => a.seconds - b.seconds);
+  
+  const results: Array<{ timestamp: string, frame: Blob }> = [];
+  let completed = 0;
+  
+  // Process each timestamp
+  for (const { original, seconds } of timestampsInSeconds) {
+    try {
+      const frame = await extractFrameFromVideo(video, seconds);
       
-      try {
-        const frameBlob = await extractFrameFromVideo(video, seconds);
-        results.push({ timestamp, frame: frameBlob });
-      } catch (error) {
-        console.error(`Failed to extract frame at ${timestamp}:`, error);
-      }
+      results.push({
+        timestamp: original,
+        frame
+      });
       
-      // Report progress
+      completed++;
       if (onProgress) {
-        onProgress(i + 1, timestamps.length);
+        onProgress(completed, timestampsInSeconds.length);
       }
+    } catch (error) {
+      console.error(`Failed to extract frame at ${original}:`, error);
+      // Continue with other timestamps even if one fails
     }
-    
-    return results;
-  } catch (error) {
-    console.error('Error extracting frames:', error);
-    throw error;
   }
+  
+  return results;
 };
