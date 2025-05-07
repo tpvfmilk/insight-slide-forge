@@ -1,28 +1,18 @@
 
-import { useState, useEffect, useRef, ChangeEvent } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
+import { Separator } from "@/components/ui/separator";
 import { 
-  Play, 
-  Pause, 
-  SkipForward, 
-  SkipBack, 
-  Camera, 
-  Trash2,
-  RefreshCw,
-  CheckCircle2,
-  Clock
+  Play, Pause, SkipBack, SkipForward, Camera, AlertCircle,
+  RefreshCw, CheckCircle2, X, Trash2
 } from "lucide-react";
 import { formatDuration } from "@/utils/formatUtils";
-import { 
-  captureFrameFromVideoElement, 
-  uploadManuallySelectedFrame, 
-  addManuallySelectedFrameToProject,
-  ExtractedFrame 
-} from "@/services/clientFrameExtractionService";
-import { VideoDetailsCard } from "./VideoDetailsCard";
+import { supabase } from "@/integrations/supabase/client";
+import { uploadSlideImage } from "@/services/imageService";
+import { toast } from "sonner";
+import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
 interface FramePickerModalProps {
   open: boolean;
@@ -46,481 +36,370 @@ export const FramePickerModal = ({
   projectId,
   onComplete,
   videoMetadata,
-  existingFrames = []
+  existingFrames = [],
 }: FramePickerModalProps) => {
-  const [videoUrl, setVideoUrl] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(0);
-  const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>([]);
-  const [isCapturing, setIsCapturing] = useState<boolean>(false);
-  const [isProcessingComplete, setIsProcessingComplete] = useState<boolean>(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [videoDuration, setVideoDuration] = useState<number>(0);
+  const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
+  const [isCaptureLoading, setIsCaptureLoading] = useState<boolean>(false);
   
-  // Load video on component mount
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Load the video when the component mounts
   useEffect(() => {
-    const loadVideo = async () => {
-      if (!open || !videoPath) return;
+    if (!open) return;
+    
+    const fetchVideo = async () => {
+      setIsLoading(true);
+      setError(null);
       
       try {
-        setIsLoading(true);
-        setError(null);
-        
-        // Generate the signed URL for the video
-        const { supabase } = await import('@/integrations/supabase/client');
+        // Get a signed URL for the video
         const { data, error } = await supabase.storage
-          .from('video_uploads')
-          .createSignedUrl(videoPath, 3600, {
-            download: false
-          });
-          
-        if (error || !data?.signedUrl) {
-          console.error("Error getting video signed URL:", error);
-          setError("Could not access the video. Please check permissions.");
-          return;
+          .from("videos")
+          .createSignedUrl(videoPath, 3600); // 1 hour expiry
+        
+        if (error) throw error;
+        
+        if (!data || !data.signedUrl) {
+          throw new Error("Failed to get video URL");
         }
         
-        // Add a cache-busting parameter
-        const videoUrlWithCache = new URL(data.signedUrl);
-        videoUrlWithCache.searchParams.append('_cache', Date.now().toString());
-        
-        setVideoUrl(videoUrlWithCache.toString());
-        console.log("Successfully loaded video with secure URL");
-        
-        // Initialize with any existing frames
-        if (existingFrames && existingFrames.length > 0) {
-          setCapturedFrames(existingFrames);
-        }
-        
-      } catch (error) {
-        console.error("Error loading video:", error);
-        setError(`Failed to load video: ${(error as Error).message}`);
+        setVideoUrl(data.signedUrl);
+      } catch (err) {
+        console.error("Error fetching video:", err);
+        setError(err instanceof Error ? err.message : "Failed to load video");
       } finally {
         setIsLoading(false);
       }
     };
     
-    loadVideo();
+    fetchVideo();
+    
+    // Initialize with existing frames if provided
+    if (existingFrames && existingFrames.length > 0) {
+      setCapturedFrames(existingFrames);
+    }
   }, [open, videoPath, existingFrames]);
   
-  // Handle video metadata loading
-  const handleVideoLoaded = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
-      toast.success("Video loaded successfully");
-    }
-  };
-  
-  // Handle video error
-  const handleVideoError = () => {
-    const videoElement = videoRef.current;
-    if (videoElement?.error) {
-      setError(`Video failed to load: ${videoElement.error.message}`);
-    } else {
-      setError("Unknown video loading error");
-    }
-  };
-  
-  // Handle play/pause
-  const togglePlayback = () => {
+  // Update currentTime when the video plays
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     
-    if (video.paused) {
-      video.play();
-      setIsPlaying(true);
-    } else {
-      video.paused = true;
-      video.pause();
-      setIsPlaying(false);
-    }
-  };
-  
-  // Update time display as video plays
-  const handleTimeUpdate = () => {
-    const video = videoRef.current;
-    if (video) {
+    const updateTime = () => {
       setCurrentTime(video.currentTime);
-    }
-  };
+    };
+    
+    video.addEventListener('timeupdate', updateTime);
+    return () => {
+      video.removeEventListener('timeupdate', updateTime);
+    };
+  }, [videoRef.current]);
   
-  // Handle slider change for scrubbing
-  const handleSliderChange = (values: number[]) => {
-    const video = videoRef.current;
-    if (video) {
-      video.currentTime = values[0];
-      setCurrentTime(values[0]);
-    }
-  };
-  
-  // Step forward by 1 second
-  const stepForward = () => {
-    const video = videoRef.current;
-    if (video) {
-      video.currentTime = Math.min(video.duration, video.currentTime + 1);
-    }
-  };
-  
-  // Step backward by 1 second
-  const stepBackward = () => {
-    const video = videoRef.current;
-    if (video) {
-      video.currentTime = Math.max(0, video.currentTime - 1);
-    }
-  };
-  
-  // Frame step forward (approximately 1/30th of a second)
-  const frameStepForward = () => {
-    const video = videoRef.current;
-    if (video) {
-      video.currentTime = Math.min(video.duration, video.currentTime + 0.033);
-    }
-  };
-  
-  // Frame step backward
-  const frameStepBackward = () => {
-    const video = videoRef.current;
-    if (video) {
-      video.currentTime = Math.max(0, video.currentTime - 0.033);
-    }
-  };
-  
-  // Capture current frame
-  const captureCurrentFrame = async () => {
+  // Sync video play state with isPlaying
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     
-    // Pause the video when capturing
-    video.pause();
-    setIsPlaying(false);
+    if (isPlaying) {
+      video.play().catch(err => {
+        console.error("Error playing video:", err);
+        setIsPlaying(false);
+      });
+    } else {
+      video.pause();
+    }
+  }, [isPlaying]);
+  
+  const handleVideoLoaded = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    // Use the video's duration or fall back to the metadata
+    setVideoDuration(video.duration || videoMetadata?.duration || 0);
+  };
+  
+  const handleTimeChange = (value: number[]) => {
+    const newTime = value[0];
+    setCurrentTime(newTime);
+    
+    if (videoRef.current) {
+      videoRef.current.currentTime = newTime;
+    }
+  };
+  
+  const togglePlayPause = () => {
+    setIsPlaying(!isPlaying);
+  };
+  
+  const seekBack = () => {
+    if (videoRef.current) {
+      const newTime = Math.max(0, videoRef.current.currentTime - 5);
+      videoRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
+    }
+  };
+  
+  const seekForward = () => {
+    if (videoRef.current && videoDuration) {
+      const newTime = Math.min(videoDuration, videoRef.current.currentTime + 5);
+      videoRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
+    }
+  };
+  
+  const captureFrame = async () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    if (!video || !canvas || !projectId) {
+      toast.error("Cannot capture frame: missing video or canvas");
+      return;
+    }
+    
+    setIsCaptureLoading(true);
     
     try {
-      setIsCapturing(true);
-      
-      // Format the current time as a timestamp
-      const currentSeconds = video.currentTime;
-      const hours = Math.floor(currentSeconds / 3600);
-      const minutes = Math.floor((currentSeconds % 3600) / 60);
-      const seconds = Math.floor(currentSeconds % 60);
-      const timestamp = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      
-      // Check if we already have a frame at this timestamp
-      const existingFrameIndex = capturedFrames.findIndex(frame => frame.timestamp === timestamp);
-      if (existingFrameIndex >= 0) {
-        toast.info(`A frame at ${timestamp} already exists. Replacing it...`);
+      // Ensure video is paused for accurate capture
+      if (!video.paused) {
+        video.pause();
+        setIsPlaying(false);
       }
       
-      // Capture the frame
-      const frameBlob = captureFrameFromVideoElement(video, timestamp);
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       
-      if (!frameBlob) {
-        toast.error("Failed to capture the current frame");
-        return;
+      // Draw the current frame on the canvas
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error("Could not get canvas context");
       }
       
-      // Upload the captured frame
-      const frameInfo = await uploadManuallySelectedFrame(projectId, frameBlob, timestamp);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      if (!frameInfo) {
-        toast.error("Failed to upload the captured frame");
-        return;
+      // Convert to blob
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(blob => {
+          if (blob) resolve(blob);
+          else reject(new Error("Failed to create blob from canvas"));
+        }, 'image/jpeg', 0.95);
+      });
+      
+      // Create a file from the blob
+      const timestamp = video.currentTime;
+      const formattedTime = formatDuration(timestamp);
+      const file = new File([blob], `frame-${formattedTime.replace(":", "-")}.jpg`, { type: 'image/jpeg' });
+      
+      // Upload to storage
+      const uploadResult = await uploadSlideImage(file);
+      
+      if (!uploadResult || !uploadResult.url) {
+        throw new Error("Failed to upload frame image");
       }
       
-      // Add the frame to our project
-      await addManuallySelectedFrameToProject(projectId, frameInfo);
+      // Add to captured frames
+      const newFrame: ExtractedFrame = {
+        timestamp: formattedTime,
+        imageUrl: uploadResult.url
+      };
       
-      // Update the state
-      if (existingFrameIndex >= 0) {
-        // Replace existing frame
-        setCapturedFrames(prev => {
-          const updated = [...prev];
-          updated[existingFrameIndex] = frameInfo;
-          return updated;
-        });
-      } else {
-        // Add new frame
-        setCapturedFrames(prev => [...prev, frameInfo]);
-      }
-      
-      toast.success(`Frame captured at ${timestamp}`);
-    } catch (error) {
-      console.error("Error capturing frame:", error);
-      toast.error(`Error capturing frame: ${(error as Error).message}`);
-    } finally {
-      setIsCapturing(false);
-    }
-  };
-  
-  // Delete a captured frame
-  const deleteFrame = async (timestamp: string) => {
-    try {
-      // Remove the frame from our state
-      setCapturedFrames(prev => prev.filter(frame => frame.timestamp !== timestamp));
-      
-      // We'll need to update the project with the new frames array
-      // First get the project to get the current extracted_frames
-      const { supabase } = await import('@/integrations/supabase/client');
-      const { data, error } = await supabase
-        .from('projects')
-        .select('extracted_frames')
-        .eq('id', projectId)
-        .single();
-      
-      if (error) {
-        console.error("Error fetching project for frame deletion:", error);
-        return;
-      }
-      
-      // Get the extracted frames and filter out the one we're deleting
-      let extractedFrames: ExtractedFrame[] = [];
-      
-      if (data?.extracted_frames) {
-        if (Array.isArray(data.extracted_frames)) {
-          extractedFrames = data.extracted_frames as unknown as ExtractedFrame[];
-          extractedFrames = extractedFrames.filter(frame => frame.timestamp !== timestamp);
+      setCapturedFrames(prev => {
+        // Check if we already have a frame with this timestamp
+        const exists = prev.some(frame => frame.timestamp === formattedTime);
+        if (exists) {
+          // Replace the existing frame
+          return prev.map(frame => 
+            frame.timestamp === formattedTime ? newFrame : frame
+          );
+        } else {
+          // Add new frame
+          return [...prev, newFrame];
         }
-      }
+      });
       
-      // Update the project
-      const { error: updateError } = await supabase
-        .from('projects')
-        .update({ 
-          extracted_frames: extractedFrames as unknown as Json
-        })
-        .eq('id', projectId);
-      
-      if (updateError) {
-        console.error("Error updating project after frame deletion:", updateError);
-        toast.error("Failed to remove frame from project");
-        return;
-      }
-      
-      toast.success(`Frame at ${timestamp} removed`);
-    } catch (error) {
-      console.error("Error deleting frame:", error);
-      toast.error(`Error: ${(error as Error).message}`);
+      toast.success(`Frame at ${formattedTime} captured!`);
+    } catch (err) {
+      console.error("Error capturing frame:", err);
+      toast.error(`Failed to capture frame: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setIsCaptureLoading(false);
     }
   };
   
-  // Complete the frame selection process
-  const completeFrameSelection = () => {
-    setIsProcessingComplete(true);
-    onComplete(capturedFrames);
+  const deleteFrame = (timestamp: string) => {
+    setCapturedFrames(prev => prev.filter(frame => frame.timestamp !== timestamp));
+    toast.success(`Removed frame at ${timestamp}`);
   };
   
-  // Format time for display
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const handleComplete = () => {
+    onComplete(capturedFrames);
   };
   
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Select Video Frames</DialogTitle>
         </DialogHeader>
         
-        <div className="p-4 space-y-6">
-          {/* Video Details Card */}
-          {videoMetadata && (
-            <div className="mb-6">
-              <VideoDetailsCard
-                fileName={videoMetadata.original_file_name}
-                duration={videoMetadata.duration}
-                fileType={videoMetadata.file_type}
-                fileSize={videoMetadata.file_size}
-              />
-            </div>
-          )}
-          
-          {/* Error Display */}
-          {error && (
-            <div className="bg-destructive/10 text-destructive p-4 rounded-md">
-              <p className="font-medium">Error</p>
-              <p>{error}</p>
-            </div>
-          )}
-          
-          {/* Video Player */}
-          <div className="aspect-video bg-black rounded-md overflow-hidden">
-            {videoUrl ? (
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                className="w-full h-full object-contain"
-                onLoadedMetadata={handleVideoLoaded}
-                onError={handleVideoError}
-                onTimeUpdate={handleTimeUpdate}
-                crossOrigin="anonymous"
-                preload="auto"
-                playsInline
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <div className="text-center text-white">
-                  <RefreshCw className="h-8 w-8 animate-spin mb-2 mx-auto" />
-                  <p>Loading video...</p>
-                </div>
-              </div>
-            )}
+        {isLoading ? (
+          <div className="flex justify-center items-center p-8">
+            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="ml-2 text-muted-foreground">Loading video...</p>
           </div>
-          
-          {/* Video Controls */}
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center p-8 text-destructive">
+            <AlertCircle className="h-10 w-10 mb-2" />
+            <p>{error}</p>
+          </div>
+        ) : (
           <div className="space-y-4">
-            {/* Time Display */}
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+            {/* Video player */}
+            <div className="relative bg-black aspect-video">
+              <video 
+                ref={videoRef}
+                src={videoUrl || undefined}
+                className="w-full h-full"
+                onLoadedMetadata={handleVideoLoaded}
+                onLoadedData={handleVideoLoaded}
+                controls={false}
+              />
+              
+              {/* Hidden canvas for frame capture */}
+              <canvas ref={canvasRef} className="hidden" />
             </div>
             
-            {/* Scrubbing Slider */}
-            <Slider
-              value={[currentTime]}
-              min={0}
-              max={duration || 100}
-              step={0.1}
-              onValueChange={handleSliderChange}
-              disabled={!videoUrl}
-              className="w-full"
-            />
-            
-            {/* Playback Controls */}
-            <div className="flex justify-center items-center space-x-4">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={stepBackward}
-                disabled={!videoUrl || currentTime <= 0}
-              >
-                <SkipBack className="h-4 w-4" />
-              </Button>
+            {/* Video controls */}
+            <div className="space-y-2">
+              {/* Time display */}
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>{formatDuration(currentTime)}</span>
+                <span>{formatDuration(videoDuration)}</span>
+              </div>
               
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={frameStepBackward}
-                disabled={!videoUrl || currentTime <= 0}
-              >
-                <SkipBack className="h-3 w-3" />
-              </Button>
+              {/* Scrubbing slider */}
+              <Slider 
+                value={[currentTime]}
+                min={0}
+                max={videoDuration || 100}
+                step={0.01}
+                onValueChange={handleTimeChange}
+                className="w-full"
+              />
               
-              <Button 
-                onClick={togglePlayback} 
-                disabled={!videoUrl}
-                variant="outline"
-                size="icon"
-                className="h-10 w-10"
-              >
-                {isPlaying ? (
-                  <Pause className="h-4 w-4" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={frameStepForward}
-                disabled={!videoUrl || currentTime >= duration}
-              >
-                <SkipForward className="h-3 w-3" />
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={stepForward}
-                disabled={!videoUrl || currentTime >= duration}
-              >
-                <SkipForward className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            {/* Capture Button */}
-            <div className="flex justify-center mt-4">
-              <Button
-                onClick={captureCurrentFrame}
-                disabled={!videoUrl || isCapturing}
-                className="px-6"
-              >
-                {isCapturing ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Capturing...
-                  </>
-                ) : (
-                  <>
-                    <Camera className="h-4 w-4 mr-2" />
-                    Capture Frame at {formatTime(currentTime)}
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-          
-          {/* Captured Frames Grid */}
-          {capturedFrames.length > 0 && (
-            <div className="mt-6 space-y-2">
-              <h3 className="text-sm font-medium">Captured Frames ({capturedFrames.length})</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {capturedFrames.map((frame, index) => (
-                  <div key={index} className="relative group">
-                    <div className="aspect-video bg-muted rounded-md overflow-hidden">
-                      <img
-                        src={frame.imageUrl}
-                        alt={`Frame at ${frame.timestamp}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1 flex justify-between items-center">
-                      <div className="flex items-center">
-                        <Clock className="h-3 w-3 mr-1" />
-                        <span>{frame.timestamp}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 text-white hover:text-red-500"
-                        onClick={() => deleteFrame(frame.timestamp)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+              {/* Control buttons */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={seekBack}
+                    disabled={isLoading}
+                  >
+                    <SkipBack className="h-4 w-4" />
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={togglePlayPause}
+                    disabled={isLoading}
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-4 w-4" />
+                    ) : (
+                      <Play className="h-4 w-4" />
+                    )}
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={seekForward}
+                    disabled={isLoading}
+                  >
+                    <SkipForward className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                <Button 
+                  variant="default" 
+                  onClick={captureFrame}
+                  disabled={isLoading || isCaptureLoading}
+                  className="gap-2"
+                >
+                  {isCaptureLoading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      Capturing...
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-4 w-4" />
+                      Capture Frame
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
-          )}
-          
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
             
-            <Button
-              onClick={completeFrameSelection}
-              disabled={capturedFrames.length === 0 || isProcessingComplete}
-            >
-              {isProcessingComplete ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Frames Applied
-                </>
+            <Separator />
+            
+            {/* Captured frames section */}
+            <div>
+              <h3 className="font-medium mb-2">Captured Frames ({capturedFrames.length})</h3>
+              
+              {capturedFrames.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No frames captured yet.</p>
+                  <p className="text-sm mt-1">Use the video controls above and click "Capture Frame" to extract images.</p>
+                </div>
               ) : (
-                <>
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Apply {capturedFrames.length} Frames to Project
-                </>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {capturedFrames.map((frame) => (
+                    <div key={frame.timestamp} className="relative border rounded-md overflow-hidden bg-muted/20">
+                      <img 
+                        src={frame.imageUrl} 
+                        alt={`Frame at ${frame.timestamp}`} 
+                        className="w-full aspect-video object-cover"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-background/80 backdrop-blur-sm p-2 flex justify-between items-center">
+                        <span className="text-xs font-mono">{frame.timestamp}</span>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 text-destructive"
+                          onClick={() => deleteFrame(frame.timestamp)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            </Button>
+            </div>
+            
+            {/* Footer actions */}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onClose}>
+                <X className="h-4 w-4 mr-2" /> 
+                Cancel
+              </Button>
+              <Button onClick={handleComplete} disabled={capturedFrames.length === 0}>
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Use Selected Frames
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );

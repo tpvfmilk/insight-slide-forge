@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, FrameSelector } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -23,6 +23,12 @@ interface Slide {
   transcriptTimestamps?: string[];
 }
 
+interface ExtractedFrame {
+  id: string;
+  imageUrl: string;
+  timestamp: string;
+}
+
 export const SlideEditor = () => {
   const { id: projectId } = useParams<{ id: string }>();
   const [slides, setSlides] = useState<Slide[]>([]);
@@ -41,6 +47,8 @@ export const SlideEditor = () => {
   });
   const [isExtractingFrames, setIsExtractingFrames] = useState<boolean>(false);
   const [isFrameExtractionModalOpen, setIsFrameExtractionModalOpen] = useState<boolean>(false);
+  const [isFrameSelectorOpen, setIsFrameSelectorOpen] = useState<boolean>(false);
+  const [allExtractedFrames, setAllExtractedFrames] = useState<ExtractedFrame[]>([]);
   const [videoPath, setVideoPath] = useState<string>("");
   const [timestamps, setTimestamps] = useState<string[]>([]);
   
@@ -63,6 +71,11 @@ export const SlideEditor = () => {
       // Store video path for frame extraction
       if (project.source_type === 'video' && project.source_file_path) {
         setVideoPath(project.source_file_path);
+      }
+      
+      // Load all extracted frames
+      if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
+        setAllExtractedFrames(project.extracted_frames);
       }
       
       if (project.slides && Array.isArray(project.slides)) {
@@ -218,6 +231,32 @@ export const SlideEditor = () => {
       await loadProject();
       toast.success("Frame extraction completed successfully");
     }
+  };
+  
+  const handleSelectFrames = () => {
+    if (allExtractedFrames.length === 0) {
+      toast.warning("No frames available. Extract frames or use the manual frame picker first.");
+      return;
+    }
+    setIsFrameSelectorOpen(true);
+  };
+  
+  const handleFrameSelection = (selectedFrames: ExtractedFrame[]) => {
+    if (!selectedFrames.length) return;
+    
+    // Update current slide with selected frames
+    const updatedSlides = [...slides];
+    updatedSlides[currentSlideIndex] = {
+      ...updatedSlides[currentSlideIndex],
+      imageUrls: selectedFrames.map(frame => frame.imageUrl)
+    };
+    
+    setSlides(updatedSlides);
+    
+    // Also update in the database
+    updateSlidesInDatabase(updatedSlides);
+    
+    toast.success(`${selectedFrames.length} frame${selectedFrames.length !== 1 ? 's' : ''} applied to slide`);
   };
   
   const goToNextSlide = () => {
@@ -518,7 +557,7 @@ export const SlideEditor = () => {
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Visual</h3>
             <div className="flex gap-2">
-              {/* Extract Frames Button - Added back */}
+              {/* Extract Frames Button */}
               {videoPath && timestamps.length > 0 && (
                 <Button 
                   variant="outline" 
@@ -540,6 +579,17 @@ export const SlideEditor = () => {
                 </Button>
               )}
               
+              {/* Select Frames Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSelectFrames}
+                disabled={allExtractedFrames.length === 0}
+              >
+                <ImageIcon className="h-4 w-4 mr-1" />
+                Select Frames
+              </Button>
+              
               <label htmlFor="image-upload" className="flex">
                 <Button variant="outline" size="sm" disabled={isUploadingImage} className="cursor-pointer">
                   {isUploadingImage ? (
@@ -558,6 +608,7 @@ export const SlideEditor = () => {
                   disabled={isUploadingImage}
                 />
               </label>
+              
               {(currentSlide?.imageUrl || (currentSlide?.imageUrls && currentSlide.imageUrls.length > 0)) && (
                 <Button variant="outline" size="sm" onClick={removeImage}>
                   <Trash2 className="h-4 w-4 mr-1" />
@@ -705,7 +756,20 @@ export const SlideEditor = () => {
         </Button>
       </div>
 
-      {/* Frame Extraction Modal - Properly placed inside the component return */}
+      {/* Frame Selection Modal */}
+      <FrameSelector
+        open={isFrameSelectorOpen}
+        onClose={() => setIsFrameSelectorOpen(false)}
+        availableFrames={allExtractedFrames}
+        selectedFrames={currentSlide?.imageUrls?.map(url => {
+          // Find frame with matching URL
+          const frame = allExtractedFrames.find(f => f.imageUrl === url);
+          return frame || { imageUrl: url, timestamp: "unknown" };
+        }) || []}
+        onSelect={handleFrameSelection}
+      />
+      
+      {/* Frame Extraction Modal */}
       {videoPath && (
         <FrameExtractionModal
           open={isFrameExtractionModalOpen}

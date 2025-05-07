@@ -1,426 +1,268 @@
-import { toast } from "sonner";
+
 import { supabase } from "@/integrations/supabase/client";
-import { initializeStorage } from "./storageService";
-import { Json } from "@/integrations/supabase/types";
+import { uploadSlideImage } from "@/services/imageService";
+import { timestampToSeconds, formatDuration } from "@/utils/formatUtils";
+import { extractFrameFromVideo } from "@/utils/videoFrameExtractor";
 
-interface ClientFrameExtractionResult {
-  success: boolean;
-  frames?: Array<{ timestamp: string, imageUrl: string }>;
-  error?: string;
-}
-
-// Define a type to handle slide objects from the database
-interface Slide {
-  id: string;
-  title?: string;
-  content?: string;
-  timestamp?: string;
-  imageUrl?: string;
-  transcriptTimestamps?: string[];
-  imageUrls?: string[];
-  [key: string]: any; // Allow for additional properties
-}
-
-// Define a type for extracted frames to store in project
 export interface ExtractedFrame {
   timestamp: string;
   imageUrl: string;
-  // Make it Json-compatible with an index signature
-  [key: string]: string | number | boolean | null | undefined;
+  [key: string]: string | number | boolean | null; // Makes it Json-compatible
 }
 
 /**
- * Extract frames from a video at specific timestamps using client-side HTML5 Video API
- * @param projectId ID of the project
- * @param videoPath Path to the video file in storage
- * @param timestamps Array of timestamps in format "HH:MM:SS" to extract frames at
- * @param onComplete Optional callback for when frames are extracted
+ * Extracts frames from a video file at the given timestamps
+ * This is a client-side function that uses the canvas API
  */
 export const clientExtractFramesFromVideo = async (
   projectId: string,
   videoPath: string,
-  timestamps: string[],
-  onComplete?: (frames: Array<{ timestamp: string, imageUrl: string }>) => void
-): Promise<ClientFrameExtractionResult> => {
+  timestamps: string[]
+): Promise<{
+  success: boolean;
+  error?: string;
+  frames?: ExtractedFrame[];
+}> => {
   try {
-    // First check if we already have extracted frames for this project
+    // Check if we already have extracted frames for this project
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('extracted_frames')
       .eq('id', projectId)
-      .single();
-    
-    if (!projectError && project && project.extracted_frames) {
-      // Type checking before casting
-      if (Array.isArray(project.extracted_frames)) {
-        const extractedFrames = project.extracted_frames as unknown as ExtractedFrame[];
-        
-        // Check if all requested timestamps already have extracted frames
-        const missingTimestamps = timestamps.filter(timestamp => 
-          !extractedFrames.some(frame => frame.timestamp === timestamp)
-        );
-        
-        if (missingTimestamps.length === 0) {
-          console.log('All requested frames already extracted, returning them');
-          return { 
-            success: true, 
-            frames: extractedFrames
-          };
-        }
-        
-        // If we're missing some timestamps, we'll only extract those
-        console.log(`Found ${extractedFrames.length} previously extracted frames, need to extract ${missingTimestamps.length} more`);
-        timestamps = missingTimestamps;
-      }
-    }
-    
-    if (!timestamps || timestamps.length === 0) {
-      console.warn("No timestamps provided for frame extraction");
-      return { success: false, error: "No timestamps provided" };
-    }
-    
-    // Deduplicate timestamps to avoid extracting the same frame multiple times
-    const uniqueTimestamps = [...new Set(timestamps)];
-    
-    console.log(`Preparing to extract ${uniqueTimestamps.length} frames for project ${projectId} from video: ${videoPath}`);
-    
-    // Ensure storage buckets are initialized before proceeding
-    await initializeStorage();
-    
-    // Generate a signed URL for the video with an expiration of 1 hour and CORS settings
-    // REMOVED the transform property to avoid any format compatibility issues
-    const { data, error } = await supabase.storage.from('video_uploads')
-      .createSignedUrl(videoPath, 3600, {
-        download: false // We need to stream, not download
-        // Transformation options removed to fix format errors
-      });
+      .maybeSingle();
       
-    if (error || !data?.signedUrl) {
-      console.error("Error creating signed URL:", error);
-      toast.error("Could not access the video file. Please check permissions.");
-      return { success: false, error: error?.message || "Failed to get secure video URL" };
+    if (projectError) {
+      console.error("Error fetching project extracted frames:", projectError);
+      throw new Error("Failed to check for existing frames");
     }
     
-    const videoUrl = data.signedUrl;
-    console.log("Generated secure video URL for extraction without transformations");
+    // Check if we already have the frames in storage
+    if (project?.extracted_frames && Array.isArray(project.extracted_frames)) {
+      const existingFrames = project.extracted_frames as unknown as ExtractedFrame[];
+      
+      // Check if we have all the requested timestamps
+      const missingTimestamps = timestamps.filter(timestamp => 
+        !existingFrames.some(frame => frame.timestamp === timestamp)
+      );
+      
+      // If we have all the frames already, just return them
+      if (missingTimestamps.length === 0) {
+        console.log("All requested frames already exist, returning them");
+        return {
+          success: true,
+          frames: existingFrames
+        };
+      }
+      
+      console.log(`Missing ${missingTimestamps.length} frames, will extract them`);
+    }
     
-    return {
-      success: true,
-      frames: [] // The actual frames will be extracted and uploaded by the FrameExtractionModal component
-    };
+    // Get a signed URL for the video
+    const { data: urlData, error: urlError } = await supabase
+      .from("videos")
+      .createSignedUrl(videoPath, 3600); // 1 hour expiry
     
+    if (urlError || !urlData?.signedUrl) {
+      console.error("Error creating signed URL for video:", urlError);
+      throw new Error("Failed to get video URL");
+    }
+    
+    // Create a video element
+    const video = document.createElement('video');
+    
+    // Return a promise that resolves when all frames are extracted
+    return new Promise((resolve, reject) => {
+      let framesProcessed = 0;
+      const extractedFrames: ExtractedFrame[] = [];
+      
+      // Setup video event handlers
+      video.onloadeddata = async () => {
+        try {
+          console.log(`Video loaded, extracting ${timestamps.length} frames`);
+          
+          // Process each timestamp
+          for (const timestamp of timestamps) {
+            try {
+              // Skip if this timestamp has been processed already
+              if (extractedFrames.some(frame => frame.timestamp === timestamp)) {
+                continue;
+              }
+              
+              // Convert timestamp to seconds
+              const seconds = timestampToSeconds(timestamp);
+              
+              // Extract frame from video
+              const frameBlob = await extractFrameFromVideo(video, seconds);
+              
+              // Create a file from the blob
+              const filename = `frame-${timestamp.replace(/:/g, "-")}.jpg`;
+              const file = new File([frameBlob], filename, { type: 'image/jpeg' });
+              
+              // Upload the file
+              const uploadResult = await uploadSlideImage(file);
+              
+              if (!uploadResult || !uploadResult.url) {
+                console.error(`Failed to upload frame at ${timestamp}`);
+                continue;
+              }
+              
+              // Add to extracted frames
+              extractedFrames.push({
+                timestamp,
+                imageUrl: uploadResult.url
+              });
+              
+              framesProcessed++;
+              console.log(`Processed ${framesProcessed} of ${timestamps.length} frames`);
+            } catch (frameError) {
+              console.error(`Error extracting frame at ${timestamp}:`, frameError);
+            }
+          }
+          
+          resolve({
+            success: true,
+            frames: extractedFrames
+          });
+        } catch (error) {
+          reject(error);
+        } finally {
+          // Clean up
+          video.pause();
+          video.removeAttribute('src');
+          video.load();
+        }
+      };
+      
+      video.onerror = (e) => {
+        console.error('Video loading error:', e);
+        reject(new Error("Failed to load video"));
+      };
+      
+      // Set the source and load the video
+      video.src = urlData.signedUrl;
+      video.preload = 'auto';
+    });
   } catch (error) {
-    console.error("Error in client frame extraction:", error);
-    toast.error(`Failed to prepare frame extraction: ${(error as Error).message}`);
-    return { success: false, error: (error as Error).message };
+    console.error('Error extracting frames from video:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
   }
 };
 
 /**
- * Update slides with extracted frame images
- * @param projectId ID of the project
- * @param extractedFrames Array of extracted frames with timestamps and imageUrls
+ * Update the project to associate extracted frames with slides
  */
 export const updateSlidesWithExtractedFrames = async (
   projectId: string,
-  extractedFrames: Array<{ timestamp: string, imageUrl: string }>
+  extractedFrames: ExtractedFrame[]
 ): Promise<boolean> => {
   try {
-    if (!extractedFrames || extractedFrames.length === 0) {
-      console.warn("No extracted frames provided for updating slides");
+    if (!projectId || !extractedFrames.length) {
       return false;
     }
     
-    toast.loading("Updating slides with extracted frames...", { id: "update-slides" });
-    
-    // Fetch the project to get the current slides and any previously extracted frames
+    // First get the existing project data
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('slides, extracted_frames')
       .eq('id', projectId)
-      .single();
-    
-    if (projectError || !project) {
-      console.error("Error fetching project slides:", projectError);
-      toast.error("Failed to fetch project slides", { id: "update-slides" });
-      return false;
+      .maybeSingle();
+      
+    if (projectError) {
+      console.error("Error fetching project:", projectError);
+      throw new Error("Failed to fetch project");
     }
     
-    // Create a map for quick lookup of timestamps to image URLs
-    const frameMap = new Map<string, string>();
-    extractedFrames.forEach(frame => {
-      frameMap.set(frame.timestamp, frame.imageUrl);
-    });
+    if (!project) {
+      throw new Error("Project not found");
+    }
     
-    // Type guard function to check if an item is a Slide object
-    const isSlideObject = (item: Json): item is Slide => {
-      return item !== null && typeof item === 'object' && !Array.isArray(item);
-    };
+    // Save the extracted frames to the project
+    let allFrames: ExtractedFrame[] = [];
     
-    // Update each slide with matching timestamps
-    const slides = Array.isArray(project.slides) ? project.slides : [];
-    const updatedSlides = slides.map(item => {
-      if (!isSlideObject(item)) return item;
-      
-      // Create a copy of the slide to update
-      const slide = item as Slide;
-      const updatedSlide: Slide = { ...slide };
-      
-      // Handle single timestamp
-      if (typeof slide.timestamp === 'string' && frameMap.has(slide.timestamp)) {
-        updatedSlide.imageUrl = frameMap.get(slide.timestamp);
-        console.log(`Updated slide ${slide.id} with image for timestamp ${slide.timestamp}`);
-      }
-      
-      // Handle multiple timestamps
-      if (Array.isArray(slide.transcriptTimestamps)) {
-        const imageUrls: string[] = [];
-        
-        slide.transcriptTimestamps.forEach(timestamp => {
-          if (typeof timestamp === 'string') {
-            const imageUrl = frameMap.get(timestamp);
-            if (imageUrl) {
-              imageUrls.push(imageUrl);
-            }
-          }
-        });
-        
-        if (imageUrls.length > 0) {
-          updatedSlide.imageUrls = imageUrls;
-          console.log(`Updated slide ${slide.id} with ${imageUrls.length} images for multiple timestamps`);
-        }
-      }
-      
-      return updatedSlide;
-    });
-    
-    // Combine previously extracted frames with new ones
-    let allExtractedFrames: ExtractedFrame[] = [];
-    
-    // If there are existing extracted frames, include them
+    // Combine with existing frames if available
     if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
-      // Type checking before casting
       const existingFrames = project.extracted_frames as unknown as ExtractedFrame[];
-      const existingTimestamps = new Set(extractedFrames.map(f => f.timestamp));
       
-      // Keep existing frames that don't have duplicates in the new batch
-      const uniqueExistingFrames = existingFrames.filter(frame => !existingTimestamps.has(frame.timestamp));
+      // Merge the new frames with existing ones, avoiding duplicates
+      allFrames = existingFrames.filter(existing => 
+        !extractedFrames.some(newFrame => newFrame.timestamp === existing.timestamp)
+      );
       
-      allExtractedFrames = [...uniqueExistingFrames];
+      // Add the new frames
+      allFrames = [...allFrames, ...extractedFrames];
+    } else {
+      allFrames = extractedFrames;
     }
     
-    // Add the new frames
-    allExtractedFrames = [...allExtractedFrames, ...extractedFrames];
-    
-    // Update the project with the updated slides and all extracted frames
+    // Save the extracted frames to the project
     const { error: updateError } = await supabase
       .from('projects')
-      .update({ 
-        slides: updatedSlides,
-        extracted_frames: allExtractedFrames as unknown as Json
+      .update({
+        extracted_frames: allFrames as unknown as any
       })
       .eq('id', projectId);
-    
+      
     if (updateError) {
-      console.error("Error updating project slides:", updateError);
-      toast.error("Failed to update slides", { id: "update-slides" });
-      return false;
+      console.error("Error updating project with extracted frames:", updateError);
+      throw new Error("Failed to save extracted frames");
     }
     
-    toast.success("Slides updated with extracted frames", { id: "update-slides" });
+    // Update the slides if present
+    if (project.slides && Array.isArray(project.slides)) {
+      const updatedSlides = project.slides.map((slide: any) => {
+        // If slide has a timestamp, find the matching frame
+        if (slide.timestamp) {
+          const matchingFrame = extractedFrames.find(frame => 
+            frame.timestamp === slide.timestamp
+          );
+          
+          if (matchingFrame) {
+            return {
+              ...slide,
+              imageUrl: matchingFrame.imageUrl
+            };
+          }
+        }
+        
+        // If slide has transcriptTimestamps, find matching frames for each
+        if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
+          const matchingFrames = slide.transcriptTimestamps
+            .map((timestamp: string) => 
+              extractedFrames.find(frame => frame.timestamp === timestamp)
+            )
+            .filter(Boolean)
+            .map((frame: any) => frame.imageUrl);
+          
+          if (matchingFrames.length > 0) {
+            return {
+              ...slide,
+              imageUrls: matchingFrames
+            };
+          }
+        }
+        
+        return slide;
+      });
+      
+      // Save the updated slides
+      const { error: slidesUpdateError } = await supabase
+        .from('projects')
+        .update({
+          slides: updatedSlides
+        })
+        .eq('id', projectId);
+        
+      if (slidesUpdateError) {
+        console.error("Error updating slides with frame images:", slidesUpdateError);
+      }
+    }
+    
     return true;
   } catch (error) {
     console.error("Error updating slides with extracted frames:", error);
-    toast.error(`Failed to update slides: ${(error as Error).message}`, { id: "update-slides" });
-    return false;
-  }
-};
-
-/**
- * Get previously extracted frames for a project
- * @param projectId ID of the project
- * @returns Array of extracted frames or undefined if none found
- */
-export const getExtractedFrames = async (projectId: string): Promise<ExtractedFrame[] | undefined> => {
-  try {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('extracted_frames')
-      .eq('id', projectId)
-      .single();
-    
-    if (error) {
-      console.error("Error fetching extracted frames:", error);
-      return undefined;
-    }
-    
-    if (data && data.extracted_frames && Array.isArray(data.extracted_frames)) {
-      return data.extracted_frames as unknown as ExtractedFrame[];
-    }
-    
-    return [];
-  } catch (error) {
-    console.error("Error getting extracted frames:", error);
-    return undefined;
-  }
-};
-
-/**
- * Manually capture a frame at the current video time
- * @param videoElement HTML video element to capture frame from
- * @param timestamp String timestamp of the current position
- * @returns The captured frame as a Blob
- */
-export const captureFrameFromVideoElement = (
-  videoElement: HTMLVideoElement,
-  timestamp: string
-): Blob | null => {
-  try {
-    if (!videoElement || videoElement.readyState < 2) {
-      console.error("Video element is not ready for frame capture");
-      return null;
-    }
-
-    // Create a canvas with the video dimensions
-    const canvas = document.createElement('canvas');
-    canvas.width = videoElement.videoWidth;
-    canvas.height = videoElement.videoHeight;
-
-    // Draw the current frame to the canvas
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.error('Could not get 2D context from canvas');
-      return null;
-    }
-
-    // Draw the video frame on the canvas
-    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-
-    // Convert canvas to blob
-    const blob = canvas.toBlob((blob) => {
-      return blob;
-    }, 'image/jpeg', 0.92);
-
-    // For synchronous return, we need to use a different approach
-    const dataURL = canvas.toDataURL('image/jpeg', 0.92);
-    const base64 = dataURL.split(',')[1];
-    const byteCharacters = atob(base64);
-    const byteArrays = [];
-    
-    for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-      const slice = byteCharacters.slice(offset, offset + 512);
-      const byteNumbers = new Array(slice.length);
-      for (let i = 0; i < slice.length; i++) {
-        byteNumbers[i] = slice.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      byteArrays.push(byteArray);
-    }
-    
-    return new Blob(byteArrays, { type: 'image/jpeg' });
-  } catch (error) {
-    console.error("Error capturing frame:", error);
-    return null;
-  }
-};
-
-/**
- * Upload a manually captured frame and associate it with a project
- * @param projectId ID of the project
- * @param frameBlob Blob object containing the captured frame
- * @param timestamp String timestamp of when the frame was captured
- * @returns Promise resolving to the uploaded frame info or null if fails
- */
-export const uploadManuallySelectedFrame = async (
-  projectId: string,
-  frameBlob: Blob,
-  timestamp: string
-): Promise<ExtractedFrame | null> => {
-  try {
-    toast.loading("Uploading selected frame...", { id: "upload-frame" });
-    
-    // Create a file name based on timestamp and project ID
-    const fileName = `manual-frame-${timestamp.replace(/:/g, '-')}-${projectId}.jpg`;
-    const file = new File([frameBlob], fileName, { type: 'image/jpeg' });
-    
-    // Import the uploadSlideImage function from imageService
-    const { uploadSlideImage } = await import("@/services/imageService");
-    
-    // Upload the frame
-    const uploadResult = await uploadSlideImage(file);
-    
-    if (!uploadResult) {
-      toast.error("Failed to upload selected frame", { id: "upload-frame" });
-      return null;
-    }
-    
-    const frameInfo: ExtractedFrame = {
-      timestamp,
-      imageUrl: uploadResult.url,
-      captureMethod: "manual", // Add metadata to distinguish manually captured frames
-    };
-    
-    toast.success("Frame uploaded successfully", { id: "upload-frame" });
-    return frameInfo;
-    
-  } catch (error) {
-    console.error("Error uploading manually selected frame:", error);
-    toast.error(`Upload failed: ${(error as Error).message}`, { id: "upload-frame" });
-    return null;
-  }
-};
-
-/**
- * Add a manually selected frame to a project's extracted_frames
- * @param projectId ID of the project
- * @param frameInfo Frame information including timestamp and imageUrl
- * @returns Promise resolving to true if successful, false otherwise
- */
-export const addManuallySelectedFrameToProject = async (
-  projectId: string,
-  frameInfo: ExtractedFrame
-): Promise<boolean> => {
-  try {
-    // Fetch the project to get existing extracted frames
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('extracted_frames')
-      .eq('id', projectId)
-      .single();
-    
-    if (projectError) {
-      console.error("Error fetching project for frame addition:", projectError);
-      return false;
-    }
-    
-    // Initialize the extracted_frames array or use the existing one
-    let extractedFrames: ExtractedFrame[] = [];
-    
-    if (project?.extracted_frames) {
-      if (Array.isArray(project.extracted_frames)) {
-        extractedFrames = project.extracted_frames as unknown as ExtractedFrame[];
-      }
-    }
-    
-    // Add the new frame
-    extractedFrames.push(frameInfo);
-    
-    // Update the project with the new extracted_frames array
-    const { error: updateError } = await supabase
-      .from('projects')
-      .update({ 
-        extracted_frames: extractedFrames as unknown as Json
-      })
-      .eq('id', projectId);
-    
-    if (updateError) {
-      console.error("Error updating project with new frame:", updateError);
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error("Error adding frame to project:", error);
     return false;
   }
 };
