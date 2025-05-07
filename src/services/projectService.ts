@@ -110,8 +110,10 @@ export const createProject = async (projectData: Omit<Project, 'id' | 'created_a
 export const updateProject = async (id: string, projectData: Partial<Project>): Promise<void> => {
   // If projectData contains extracted_frames, ensure it's cast correctly for Supabase
   if (projectData.extracted_frames) {
+    // Create a copy of projectData to avoid modifying the original
     const updatedData = {
       ...projectData,
+      // Cast the extracted_frames to Json before sending to Supabase
       extracted_frames: projectData.extracted_frames as unknown as Json
     };
     
