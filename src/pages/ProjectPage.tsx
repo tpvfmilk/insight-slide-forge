@@ -18,6 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "@/services/storageService";
 import { manuallyExtractFramesForExistingProject } from "@/services/frameExtractionService";
 import { slidesNeedFrameExtraction } from "@/services/imageService";
+import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
+import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -38,6 +40,7 @@ const ProjectPage = () => {
   const [title, setTitle] = useState<string>("");
   const [videoFileName, setVideoFileName] = useState<string>("");
   const [needsFrameExtraction, setNeedsFrameExtraction] = useState<boolean>(false);
+  const [allTimestamps, setAllTimestamps] = useState<string[]>([]);
   
   const loadProject = async () => {
     if (!projectId) return;
@@ -70,6 +73,20 @@ const ProjectPage = () => {
         hasValidSlides(projectData) && 
         slidesNeedFrameExtraction(slidesArray)
       );
+      
+      // Collect all timestamps from slides for potential frame extraction
+      const timestamps: string[] = [];
+      if (Array.isArray(projectData.slides)) {
+        projectData.slides.forEach(slide => {
+          if (slide.timestamp) {
+            timestamps.push(slide.timestamp);
+          }
+          if (Array.isArray(slide.transcriptTimestamps)) {
+            timestamps.push(...slide.transcriptTimestamps);
+          }
+        });
+      }
+      setAllTimestamps([...new Set(timestamps)]); // Remove duplicates
       
       // Get video filename if it's a video project
       if (projectData.source_type === 'video' && projectData.source_file_path) {
@@ -169,23 +186,43 @@ const ProjectPage = () => {
   };
 
   const handleExtractFrames = async () => {
-    if (!projectId || isExtractingFrames) return;
+    if (!projectId || !project?.source_file_path || isExtractingFrames || allTimestamps.length === 0) {
+      return;
+    }
     
     setIsExtractingFrames(true);
     
     try {
-      const success = await manuallyExtractFramesForExistingProject(projectId);
+      const result = await clientExtractFramesFromVideo(projectId, project.source_file_path, allTimestamps);
       
-      if (success) {
-        // Reload the project to get the updated slides with images
-        await loadProject();
-        setNeedsFrameExtraction(false);
-        toast.success("Frame extraction completed successfully");
+      if (result.success) {
+        setIsFrameExtractionModalOpen(true);
       } else {
-        toast.info("Placeholder images were used instead of actual video frames. The functionality requires the ffmpeg command which is not available in the current environment.");
+        toast.error(`Failed to prepare frame extraction: ${result.error}`);
       }
     } finally {
       setIsExtractingFrames(false);
+    }
+  };
+  
+  const handleFrameExtractionComplete = async (frames: Array<{ timestamp: string, imageUrl: string }>) => {
+    if (!projectId) return;
+    
+    setIsFrameExtractionModalOpen(false);
+    
+    if (frames.length === 0) {
+      toast.info("No frames were extracted");
+      return;
+    }
+    
+    // Update the project's slides with the extracted frames
+    const success = await updateSlidesWithExtractedFrames(projectId, frames);
+    
+    if (success) {
+      // Reload the project to get the updated slides with images
+      await loadProject();
+      setNeedsFrameExtraction(false);
+      toast.success("Frame extraction completed successfully");
     }
   };
   
@@ -538,7 +575,7 @@ const ProjectPage = () => {
               </DialogContent>
             </Dialog>
             
-            {/* Extract Frames Button */}
+            {/* Extract Frames Button - Updated for client-side extraction */}
             {needsFrameExtraction && (
               <Button 
                 variant="outline" 
@@ -549,12 +586,12 @@ const ProjectPage = () => {
                 {isExtractingFrames ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                    Generating Placeholders...
+                    Preparing Video...
                   </>
                 ) : (
                   <>
                     <Image className="h-4 w-4 mr-1" />
-                    Generate Image Placeholders
+                    Extract Video Frames
                   </>
                 )}
               </Button>
@@ -616,6 +653,18 @@ const ProjectPage = () => {
             <SlideEditor />
           )}
         </div>
+        
+        {/* Frame Extraction Modal */}
+        {project && project.source_file_path && (
+          <FrameExtractionModal
+            open={isFrameExtractionModalOpen}
+            onClose={() => setIsFrameExtractionModalOpen(false)}
+            videoPath={project.source_file_path}
+            projectId={projectId || ""}
+            timestamps={allTimestamps}
+            onComplete={handleFrameExtractionComplete}
+          />
+        )}
       </div>
     </InsightLayout>
   );

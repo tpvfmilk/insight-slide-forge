@@ -9,7 +9,7 @@ import { toast } from "sonner";
  * @param file Image file to be uploaded
  * @returns Object containing file path and URL
  */
-export const uploadSlideImage = async (file: File): Promise<{ path: string; url: string } | null> => {
+export const uploadSlideImage = async (file: File | Blob): Promise<{ path: string; url: string } | null> => {
   try {
     // Ensure storage buckets are initialized before uploading
     const initialized = await initializeStorage();
@@ -17,14 +17,8 @@ export const uploadSlideImage = async (file: File): Promise<{ path: string; url:
       toast.error("Failed to initialize storage. Please check your connection and try again.");
     }
     
-    // Check if it's a valid image file
-    if (!file.type.startsWith('image/')) {
-      throw new Error('File must be an image');
-    }
-    
-    // Generate a unique file path
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${uuidv4()}.${fileExt}`;
+    // Generate a unique file name
+    const fileName = `${uuidv4()}.jpg`;
     const filePath = `slides/${fileName}`;
 
     // Check if slide_stills bucket exists
@@ -46,7 +40,9 @@ export const uploadSlideImage = async (file: File): Promise<{ path: string; url:
     const { data, error } = await supabase
       .storage
       .from('slide_stills')
-      .upload(filePath, file);
+      .upload(filePath, file, {
+        contentType: 'image/jpeg'
+      });
 
     if (error) {
       console.error('Error uploading image:', error);
@@ -111,4 +107,49 @@ export const slidesNeedFrameExtraction = (slides: any[] | null): boolean => {
   });
   
   return slidesWithTimestamps.length > 0;
+};
+
+/**
+ * Uploads a frame extracted from a video
+ * @param frame Blob containing the frame image
+ * @param timestamp Timestamp associated with the frame
+ * @returns Object containing the path and URL of the uploaded image
+ */
+export const uploadFrameImage = async (
+  frame: Blob,
+  timestamp: string
+): Promise<{ path: string; url: string } | null> => {
+  try {
+    // Create a file name based on the timestamp
+    const sanitizedTimestamp = timestamp.replace(/:/g, '-');
+    const fileName = `frame-${sanitizedTimestamp}-${uuidv4().slice(0, 8)}.jpg`;
+    const filePath = `frames/${fileName}`;
+    
+    // Upload the frame to storage
+    const { data, error } = await supabase
+      .storage
+      .from('slide_stills')
+      .upload(filePath, frame, {
+        contentType: 'image/jpeg'
+      });
+      
+    if (error) {
+      console.error('Error uploading frame:', error);
+      throw error;
+    }
+    
+    // Get the public URL for the file
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('slide_stills')
+      .getPublicUrl(data.path);
+      
+    return {
+      path: data.path,
+      url: publicUrl
+    };
+  } catch (error) {
+    console.error('Error in uploadFrameImage:', error);
+    return null;
+  }
 };

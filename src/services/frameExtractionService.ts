@@ -1,7 +1,13 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { initializeStorage } from "./storageService";
+
+/**
+ * @deprecated This server-side extraction approach has been replaced with client-side HTML5 video extraction.
+ * Please use clientFrameExtractionService.ts instead for better compatibility and actual frame extraction.
+ * 
+ * This service is kept for backward compatibility but will be phased out in future versions.
+ */
 
 interface FrameExtractionResult {
   success: boolean;
@@ -15,12 +21,16 @@ interface FrameExtractionResult {
  * @param videoPath Path to the video file in storage
  * @param timestamps Array of timestamps in format "HH:MM:SS" to extract frames at
  * @returns Object containing success status and frame URLs if successful
+ * @deprecated Use clientFrameExtractionService.ts instead
  */
 export const extractFramesFromVideo = async (
   projectId: string,
   videoPath: string,
   timestamps: string[]
 ): Promise<FrameExtractionResult> => {
+  // Log deprecation warning
+  console.warn("The server-side extractFramesFromVideo function is deprecated. Use the client-side extraction approach instead.");
+  
   try {
     if (!timestamps || timestamps.length === 0) {
       console.warn("No timestamps provided for frame extraction");
@@ -194,8 +204,12 @@ type SlideType = {
  * Extract frames for an existing project that already has slides with timestamps
  * @param projectId ID of the project
  * @returns Promise resolving to success/failure status
+ * @deprecated Use clientFrameExtractionService.ts instead
  */
 export const manuallyExtractFramesForExistingProject = async (projectId: string): Promise<boolean> => {
+  // Log deprecation warning
+  console.warn("The manuallyExtractFramesForExistingProject function is deprecated. Use the client-side extraction approach instead.");
+  
   try {
     toast.loading("Preparing to extract video frames...", { id: "manual-extract-frames" });
     
