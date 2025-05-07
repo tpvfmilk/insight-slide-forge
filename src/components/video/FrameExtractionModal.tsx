@@ -8,6 +8,13 @@ import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 import { uploadSlideImage } from "@/services/imageService";
 import { RefreshCw, Check, X, Image, AlertTriangle, Play, PauseIcon, SkipForward } from "lucide-react";
 import { timestampToSeconds } from "@/utils/formatUtils";
+import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
+
+// Define ExtractedFrame interface
+export interface ExtractedFrame {
+  timestamp: string;
+  imageUrl: string;
+}
 
 interface FrameExtractionModalProps {
   open: boolean;
@@ -16,6 +23,13 @@ interface FrameExtractionModalProps {
   projectId: string;
   timestamps: string[];
   onComplete: (frameUrls: Array<{ timestamp: string, imageUrl: string }>) => void;
+  videoMetadata?: {
+    duration?: number;
+    original_file_name?: string;
+    file_type?: string;
+    file_size?: number;
+  };
+  previouslyExtractedFrames?: ExtractedFrame[];
 }
 
 export const FrameExtractionModal = ({
@@ -24,7 +38,9 @@ export const FrameExtractionModal = ({
   videoPath,
   projectId,
   timestamps,
-  onComplete
+  onComplete,
+  videoMetadata,
+  previouslyExtractedFrames = []
 }: FrameExtractionModalProps) => {
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
@@ -372,6 +388,39 @@ export const FrameExtractionModal = ({
         </DialogHeader>
         
         <div className="p-4 space-y-6">
+          {/* Video Details Card - Added from sidebar */}
+          {videoMetadata && (
+            <div className="mb-6">
+              <VideoDetailsCard
+                fileName={videoMetadata.original_file_name}
+                duration={videoMetadata.duration}
+                fileType={videoMetadata.file_type}
+                fileSize={videoMetadata.file_size}
+              />
+            </div>
+          )}
+          
+          {/* Previously Extracted Frames - Added from sidebar */}
+          {previouslyExtractedFrames && previouslyExtractedFrames.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium mb-2">Previously Extracted Frames</h3>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                {previouslyExtractedFrames.map((frame, index) => (
+                  <div key={index} className="aspect-video bg-muted rounded overflow-hidden relative">
+                    <img 
+                      src={frame.imageUrl} 
+                      alt={`Frame at ${frame.timestamp}`} 
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1">
+                      {frame.timestamp}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
           {/* Error Message with enhanced troubleshooting info */}
           {error && (
             <div className="bg-destructive/10 text-destructive p-4 rounded-md flex items-start gap-3">

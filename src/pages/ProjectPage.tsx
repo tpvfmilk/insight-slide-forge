@@ -18,7 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "@/services/storageService";
 import { manuallyExtractFramesForExistingProject } from "@/services/frameExtractionService";
 import { slidesNeedFrameExtraction } from "@/services/imageService";
-import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
+import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
 
@@ -637,14 +637,13 @@ const ProjectPage = () => {
               </DialogContent>
             </Dialog>
             
-            {/* Extract Frames Button - Updated for client-side extraction */}
+            {/* Extract Frames Button */}
             {needsFrameExtraction && (
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={handleExtractFrames} 
                 disabled={isExtractingFrames}
-                className="w-full mt-4"
               >
                 {isExtractingFrames ? (
                   <>
@@ -704,83 +703,17 @@ const ProjectPage = () => {
           </div>
         </div>
         
-        <div className="flex-1 overflow-hidden flex">
-          {/* Video Details Sidebar */}
-          {project?.source_type === 'video' && (
-            <div className="w-64 p-4 border-r overflow-y-auto">
-              <VideoDetailsCard
-                fileName={videoMetadata?.original_file_name}
-                duration={videoMetadata?.duration}
-                fileType={videoMetadata?.file_type}
-                fileSize={videoMetadata?.file_size}
-              />
-              
-              {/* Previously Extracted Frames */}
-              {extractedFrames.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="text-sm font-medium mb-2">Extracted Frames ({extractedFrames.length})</h3>
-                  <div className="space-y-2 mt-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      {extractedFrames.slice(0, 4).map((frame, index) => (
-                        <div key={index} className="aspect-video bg-muted rounded-md overflow-hidden relative">
-                          <img 
-                            src={frame.imageUrl} 
-                            alt={`Frame at ${frame.timestamp}`} 
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1 text-center">
-                            {frame.timestamp}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {extractedFrames.length > 4 && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        + {extractedFrames.length - 4} more frames
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              {/* Frame Extraction Button */}
-              {needsFrameExtraction && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleExtractFrames} 
-                  disabled={isExtractingFrames}
-                  className="w-full mt-4"
-                >
-                  {isExtractingFrames ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Preparing...
-                    </>
-                  ) : (
-                    <>
-                      <Image className="h-4 w-4 mr-2" />
-                      {extractedFrames.length > 0 ? "Extract Missing Frames" : "Extract Video Frames"}
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          )}
-          
-          {/* Main Content Area */}
-          <div className="flex-1 overflow-hidden">
-            {isLoading ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
-                  <p className="text-sm text-muted-foreground">Loading project...</p>
-                </div>
+        <div className="flex-1 overflow-hidden">
+          {isLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
+                <p className="text-sm text-muted-foreground">Loading project...</p>
               </div>
-            ) : (
-              <SlideEditor />
-            )}
-          </div>
+            </div>
+          ) : (
+            <SlideEditor />
+          )}
         </div>
         
         {/* Frame Extraction Modal */}
@@ -794,6 +727,8 @@ const ProjectPage = () => {
               !extractedFrames.some(frame => frame.timestamp === timestamp)
             )}
             onComplete={handleFrameExtractionComplete}
+            videoMetadata={videoMetadata || undefined}
+            previouslyExtractedFrames={extractedFrames}
           />
         )}
       </div>
