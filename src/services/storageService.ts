@@ -2,13 +2,23 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+// Track if storage has been initialized already during this session
+let storageInitialized = false;
+
 /**
  * Initializes the Supabase storage buckets required by the application
  * Creates video_uploads and slide_stills buckets if they don't exist
+ * Sets video_uploads bucket to public
  * @returns Promise resolving to a success/failure status
  */
 export const initializeStorage = async (): Promise<boolean> => {
   try {
+    // If we've already initialized storage in this session, don't do it again
+    if (storageInitialized) {
+      console.log("Storage already initialized in this session, skipping");
+      return true;
+    }
+    
     console.log("Initializing storage buckets...");
     
     // Check if user is authenticated before proceeding
@@ -35,6 +45,21 @@ export const initializeStorage = async (): Promise<boolean> => {
     
     const data = await response.json();
     console.log("Storage initialization result:", data);
+    
+    // Mark as initialized to avoid unnecessary repeat calls
+    if (data.success) {
+      storageInitialized = true;
+      
+      // Check specifically if the video_uploads bucket is public
+      const videoUploadsResult = data.results.find(r => r.bucket === 'video_uploads');
+      if (videoUploadsResult && videoUploadsResult.status !== 'error') {
+        console.log("Video uploads bucket is properly configured");
+      } else {
+        console.warn("Video uploads bucket might not be properly configured");
+        toast.warning("Video uploads storage might not be configured correctly. Video frame extraction may not work properly.");
+      }
+    }
+    
     return data.success === true;
   } catch (error) {
     console.error("Error initializing storage:", error);

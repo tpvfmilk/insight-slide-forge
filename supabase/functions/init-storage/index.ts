@@ -38,7 +38,7 @@ serve(async (req) => {
       {
         id: 'video_uploads',
         name: 'Video Uploads',
-        public: false,
+        public: true, // Changed from false to true to ensure bucket is public
         file_size_limit: 104857600, // 100MB
       },
       {
@@ -95,27 +95,39 @@ serve(async (req) => {
       } else {
         console.log(`Bucket already exists: ${bucket.id}`);
         
-        // Update bucket settings to ensure they're correct
-        const { error: updateError } = await supabase
-          .storage
-          .updateBucket(bucket.id, {
-            public: bucket.public,
-            fileSizeLimit: bucket.file_size_limit,
-          });
-        
-        if (updateError) {
-          console.error(`Error updating bucket ${bucket.id}:`, updateError);
-          results.push({ 
-            bucket: bucket.id, 
-            status: 'error', 
-            message: `Failed to update bucket: ${updateError.message}` 
-          });
+        // Only update bucket settings if they don't match what we want
+        // This prevents unnecessarily toggling the public setting
+        if (existingBucket.public !== bucket.public || existingBucket.fileSizeLimit !== bucket.file_size_limit) {
+          console.log(`Updating bucket ${bucket.id} settings to match desired configuration...`);
+          
+          const { error: updateError } = await supabase
+            .storage
+            .updateBucket(bucket.id, {
+              public: bucket.public,
+              fileSizeLimit: bucket.file_size_limit,
+            });
+          
+          if (updateError) {
+            console.error(`Error updating bucket ${bucket.id}:`, updateError);
+            results.push({ 
+              bucket: bucket.id, 
+              status: 'error', 
+              message: `Failed to update bucket: ${updateError.message}` 
+            });
+          } else {
+            console.log(`Updated bucket settings: ${bucket.id}`);
+            results.push({ 
+              bucket: bucket.id, 
+              status: 'updated', 
+              message: 'Bucket settings updated successfully' 
+            });
+          }
         } else {
-          console.log(`Updated bucket settings: ${bucket.id}`);
+          console.log(`Bucket ${bucket.id} already has the correct settings, skipping update`);
           results.push({ 
             bucket: bucket.id, 
-            status: 'updated', 
-            message: 'Bucket settings updated successfully' 
+            status: 'unchanged', 
+            message: 'Bucket settings already correct' 
           });
         }
       }
