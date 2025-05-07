@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Project, fetchProjectById, updateProject } from "@/services/projectService";
@@ -6,12 +5,13 @@ import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RefreshCw, Settings2, FileText } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings2, FileText, SliderIcon } from "lucide-react";
 import { generateSlidesForProject, hasValidSlides } from "@/services/slideGenerationService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
 import { transcribeVideo } from "@/services/uploadService";
 import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -23,8 +23,10 @@ const ProjectPage = () => {
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isTranscriptDialogOpen, setIsTranscriptDialogOpen] = useState<boolean>(false);
+  const [isDensityDialogOpen, setIsDensityDialogOpen] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>("");
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   
   const loadProject = async () => {
     if (!projectId) return;
@@ -42,6 +44,7 @@ const ProjectPage = () => {
       setProject(projectData);
       setContextPrompt(projectData.context_prompt || "");
       setTranscript(projectData.transcript || "");
+      setSlidesPerMinute(projectData.slides_per_minute || 6);
       
       // For new projects, check if we need to transcribe or generate slides
       const isNewlyCreated = Date.now() - new Date(projectData.created_at).getTime() < 60000; // Within a minute
@@ -179,6 +182,35 @@ const ProjectPage = () => {
     }
   };
   
+  const handleSaveDensity = async () => {
+    if (!projectId || !project) return;
+    
+    setIsSaving(true);
+    
+    try {
+      await updateProject(projectId, {
+        slides_per_minute: slidesPerMinute
+      });
+      
+      toast.success("Slides per minute setting saved");
+      setIsDensityDialogOpen(false);
+      
+      // Update the project in state with the new setting
+      setProject(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          slides_per_minute: slidesPerMinute
+        };
+      });
+    } catch (error) {
+      console.error("Error saving density setting:", error);
+      toast.error("Failed to save slides per minute setting");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
   const needsTranscription = project?.source_type === 'video' && !project?.transcript;
   
   return (
@@ -244,6 +276,71 @@ const ProjectPage = () => {
                           Saving...
                         </>
                       ) : "Save Transcript"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            {/* Slide Density Dialog */}
+            <Dialog open={isDensityDialogOpen} onOpenChange={setIsDensityDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <SliderIcon className="h-4 w-4 mr-1" />
+                  Slide Density
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Slide Density Control</DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Adjust how many slides are generated per minute of content.
+                        Higher values create more detailed slides, while lower values create
+                        more summarized content.
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-muted-foreground">1</span>
+                      <Slider
+                        value={[slidesPerMinute]}
+                        min={1}
+                        max={20}
+                        step={1}
+                        onValueChange={(values) => setSlidesPerMinute(values[0])}
+                        className="flex-1"
+                      />
+                      <span className="text-sm text-muted-foreground">20</span>
+                      <span className="w-8 text-right text-sm font-medium">{slidesPerMinute}</span>
+                    </div>
+                    
+                    <p className="text-xs text-muted-foreground italic">
+                      Changes will apply the next time slides are generated.
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-end mt-4 space-x-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsDensityDialogOpen(false)}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSaveDensity}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                          Saving...
+                        </>
+                      ) : "Save Setting"}
                     </Button>
                   </div>
                 </div>

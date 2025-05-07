@@ -5,32 +5,63 @@ import { Input } from "@/components/ui/input";
 import { Clock, Download, FileText, Search, Trash } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { fetchRecentProjects, Project } from "@/services/projectService";
+import { fetchRecentProjects, Project, deleteProject } from "@/services/projectService";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { 
+  DropdownMenu, 
+  DropdownMenuTrigger, 
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const ProjectsPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   
+  const loadProjects = async () => {
+    try {
+      setLoading(true);
+      // Get all projects, not just the limited number
+      const data = await fetchRecentProjects(100);
+      setProjects(data);
+    } catch (error) {
+      console.error("Failed to load projects:", error);
+      toast.error("Failed to load projects");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   useEffect(() => {
-    const loadProjects = async () => {
-      try {
-        setLoading(true);
-        // Get all projects, not just the limited number
-        const data = await fetchRecentProjects(100);
-        setProjects(data);
-      } catch (error) {
-        console.error("Failed to load projects:", error);
-        toast.error("Failed to load projects");
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     loadProjects();
   }, []);
+  
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await deleteProject(projectId);
+      toast.success("Project deleted successfully");
+      
+      // Update the projects list
+      setProjects(projects.filter(project => project.id !== projectId));
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      toast.error("Failed to delete project");
+    }
+  };
   
   const filteredProjects = projects.filter(project => 
     project.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -48,6 +79,11 @@ const ProjectsPage = () => {
     const diffMs = expiration.getTime() - now.getTime();
     const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
     return Math.max(0, diffHours); // Ensure we don't return negative hours
+  };
+  
+  const handleExport = (projectId: string, format: string) => {
+    // This would be implemented in exportService.ts
+    toast.success(`Exporting as ${format}...`);
   };
   
   return (
@@ -150,14 +186,55 @@ const ProjectsPage = () => {
                             <span className="sr-only">View</span>
                           </Link>
                         </Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8">
-                          <Download className="h-4 w-4" />
-                          <span className="sr-only">Download</span>
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
-                          <Trash className="h-4 w-4" />
-                          <span className="sr-only">Delete</span>
-                        </Button>
+                        
+                        {/* Export Dropdown Button */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8">
+                              <Download className="h-4 w-4" />
+                              <span className="sr-only">Export</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleExport(project.id, "pdf")}>
+                              Export as PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExport(project.id, "pptx")}>
+                              Export as PowerPoint
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleExport(project.id, "images")}>
+                              Export as Images
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        
+                        {/* Delete Confirmation Dialog */}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                              <Trash className="h-4 w-4" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Project?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete "{project.title}"? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => handleDeleteProject(project.id)}
+                                className="bg-destructive hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </td>
                   </tr>

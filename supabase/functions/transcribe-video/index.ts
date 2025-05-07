@@ -92,6 +92,10 @@ serve(async (req) => {
     const transcriptionData = await openAIResponse.json();
     const transcript = transcriptionData.text;
 
+    // 3. Extract still frames at regular intervals
+    // This will be done in the generate-slides function instead of here
+    // since we need to know the slide timestamps first
+
     // 3. Update the project with the transcript
     const { error: updateError } = await supabase
       .from('projects')

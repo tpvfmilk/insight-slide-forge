@@ -12,10 +12,10 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
   try {
     toast.loading("Generating slides...", { id: "generate-slides" });
     
-    // Fetch the project to get context_prompt if available
+    // Fetch the project to get context_prompt and slides_per_minute if available
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('context_prompt, transcript, source_type')
+      .select('context_prompt, transcript, source_type, slides_per_minute')
       .eq('id', projectId)
       .single();
       
@@ -38,7 +38,8 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       },
       body: JSON.stringify({
         projectId,
-        contextPrompt: project?.context_prompt || ''
+        contextPrompt: project?.context_prompt || '',
+        slidesPerMinute: project?.slides_per_minute || 6
       })
     });
     

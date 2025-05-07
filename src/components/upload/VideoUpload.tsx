@@ -7,11 +7,13 @@ import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
+import { SliderControl } from "./SliderControl";
 
 export const VideoUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [contextPrompt, setContextPrompt] = useState<string>("");
+  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -53,8 +55,14 @@ export const VideoUpload = () => {
     }, 300);
     
     try {
-      // Perform the actual upload - now with context prompt
-      const project = await createProjectFromVideo(file, undefined, contextPrompt);
+      // Perform the actual upload with slides per minute
+      const project = await createProjectFromVideo(
+        file, 
+        undefined, 
+        contextPrompt,
+        "", // No transcript
+        slidesPerMinute
+      );
       
       clearInterval(interval);
       setUploadProgress(100);
@@ -83,7 +91,12 @@ export const VideoUpload = () => {
         MP4 or WebM format, up to 100MB
       </p>
       
-      <div className="w-full mb-6">
+      <div className="w-full space-y-6 mb-6">
+        <SliderControl 
+          value={slidesPerMinute}
+          onChange={setSlidesPerMinute}
+        />
+        
         <ContextPromptInput 
           value={contextPrompt}
           onChange={setContextPrompt}

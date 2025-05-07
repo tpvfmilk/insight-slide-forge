@@ -77,14 +77,34 @@ serve(async (req) => {
     // Use either contextPrompt passed in the request or the one stored in the project
     const finalContextPrompt = contextPrompt || project.context_prompt || '';
 
+    // Calculate target slide count based on content length or slides_per_minute
+    // Estimate 150 words per minute for transcript text
+    let targetSlideCount = 6; // Default
+
+    if (project.slides_per_minute) {
+      // Calculate from transcript length (estimate 150 words per minute)
+      const wordCount = contentForProcessing.split(/\s+/).length;
+      const estimatedMinutes = wordCount / 150;
+      targetSlideCount = Math.round(estimatedMinutes * project.slides_per_minute);
+      
+      // Ensure reasonable limits
+      targetSlideCount = Math.max(3, Math.min(20, targetSlideCount));
+    }
+
     // Process with AI
-    const slideDeck: Slide[] = await generateSlidesWithAI(contentForProcessing, project.title, finalContextPrompt);
+    const slideDeck: Slide[] = await generateSlidesWithAI(
+      contentForProcessing, 
+      project.title, 
+      finalContextPrompt, 
+      targetSlideCount
+    );
     
     // Update project with generated slides
     const { error: updateError } = await supabase
       .from('projects')
       .update({ 
         slides: slideDeck,
+        target_slide_count: targetSlideCount,
         updated_at: new Date().toISOString()
       })
       .eq('id', projectId);
@@ -94,6 +114,13 @@ serve(async (req) => {
         JSON.stringify({ error: "Failed to update project with slides", details: updateError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // If it's a video, extract still images for each slide with a timestamp
+    if (project.source_type === 'video' && project.source_file_path) {
+      // This would be implemented with ffmpeg
+      // For now, we'll skip this part as it requires more complex edge function capabilities
+      // and will be handled in a separate function call
     }
 
     return new Response(
@@ -109,7 +136,7 @@ serve(async (req) => {
   }
 });
 
-async function generateSlidesWithAI(content: string, title: string, contextPrompt: string = ''): Promise<Slide[]> {
+async function generateSlidesWithAI(content: string, title: string, contextPrompt: string = '', targetSlideCount: number = 6): Promise<Slide[]> {
   if (!openAIKey) {
     throw new Error("OpenAI API key not configured");
   }
@@ -131,11 +158,13 @@ async function generateSlidesWithAI(content: string, title: string, contextPromp
     
     For the main title slide, use the title: "${title}"
     
+    The user wants approximately ${targetSlideCount} slides in total. Adjust your content grouping accordingly.
+    
     Here's the content to transform into slides:
     ${content}
     ${contextInfo}
     
-    Create 5-7 slides total that capture the key points. Structure should follow a logical flow with introduction, main points, and conclusion.
+    Create ${targetSlideCount} slides total that capture the key points. Structure should follow a logical flow with introduction, main points, and conclusion.
     `;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {

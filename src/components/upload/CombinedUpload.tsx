@@ -8,6 +8,7 @@ import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
+import { SliderControl } from "./SliderControl";
 
 export const CombinedUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -16,6 +17,7 @@ export const CombinedUpload = () => {
   const [transcriptText, setTranscriptText] = useState<string>("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>("");
+  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -68,12 +70,13 @@ export const CombinedUpload = () => {
     }, 300);
     
     try {
-      // Create project from video, passing the transcript text
+      // Create project from video, passing the transcript text and slides per minute
       const project = await createProjectFromVideo(
         videoFile, 
         undefined, 
         contextPrompt,
-        transcriptText
+        transcriptText,
+        slidesPerMinute
       );
       
       clearInterval(interval);
@@ -128,6 +131,11 @@ export const CombinedUpload = () => {
       </div>
 
       <div className="space-y-4">
+        <SliderControl 
+          value={slidesPerMinute}
+          onChange={setSlidesPerMinute}
+        />
+
         <div className="space-y-2">
           <label htmlFor="transcript-text" className="text-sm font-medium flex items-center gap-2">
             <FileText className="h-4 w-4" />

@@ -8,12 +8,14 @@ import { createProjectFromUrl } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
+import { SliderControl } from "./SliderControl";
 
 export const YoutubeUpload = () => {
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   const navigate = useNavigate();
 
   const handleYouTubeSubmit = async (e: React.FormEvent) => {
@@ -51,8 +53,13 @@ export const YoutubeUpload = () => {
     }, 300);
     
     try {
-      // Create project from URL - now with context prompt
-      const project = await createProjectFromUrl(videoUrl, undefined, contextPrompt);
+      // Create project from URL with slides per minute
+      const project = await createProjectFromUrl(
+        videoUrl, 
+        undefined, 
+        contextPrompt,
+        slidesPerMinute
+      );
       
       clearInterval(interval);
       setUploadProgress(100);
@@ -102,7 +109,12 @@ export const YoutubeUpload = () => {
         </div>
       </div>
 
-      <div className="w-full mt-4">
+      <div className="space-y-4 mt-4">
+        <SliderControl 
+          value={slidesPerMinute}
+          onChange={setSlidesPerMinute}
+        />
+        
         <ContextPromptInput 
           value={contextPrompt}
           onChange={setContextPrompt}

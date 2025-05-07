@@ -1,3 +1,4 @@
+
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,6 +7,7 @@ import { createProjectFromTranscript, uploadFile } from "@/services/uploadServic
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
+import { SliderControl } from "./SliderControl";
 
 export const TranscriptUpload = () => {
   const [transcriptText, setTranscriptText] = useState<string>("");
@@ -13,6 +15,7 @@ export const TranscriptUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -26,11 +29,13 @@ export const TranscriptUpload = () => {
     
     try {
       setIsUploading(true);
-      // Create project from transcript text - now with context prompt
+      // Create project from transcript text with slides per minute
       const project = await createProjectFromTranscript(
         transcriptText, 
-        undefined, // title parameter (using default)
-        contextPrompt // contextPrompt parameter
+        undefined, // title parameter
+        contextPrompt, // contextPrompt parameter
+        imageFile, // optional image file
+        slidesPerMinute // slides per minute
       );
       
       if (project) {
@@ -106,7 +111,12 @@ export const TranscriptUpload = () => {
         />
       </div>
       
-      <div className="w-full mt-4">
+      <div className="space-y-4 mt-4">
+        <SliderControl 
+          value={slidesPerMinute}
+          onChange={setSlidesPerMinute}
+        />
+        
         <ContextPromptInput 
           value={contextPrompt}
           onChange={setContextPrompt}

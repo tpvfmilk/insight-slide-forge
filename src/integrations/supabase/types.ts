@@ -119,9 +119,11 @@ export type Database = {
           id: string
           model_id: string | null
           slides: Json | null
+          slides_per_minute: number | null
           source_file_path: string | null
           source_type: string
           source_url: string | null
+          target_slide_count: number | null
           title: string
           transcript: string | null
           updated_at: string
@@ -135,9 +137,11 @@ export type Database = {
           id?: string
           model_id?: string | null
           slides?: Json | null
+          slides_per_minute?: number | null
           source_file_path?: string | null
           source_type: string
           source_url?: string | null
+          target_slide_count?: number | null
           title: string
           transcript?: string | null
           updated_at?: string
@@ -151,9 +155,11 @@ export type Database = {
           id?: string
           model_id?: string | null
           slides?: Json | null
+          slides_per_minute?: number | null
           source_file_path?: string | null
           source_type?: string
           source_url?: string | null
+          target_slide_count?: number | null
           title?: string
           transcript?: string | null
           updated_at?: string

@@ -49,13 +49,15 @@ export const uploadFile = async (file: File): Promise<{ path: string; url: strin
  * @param title Project title
  * @param contextPrompt Optional context prompt to guide slide generation
  * @param transcript Optional transcript text to enhance slide generation
+ * @param slidesPerMinute Optional number of slides per minute (controls slide density)
  * @returns The created project
  */
 export const createProjectFromVideo = async (
   file: File, 
   title: string = 'New Project',
   contextPrompt: string = '',
-  transcript: string = ''
+  transcript: string = '',
+  slidesPerMinute: number = 6
 ): Promise<Project | null> => {
   try {
     // Upload the video file
@@ -73,6 +75,7 @@ export const createProjectFromVideo = async (
       source_url: uploadResult.url,
       context_prompt: contextPrompt,
       transcript: transcript || null, // Add transcript if provided
+      slides_per_minute: slidesPerMinute, // Add slides per minute
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 
@@ -120,12 +123,14 @@ export const createProjectFromVideo = async (
  * @param url Video URL (YouTube or Vimeo)
  * @param title Project title
  * @param contextPrompt Optional context prompt to guide slide generation
+ * @param slidesPerMinute Optional number of slides per minute (controls slide density)
  * @returns The created project
  */
 export const createProjectFromUrl = async (
   url: string, 
   title: string = 'New Project',
-  contextPrompt: string = ''
+  contextPrompt: string = '',
+  slidesPerMinute: number = 6
 ): Promise<Project | null> => {
   try {
     // Create a new project
@@ -134,6 +139,7 @@ export const createProjectFromUrl = async (
       source_type: 'url',
       source_url: url,
       context_prompt: contextPrompt,
+      slides_per_minute: slidesPerMinute, // Add slides per minute
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 
@@ -154,13 +160,15 @@ export const createProjectFromUrl = async (
  * @param title Project title (optional)
  * @param contextPrompt Optional context prompt to guide slide generation (optional)
  * @param imageFile Optional image file to attach to the project (optional)
+ * @param slidesPerMinute Optional number of slides per minute (controls slide density)
  * @returns The created project
  */
 export const createProjectFromTranscript = async (
   transcript: string, 
   title: string = 'New Project',
   contextPrompt: string = '',
-  imageFile?: File | null
+  imageFile?: File | null,
+  slidesPerMinute: number = 6
 ): Promise<Project | null> => {
   try {
     // Initialize the project data
@@ -169,6 +177,7 @@ export const createProjectFromTranscript = async (
       source_type: 'transcript',
       transcript: transcript,
       context_prompt: contextPrompt,
+      slides_per_minute: slidesPerMinute, // Add slides per minute
       user_id: (await supabase.auth.getUser()).data.user?.id as string
     };
 
