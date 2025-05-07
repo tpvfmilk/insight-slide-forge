@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { toast } from "sonner";
 
-interface Slide {
+export interface Slide {
   id: string;
   title: string;
   content: string;
