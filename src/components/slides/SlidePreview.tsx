@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, X, Fullscreen, FullscreenExit, Sun, Moon, Timer } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Fullscreen, Sun, Moon, Timer } from "lucide-react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -188,9 +188,10 @@ export const SlidePreview = () => {
         
         if (projectData?.slides && isValidSlideArray(projectData.slides)) {
           if (projectData.slides.length > 0) {
-            // Set transition type if available in project
-            const projectTransitionType = projectData.transitionType || "fade";
-            setTransitionType(projectTransitionType as "fade" | "slide" | "zoom");
+            // Set transition type if available in project, otherwise use default "fade"
+            // Fix for the transitionType error - use default "fade" if not defined
+            const projectTransitionType = projectData.transitionType as "fade" | "slide" | "zoom" || "fade";
+            setTransitionType(projectTransitionType);
             setSlides(projectData.slides);
           } else {
             toast.error("No slides available for presentation");
@@ -286,7 +287,7 @@ export const SlidePreview = () => {
             onClick={toggleFullscreen} 
             className="text-white hover:bg-white/10"
           >
-            {isFullscreen ? <FullscreenExit className="h-5 w-5" /> : <Fullscreen className="h-5 w-5" />}
+            <Fullscreen className="h-5 w-5" />
             <span className="sr-only">Toggle fullscreen</span>
           </Button>
           
