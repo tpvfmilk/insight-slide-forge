@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -188,10 +187,10 @@ export const SlidePreview = () => {
         
         if (projectData?.slides && isValidSlideArray(projectData.slides)) {
           if (projectData.slides.length > 0) {
-            // Set transition type if available in project, otherwise use default "fade"
-            // Fix for the transitionType error - use default "fade" if not defined
-            const projectTransitionType = projectData.transitionType as "fade" | "slide" | "zoom" || "fade";
-            setTransitionType(projectTransitionType);
+            // Check if any slide has a transition type defined, otherwise use default
+            const firstSlideWithTransition = projectData.slides.find(slide => slide.transitionType);
+            const defaultTransition = firstSlideWithTransition?.transitionType || "fade";
+            setTransitionType(defaultTransition);
             setSlides(projectData.slides);
           } else {
             toast.error("No slides available for presentation");
