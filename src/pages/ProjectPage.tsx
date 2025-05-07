@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Project, fetchProjectById, updateProject } from "@/services/projectService";
@@ -5,13 +6,16 @@ import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon } from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon, Edit2 } from "lucide-react";
 import { generateSlidesForProject, hasValidSlides } from "@/services/slideGenerationService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
 import { transcribeVideo } from "@/services/uploadService";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -24,9 +28,12 @@ const ProjectPage = () => {
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isTranscriptDialogOpen, setIsTranscriptDialogOpen] = useState<boolean>(false);
   const [isDensityDialogOpen, setIsDensityDialogOpen] = useState<boolean>(false);
+  const [isEditTitleDialogOpen, setIsEditTitleDialogOpen] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>("");
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
+  const [title, setTitle] = useState<string>("");
+  const [videoFileName, setVideoFileName] = useState<string>("");
   
   const loadProject = async () => {
     if (!projectId) return;
@@ -45,6 +52,19 @@ const ProjectPage = () => {
       setContextPrompt(projectData.context_prompt || "");
       setTranscript(projectData.transcript || "");
       setSlidesPerMinute(projectData.slides_per_minute || 6);
+      setTitle(projectData.title || "Untitled Project");
+      
+      // Get video filename if it's a video project
+      if (projectData.source_type === 'video' && projectData.source_file_path) {
+        try {
+          const path = projectData.source_file_path;
+          const pathParts = path.split('/');
+          const fileName = pathParts[pathParts.length - 1];
+          setVideoFileName(fileName);
+        } catch (error) {
+          console.error("Error parsing video filename:", error);
+        }
+      }
       
       // For new projects, check if we need to transcribe or generate slides
       const isNewlyCreated = Date.now() - new Date(projectData.created_at).getTime() < 60000; // Within a minute
@@ -211,6 +231,35 @@ const ProjectPage = () => {
     }
   };
   
+  const handleSaveTitle = async () => {
+    if (!projectId || !project) return;
+    
+    setIsSaving(true);
+    
+    try {
+      await updateProject(projectId, {
+        title: title
+      });
+      
+      toast.success("Project title saved");
+      setIsEditTitleDialogOpen(false);
+      
+      // Update the project in state with the new title
+      setProject(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          title: title
+        };
+      });
+    } catch (error) {
+      console.error("Error saving title:", error);
+      toast.error("Failed to save project title");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
   const needsTranscription = project?.source_type === 'video' && !project?.transcript;
   
   return (
@@ -226,18 +275,73 @@ const ProjectPage = () => {
             </Button>
             
             <div>
-              <h1 className="text-xl font-semibold truncate">
-                {isLoading ? "Loading..." : project?.title || "Untitled Project"}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                {project?.source_type === 'video' ? 'From video upload' : 
-                 project?.source_type === 'url' ? 'From URL' : 
-                 project?.source_type === 'transcript' ? 'From transcript' : 'Unknown source'}
-              </p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-semibold truncate">
+                  {isLoading ? "Loading..." : project?.title || "Untitled Project"}
+                </h1>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setIsEditTitleDialogOpen(true)}
+                  className="h-6 w-6"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground">
+                  {project?.source_type === 'video' ? 'From video upload' : 
+                  project?.source_type === 'url' ? 'From URL' : 
+                  project?.source_type === 'transcript' ? 'From transcript' : 'Unknown source'}
+                </p>
+                {videoFileName && (
+                  <Badge variant="outline" className="text-xs font-normal">
+                    {videoFileName}
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
           
           <div className="flex items-center space-x-2">
+            {/* Edit Title Dialog */}
+            <Dialog open={isEditTitleDialogOpen} onOpenChange={setIsEditTitleDialogOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Edit Project Title</DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                  <Input 
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Project title"
+                    className="w-full"
+                  />
+                  
+                  <div className="flex justify-end mt-4 space-x-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsEditTitleDialogOpen(false)}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSaveTitle}
+                      disabled={isSaving || !title.trim()}
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                          Saving...
+                        </>
+                      ) : "Save Title"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
             {/* Transcript Dialog */}
             <Dialog open={isTranscriptDialogOpen} onOpenChange={setIsTranscriptDialogOpen}>
               <DialogTrigger asChild>

@@ -30,6 +30,23 @@ export const extractFramesFromVideo = async (
     
     toast.loading("Extracting video frames...", { id: "extract-frames" });
     
+    // Check for local development vs production
+    const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    if (isLocalDev) {
+      // In local development, generate placeholder frames for testing
+      console.log("Local development detected, using placeholder frames");
+      const placeholderFrames = uniqueTimestamps.map(timestamp => ({
+        timestamp,
+        imageUrl: `https://via.placeholder.com/640x360?text=Frame+at+${timestamp.replace(/:/g, '-')}`
+      }));
+      
+      toast.success("Generated placeholder frames for local development", { id: "extract-frames" });
+      return { success: true, frames: placeholderFrames };
+    }
+    
+    console.log(`Extracting frames for project ${projectId} from ${videoPath} at timestamps:`, uniqueTimestamps);
+    
     const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/extract-frames', {
       method: "POST",
       headers: {
@@ -50,6 +67,7 @@ export const extractFramesFromVideo = async (
     
     const { frames } = await response.json();
     
+    console.log("Frames extracted successfully:", frames);
     toast.success("Frame extraction completed!", { id: "extract-frames" });
     return { success: true, frames };
   } catch (error) {

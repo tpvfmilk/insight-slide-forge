@@ -72,41 +72,63 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       if (allTimestamps.length > 0) {
         console.log("Extracting frames for timestamps:", allTimestamps);
         
-        // Extract frames for all timestamps in one go
-        const extractionResult = await extractFramesFromVideo(projectId, project.source_file_path, allTimestamps);
-        
-        if (extractionResult.success && extractionResult.frames) {
-          console.log("Frames extracted successfully:", extractionResult.frames);
+        try {
+          // Extract frames for all timestamps in one go
+          const extractionResult = await extractFramesFromVideo(projectId, project.source_file_path, allTimestamps);
           
-          // Map timestamps to images for each slide
-          const slidesWithImages = generatedSlides.map(slide => {
-            // Determine which timestamps to use for this slide
-            const slideTimestamps = slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps) 
-              ? slide.transcriptTimestamps 
-              : (slide.timestamp ? [slide.timestamp] : []);
+          if (extractionResult.success && extractionResult.frames && extractionResult.frames.length > 0) {
+            console.log("Frames extracted successfully:", extractionResult.frames);
             
-            // Map timestamps to images
-            const imageUrls = mapTimestampsToImages(extractionResult.frames, slideTimestamps);
-            
-            // If we have new imageUrls array, use it, otherwise keep the existing imageUrl for backward compatibility
-            if (imageUrls.length > 0) {
-              return {
-                ...slide,
-                imageUrls
-              };
-            } else if (slide.timestamp && extractionResult.frames) {
-              const matchingFrame = extractionResult.frames.find(frame => frame.timestamp === slide.timestamp);
-              if (matchingFrame) {
+            // Map timestamps to images for each slide
+            const slidesWithImages = generatedSlides.map(slide => {
+              // Determine which timestamps to use for this slide
+              const slideTimestamps = slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps) 
+                ? slide.transcriptTimestamps 
+                : (slide.timestamp ? [slide.timestamp] : []);
+              
+              // Map timestamps to images
+              const imageUrls = mapTimestampsToImages(extractionResult.frames, slideTimestamps);
+              
+              // If we have new imageUrls array, use it, otherwise keep the existing imageUrl for backward compatibility
+              if (imageUrls.length > 0) {
                 return {
                   ...slide,
-                  imageUrl: matchingFrame.imageUrl
+                  imageUrls
                 };
+              } else if (slide.timestamp && extractionResult.frames) {
+                const matchingFrame = extractionResult.frames.find(frame => frame.timestamp === slide.timestamp);
+                if (matchingFrame) {
+                  return {
+                    ...slide,
+                    imageUrl: matchingFrame.imageUrl
+                  };
+                }
               }
+              return slide;
+            });
+            
+            // Store the updated slides with images in the database
+            try {
+              const { error: updateError } = await supabase
+                .from('projects')
+                .update({ slides: slidesWithImages })
+                .eq('id', projectId);
+                
+              if (updateError) {
+                console.error("Error updating slides with images:", updateError);
+              } else {
+                console.log("Successfully updated slides with images in database");
+              }
+            } catch (e) {
+              console.error("Failed to save slides with images:", e);
             }
-            return slide;
-          });
-          
-          return { success: true, slides: slidesWithImages };
+            
+            return { success: true, slides: slidesWithImages };
+          } else {
+            console.warn("No frames were extracted or extraction failed");
+          }
+        } catch (extractionError) {
+          console.error("Error during frame extraction:", extractionError);
         }
       }
     }
@@ -128,6 +150,8 @@ interface Slide {
   content: string;
   timestamp?: string;
   imageUrl?: string;
+  transcriptTimestamps?: string[];
+  imageUrls?: string[];
 }
 
 /**
