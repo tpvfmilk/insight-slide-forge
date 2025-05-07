@@ -2,11 +2,24 @@
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "./storageService";
+import { Json } from "@/integrations/supabase/types";
 
 interface ClientFrameExtractionResult {
   success: boolean;
   frames?: Array<{ timestamp: string, imageUrl: string }>;
   error?: string;
+}
+
+// Define a type to handle slide objects from the database
+interface Slide {
+  id: string;
+  title?: string;
+  content?: string;
+  timestamp?: string;
+  imageUrl?: string;
+  transcriptTimestamps?: string[];
+  imageUrls?: string[];
+  [key: string]: any; // Allow for additional properties
 }
 
 /**
@@ -112,23 +125,29 @@ export const updateSlidesWithExtractedFrames = async (
       frameMap.set(frame.timestamp, frame.imageUrl);
     });
     
+    // Type guard function to check if an item is a Slide object
+    const isSlideObject = (item: Json): item is Slide => {
+      return item !== null && typeof item === 'object' && !Array.isArray(item);
+    };
+    
     // Update each slide with matching timestamps
-    const updatedSlides = Array.isArray(project.slides) ? project.slides.map(slide => {
-      if (!slide) return slide;
+    const updatedSlides = Array.isArray(project.slides) ? project.slides.map(item => {
+      if (!isSlideObject(item)) return item;
       
       // Create a copy of the slide to update
-      const updatedSlide = Object.assign({}, slide);
+      const slide = item as Slide;
+      const updatedSlide: Slide = { ...slide };
       
       // Handle single timestamp
-      if (updatedSlide.timestamp && frameMap.has(updatedSlide.timestamp)) {
-        updatedSlide.imageUrl = frameMap.get(updatedSlide.timestamp);
+      if (typeof slide.timestamp === 'string' && frameMap.has(slide.timestamp)) {
+        updatedSlide.imageUrl = frameMap.get(slide.timestamp);
       }
       
       // Handle multiple timestamps
-      if (updatedSlide.transcriptTimestamps && Array.isArray(updatedSlide.transcriptTimestamps)) {
+      if (Array.isArray(slide.transcriptTimestamps)) {
         const imageUrls: string[] = [];
         
-        updatedSlide.transcriptTimestamps.forEach(timestamp => {
+        slide.transcriptTimestamps.forEach(timestamp => {
           if (typeof timestamp === 'string') {
             const imageUrl = frameMap.get(timestamp);
             if (imageUrl) {
