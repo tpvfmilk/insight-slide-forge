@@ -16,6 +16,7 @@ import DashboardPage from "./pages/DashboardPage";
 import UploadPage from "./pages/UploadPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import ProjectPage from "./pages/ProjectPage";
+import PresentationPage from "./pages/PresentationPage";
 import CalendarPage from "./pages/CalendarPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
@@ -42,6 +43,7 @@ const App = () => (
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/projects/:id" element={<ProjectPage />} />
+              <Route path="/projects/:id/present" element={<PresentationPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>

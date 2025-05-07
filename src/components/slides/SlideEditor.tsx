@@ -2,11 +2,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Copy, Clock, Image as ImageIcon, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Copy, Clock, Image as ImageIcon, RefreshCw, Presentation } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProjectById } from "@/services/projectService";
 
@@ -250,6 +250,17 @@ export const SlideEditor = () => {
             <Copy className="h-4 w-4 mr-1" />
             Copy
           </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            asChild
+            disabled={slides.length <= 1 || slides[0].id === "slide-placeholder"}
+          >
+            <Link to={`/projects/${projectId}/present`}>
+              <Presentation className="h-4 w-4 mr-1" />
+              Present
+            </Link>
+          </Button>
           <Dialog>
             <DialogTrigger asChild>
               <Button size="sm">
@@ -402,3 +413,4 @@ export const SlideEditor = () => {
     </div>
   );
 };
+
