@@ -1,6 +1,8 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
+import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
 // Extend the Database Project type with our additional fields until Supabase types are regenerated
 export type Project = Database["public"]["Tables"]["projects"]["Row"] & {
@@ -10,10 +12,7 @@ export type Project = Database["public"]["Tables"]["projects"]["Row"] & {
     file_type?: string;
     file_size?: number;
   };
-  extracted_frames?: Array<{
-    timestamp: string;
-    imageUrl: string;
-  }>;
+  extracted_frames?: ExtractedFrame[];
 };
 
 /**
@@ -32,7 +31,14 @@ export const fetchRecentProjects = async (limit: number = 3): Promise<Project[]>
     throw error;
   }
 
-  return data || [];
+  // Cast data to Project[] with proper handling of JSON fields
+  return (data || []).map(project => ({
+    ...project,
+    // Cast video_metadata JSON to the correct type if present
+    video_metadata: project.video_metadata as Project['video_metadata'],
+    // Cast extracted_frames JSON to the correct type if present
+    extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | undefined
+  }));
 };
 
 /**
@@ -51,7 +57,16 @@ export const fetchProjectById = async (id: string): Promise<Project | null> => {
     throw error;
   }
 
-  return data;
+  if (!data) return null;
+
+  // Cast data to Project with proper handling of JSON fields
+  return {
+    ...data,
+    // Cast video_metadata JSON to the correct type if present
+    video_metadata: data.video_metadata as Project['video_metadata'],
+    // Cast extracted_frames JSON to the correct type if present
+    extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | undefined
+  };
 };
 
 /**
@@ -70,7 +85,14 @@ export const createProject = async (projectData: Omit<Project, 'id' | 'created_a
     throw error;
   }
 
-  return data;
+  // Cast data to Project with proper handling of JSON fields
+  return {
+    ...data,
+    // Cast video_metadata JSON to the correct type if present
+    video_metadata: data.video_metadata as Project['video_metadata'],
+    // Cast extracted_frames JSON to the correct type if present
+    extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | undefined
+  };
 };
 
 /**
