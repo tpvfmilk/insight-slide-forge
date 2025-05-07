@@ -9,13 +9,161 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      api_keys: {
+        Row: {
+          created_at: string
+          id: string
+          is_valid: boolean | null
+          key_hash: string
+          last_verified: string | null
+          service: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_valid?: boolean | null
+          key_hash: string
+          last_verified?: string | null
+          service: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_valid?: boolean | null
+          key_hash?: string
+          last_verified?: string | null
+          service?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      openai_usage: {
+        Row: {
+          created_at: string
+          estimated_cost: number
+          id: string
+          input_tokens: number
+          model_id: string
+          output_tokens: number
+          project_id: string
+          total_tokens: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          estimated_cost?: number
+          id?: string
+          input_tokens?: number
+          model_id: string
+          output_tokens?: number
+          project_id: string
+          total_tokens?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          estimated_cost?: number
+          id?: string
+          input_tokens?: number
+          model_id?: string
+          output_tokens?: number
+          project_id?: string
+          total_tokens?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "openai_usage_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          expires_at: string
+          id: string
+          model_id: string | null
+          slides: Json | null
+          source_type: string
+          source_url: string | null
+          title: string
+          transcript: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          expires_at?: string
+          id?: string
+          model_id?: string | null
+          slides?: Json | null
+          source_type: string
+          source_url?: string | null
+          title: string
+          transcript?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          expires_at?: string
+          id?: string
+          model_id?: string | null
+          slides?: Json | null
+          source_type?: string
+          source_url?: string | null
+          title?: string
+          transcript?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_current_user_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

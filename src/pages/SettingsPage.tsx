@@ -1,4 +1,3 @@
-
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,16 +9,13 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ProfileForm } from "@/components/auth/ProfileForm";
+import { useAuth } from "@/context/AuthContext";
 
 const SettingsPage = () => {
-  const [name, setName] = useState("User Account");
-  const [email, setEmail] = useState("user@example.com");
   const [darkMode, setDarkMode] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
-  
-  const handleProfileSave = () => {
-    toast.success("Profile updated successfully!");
-  };
+  const { signOut } = useAuth();
   
   const handlePasswordSave = () => {
     toast.success("Password updated successfully!");
@@ -27,6 +23,14 @@ const SettingsPage = () => {
   
   const handlePreferencesSave = () => {
     toast.success("Preferences updated successfully!");
+  };
+
+  const handleDeleteAccount = () => {
+    if (window.confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
+      // In a real app, you'd call an API to delete the account
+      toast.success("Account deleted successfully");
+      signOut();
+    }
   };
   
   return (
@@ -50,30 +54,7 @@ const SettingsPage = () => {
             <div className="border rounded-lg p-6 space-y-6">
               <div>
                 <h2 className="text-xl font-semibold mb-4">Personal Information</h2>
-                <div className="space-y-4 max-w-md">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input 
-                      id="name" 
-                      value={name} 
-                      onChange={(e) => setName(e.target.value)} 
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input 
-                      id="email" 
-                      type="email"
-                      value={email} 
-                      onChange={(e) => setEmail(e.target.value)} 
-                    />
-                  </div>
-                  
-                  <div>
-                    <Button onClick={handleProfileSave}>Save Changes</Button>
-                  </div>
-                </div>
+                <ProfileForm />
               </div>
             </div>
           </TabsContent>
@@ -131,7 +112,12 @@ const SettingsPage = () => {
                         This action is permanent and cannot be undone
                       </p>
                     </div>
-                    <Button variant="destructive">Delete Account</Button>
+                    <Button 
+                      variant="destructive"
+                      onClick={handleDeleteAccount}
+                    >
+                      Delete Account
+                    </Button>
                   </div>
                 </div>
               </div>

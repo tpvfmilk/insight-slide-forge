@@ -1,9 +1,11 @@
-
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Layout, CheckCircle, Key, FileText, Upload } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 
 const LandingPage = () => {
+  const { user } = useAuth();
+  
   return (
     <div className="flex flex-col min-h-screen">
       {/* Navigation */}
@@ -23,12 +25,20 @@ const LandingPage = () => {
           </nav>
           
           <div className="flex items-center gap-4">
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/login">Login</Link>
-            </Button>
-            <Button asChild size="sm">
-              <Link to="/register">Get Started</Link>
-            </Button>
+            {user ? (
+              <Button asChild size="sm">
+                <Link to="/dashboard">Dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/login">Login</Link>
+                </Button>
+                <Button asChild size="sm">
+                  <Link to="/register">Get Started</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>

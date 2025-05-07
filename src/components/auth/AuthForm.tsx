@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Layout } from "lucide-react";
 import { Link } from "react-router-dom";
-import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 type FormType = "login" | "register" | "reset";
 
@@ -17,31 +17,28 @@ export const AuthForm = ({ type }: AuthFormProps) => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const { signIn, signUp, resetPassword } = useAuth();
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Here we would integrate with Supabase Auth
-    // This is a placeholder until Supabase is connected
+    if (type === "register" && password !== confirmPassword) {
+      alert("Passwords do not match!");
+      return;
+    }
     
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
       if (type === "login") {
-        toast.success("Login successful! Redirecting...");
-        // Redirect would happen here
+        await signIn(email, password);
       } else if (type === "register") {
-        toast.success("Registration successful! Please check your email to verify your account.");
+        await signUp(email, password);
       } else if (type === "reset") {
-        toast.success("Password reset link has been sent to your email.");
+        await resetPassword(email);
       }
-      
     } catch (error) {
-      toast.error("Something went wrong. Please try again.");
-      console.error(error);
+      console.error("Authentication error:", error);
     } finally {
       setIsLoading(false);
     }

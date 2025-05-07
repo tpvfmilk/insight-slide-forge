@@ -1,5 +1,5 @@
 
-import { Calendar, File, Layout, LayoutDashboard, Settings, Upload, User } from 'lucide-react';
+import { Calendar, File, Layout, LayoutDashboard, Settings, Upload } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   Sidebar, 
@@ -8,15 +8,15 @@ import {
   SidebarHeader, 
   SidebarTrigger,
   SidebarGroup,
-  SidebarGroupContent,
   SidebarGroupLabel,
+  SidebarGroupContent,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '../shared/ThemeToggle';
+import { UserProfileButton } from '@/components/auth/UserProfileButton';
 
 export const InsightSidebar = () => {
   const location = useLocation();
@@ -70,14 +70,10 @@ export const InsightSidebar = () => {
       
       <SidebarFooter className="p-4 border-t">
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" className="rounded-full">
-            <User className="h-5 w-5" />
-          </Button>
+          <UserProfileButton />
           <div className="flex-1">
-            <div className="font-medium text-sm">User Account</div>
-            <div className="text-xs text-muted-foreground">Free Plan</div>
+            <ThemeToggle />
           </div>
-          <ThemeToggle />
         </div>
       </SidebarFooter>
     </Sidebar>
