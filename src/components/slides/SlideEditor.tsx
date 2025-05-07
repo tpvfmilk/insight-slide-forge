@@ -200,9 +200,31 @@ export const SlideEditor = () => {
     }
     
     setIsExtractingFrames(true);
+    toast.loading("Preparing video frames extraction...", { id: "extract-prep" });
     
     try {
-      const result = await clientExtractFramesFromVideo(projectId, videoPath, timestamps);
+      let result;
+      
+      // Try with the current path first
+      result = await clientExtractFramesFromVideo(projectId, videoPath, timestamps);
+      
+      if (!result.success && result.error?.includes("Failed to get video URL")) {
+        // If that fails, try getting the source_url from the project and see if we can use that
+        console.log("Original video path failed, checking project for alternate sources");
+        
+        const { data: project } = await supabase
+          .from('projects')
+          .select('source_url')
+          .eq('id', projectId)
+          .maybeSingle();
+          
+        if (project?.source_url) {
+          toast.info("Trying alternate video source...", { id: "extract-prep" });
+          result = await clientExtractFramesFromVideo(projectId, project.source_url, timestamps);
+        }
+      }
+      
+      toast.dismiss("extract-prep");
       
       if (result.success) {
         setIsFrameExtractionModalOpen(true);

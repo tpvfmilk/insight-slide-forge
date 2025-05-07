@@ -143,29 +143,77 @@ serve(async (req) => {
       );
     }
 
+    // Check if the video path is valid 
+    if (!videoPath.match(/^[a-zA-Z0-9\-_.\/]+$/)) {
+      console.error("Invalid video path format:", videoPath);
+      return new Response(
+        JSON.stringify({ error: "Invalid video path format", details: "Path contains invalid characters" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Ensure slide_stills bucket exists
     const bucketExists = await ensureSlideStillsBucketExists();
     if (!bucketExists) {
       console.warn("Could not verify slide_stills bucket, will attempt to continue anyway");
     }
 
-    // Download the video file from storage - we'll still do this even though we can't process it
-    // This helps verify the file exists and is accessible
-    console.log(`Downloading video from path: ${videoPath}`);
-    const { data: fileData, error: fileError } = await supabase
-      .storage
-      .from('video_uploads')
-      .download(videoPath);
+    // Try to download from video_uploads bucket
+    let fileData: ArrayBuffer | null = null;
+    let fileError = null;
+    
+    try {
+      console.log(`Downloading video from path: ${videoPath}`);
+      const result = await supabase
+        .storage
+        .from('video_uploads')
+        .download(videoPath);
+      
+      fileData = result.data;
+      fileError = result.error;
+    } catch (err) {
+      console.log(`Error downloading from video_uploads, will try videos bucket: ${err.message}`);
+      fileError = err;
+    }
+    
+    // If failed, try videos bucket
+    if (fileError || !fileData) {
+      try {
+        // Try to extract just the filename
+        const filename = videoPath.split('/').pop();
+        if (!filename) {
+          throw new Error("Invalid video path format");
+        }
+        
+        console.log(`Trying videos bucket with filename: ${filename}`);
+        const result = await supabase
+          .storage
+          .from('videos')
+          .download(filename);
+          
+        fileData = result.data;
+        fileError = result.error;
+      } catch (err) {
+        console.log(`Error downloading from videos bucket: ${err.message}`);
+        fileError = fileError || err;
+      }
+    }
     
     if (fileError || !fileData) {
       console.error("Video download error:", fileError);
       return new Response(
-        JSON.stringify({ error: "Failed to download video file", details: fileError?.message }),
+        JSON.stringify({ 
+          error: "Failed to download video file", 
+          details: fileError?.message,
+          // Include helpful debug info
+          path: videoPath,
+          tried: ["video_uploads", "videos"]
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Video downloaded successfully, size: ${fileData.size} bytes`);
+    console.log(`Video downloaded successfully, size: ${fileData.byteLength} bytes`);
     console.log("Deno.run is not available in this environment. Using placeholder images instead.");
 
     // Process each timestamp and generate placeholder frames

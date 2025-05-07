@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -395,7 +394,7 @@ export const FrameExtractionModal = ({
                 fileName={videoMetadata.original_file_name}
                 duration={videoMetadata.duration}
                 fileType={videoMetadata.file_type}
-                fileSize={videoMetadata.file_size}
+                fileSize={videoMetadata.fileSize || videoMetadata.file_size}
               />
             </div>
           )}
@@ -436,10 +435,12 @@ export const FrameExtractionModal = ({
                     <li>Network connectivity issues</li>
                     <li>Format not supported by your browser</li>
                     <li>CORS configuration preventing video access</li>
+                    <li>Video file may have been moved or deleted</li>
+                    <li>The file path might be incorrect</li>
                   </ul>
                 </p>
                 <p className="mt-1 text-xs">
-                  Troubleshooting: Try refreshing the page or uploading the video in a different format.
+                  Troubleshooting: Try using the manual frame picker instead, or uploading the video in a different format.
                 </p>
               </div>
             </div>

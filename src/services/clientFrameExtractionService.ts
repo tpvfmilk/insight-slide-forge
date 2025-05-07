@@ -57,121 +57,73 @@ export const clientExtractFramesFromVideo = async (
       console.log(`Missing ${missingTimestamps.length} frames, will extract them`);
     }
     
-    // Get a signed URL for the video
-    const { data: urlData, error: urlError } = await supabase
-      .storage
-      .from('videos')
-      .createSignedUrl(videoPath, 3600); // 1 hour expiry
-    
-    if (urlError || !urlData?.signedUrl) {
-      console.error("Error creating signed URL for video:", urlError);
-      throw new Error("Failed to get video URL");
-    }
-    
-    // Create a video element
-    const video = document.createElement('video');
-    
-    // Return a promise that resolves when all frames are extracted
-    return new Promise((resolve, reject) => {
-      let framesProcessed = 0;
-      const extractedFrames: ExtractedFrame[] = [];
+    // First try with 'video_uploads' bucket (default path)
+    try {
+      const { data: urlData, error: urlError } = await supabase
+        .storage
+        .from('video_uploads')
+        .createSignedUrl(videoPath, 3600); // 1 hour expiry
       
-      // Setup video event handlers
-      video.onloadeddata = async () => {
-        try {
-          console.log(`Video loaded, extracting ${timestamps.length} frames`);
-          
-          // Process each timestamp
-          for (const timestamp of timestamps) {
-            try {
-              // Skip if this timestamp has been processed already
-              if (extractedFrames.some(frame => frame.timestamp === timestamp)) {
-                continue;
-              }
-              
-              // Convert timestamp to seconds
-              const seconds = timestampToSeconds(timestamp);
-              
-              // Extract frame from video by seeking to position and capturing
-              video.currentTime = seconds;
-              
-              // Wait for video to seek to the position
-              await new Promise<void>((seekResolve) => {
-                const handleSeeked = () => {
-                  video.removeEventListener('seeked', handleSeeked);
-                  seekResolve();
-                };
-                video.addEventListener('seeked', handleSeeked);
-              });
-              
-              // Create a canvas to capture the frame
-              const canvas = document.createElement('canvas');
-              canvas.width = video.videoWidth;
-              canvas.height = video.videoHeight;
-              const ctx = canvas.getContext('2d');
-              if (!ctx) {
-                throw new Error("Failed to get canvas context");
-              }
-              
-              // Draw the video frame to the canvas
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              
-              // Convert the canvas to a blob
-              const blob = await new Promise<Blob>((blobResolve) => {
-                canvas.toBlob((blob) => {
-                  if (blob) blobResolve(blob);
-                  else reject(new Error("Failed to create blob"));
-                }, 'image/jpeg', 0.95);
-              });
-              
-              // Create a file from the blob
-              const filename = `frame-${timestamp.replace(/:/g, "-")}.jpg`;
-              const file = new File([blob], filename, { type: 'image/jpeg' });
-              
-              // Upload the file
-              const uploadResult = await uploadSlideImage(file);
-              
-              if (!uploadResult || !uploadResult.url) {
-                console.error(`Failed to upload frame at ${timestamp}`);
-                continue;
-              }
-              
-              // Add to extracted frames
-              extractedFrames.push({
-                timestamp,
-                imageUrl: uploadResult.url
-              });
-              
-              framesProcessed++;
-              console.log(`Processed ${framesProcessed} of ${timestamps.length} frames`);
-            } catch (frameError) {
-              console.error(`Error extracting frame at ${timestamp}:`, frameError);
-            }
-          }
-          
-          resolve({
-            success: true,
-            frames: extractedFrames
-          });
-        } catch (error) {
-          reject(error);
-        } finally {
-          // Clean up
-          video.pause();
-          video.removeAttribute('src');
-          video.load();
+      if (urlError || !urlData?.signedUrl) {
+        throw new Error(`Error from video_uploads bucket: ${urlError?.message}`);
+      }
+      
+      // Success! Return the URL
+      return processVideoWithUrl(urlData.signedUrl, timestamps, projectId);
+    } catch (videoUploadsError) {
+      console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...");
+      
+      // Try with 'videos' bucket as alternative
+      try {
+        // Extract just the filename from the path
+        const filename = videoPath.split('/').pop();
+        if (!filename) {
+          throw new Error("Invalid video path format");
         }
-      };
-      
-      video.onerror = (e) => {
-        console.error('Video loading error:', e);
-        reject(new Error("Failed to load video"));
-      };
-      
-      // Set the source and load the video
-      video.src = urlData.signedUrl;
-      video.preload = 'auto';
-    });
+        
+        const { data: urlData, error: urlError } = await supabase
+          .storage
+          .from('videos')
+          .createSignedUrl(filename, 3600);
+        
+        if (urlError || !urlData?.signedUrl) {
+          throw new Error(`Error from videos bucket: ${urlError?.message}`);
+        }
+        
+        // Success with videos bucket!
+        return processVideoWithUrl(urlData.signedUrl, timestamps, projectId);
+      } catch (videosBucketError) {
+        // Both attempts failed
+        console.error("Error creating signed URL for video:", { 
+          videoUploadsError, 
+          videosBucketError 
+        });
+        
+        // Try to check if the video exists in the database but with a different path
+        const { data: projectData, error: projectPathError } = await supabase
+          .from('projects')
+          .select('source_url')
+          .eq('id', projectId)
+          .maybeSingle();
+          
+        if (projectPathError) {
+          console.error("Error fetching project source URL:", projectPathError);
+        }
+        
+        // If we have a source URL in the project, try that instead
+        if (projectData?.source_url) {
+          console.log("Found source URL in project, trying that instead:", projectData.source_url);
+          
+          try {
+            return processVideoWithUrl(projectData.source_url, timestamps, projectId);
+          } catch (sourceUrlError) {
+            console.error("Failed to use source_url as fallback:", sourceUrlError);
+          }
+        }
+        
+        throw new Error("Failed to get video URL. Please check if the video file exists in storage.");
+      }
+    }
   } catch (error) {
     console.error('Error extracting frames from video:', error);
     return {
@@ -179,6 +131,126 @@ export const clientExtractFramesFromVideo = async (
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
+};
+
+/**
+ * Process a video URL to extract frames
+ * This is a helper function used by clientExtractFramesFromVideo
+ */
+const processVideoWithUrl = async (
+  videoUrl: string, 
+  timestamps: string[], 
+  projectId: string
+): Promise<{
+  success: boolean;
+  error?: string;
+  frames?: ExtractedFrame[];
+}> => {
+  // Create a video element
+  const video = document.createElement('video');
+  
+  // Return a promise that resolves when all frames are extracted
+  return new Promise((resolve, reject) => {
+    let framesProcessed = 0;
+    const extractedFrames: ExtractedFrame[] = [];
+    
+    // Setup video event handlers
+    video.onloadeddata = async () => {
+      try {
+        console.log(`Video loaded, extracting ${timestamps.length} frames`);
+        
+        // Process each timestamp
+        for (const timestamp of timestamps) {
+          try {
+            // Skip if this timestamp has been processed already
+            if (extractedFrames.some(frame => frame.timestamp === timestamp)) {
+              continue;
+            }
+            
+            // Convert timestamp to seconds
+            const seconds = timestampToSeconds(timestamp);
+            
+            // Extract frame from video by seeking to position and capturing
+            video.currentTime = seconds;
+            
+            // Wait for video to seek to the position
+            await new Promise<void>((seekResolve) => {
+              const handleSeeked = () => {
+                video.removeEventListener('seeked', handleSeeked);
+                seekResolve();
+              };
+              video.addEventListener('seeked', handleSeeked);
+            });
+            
+            // Create a canvas to capture the frame
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              throw new Error("Failed to get canvas context");
+            }
+            
+            // Draw the video frame to the canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Convert the canvas to a blob
+            const blob = await new Promise<Blob>((blobResolve) => {
+              canvas.toBlob((blob) => {
+                if (blob) blobResolve(blob);
+                else reject(new Error("Failed to create blob"));
+              }, 'image/jpeg', 0.95);
+            });
+            
+            // Create a file from the blob
+            const filename = `frame-${timestamp.replace(/:/g, "-")}.jpg`;
+            const file = new File([blob], filename, { type: 'image/jpeg' });
+            
+            // Upload the file
+            const uploadResult = await uploadSlideImage(file);
+            
+            if (!uploadResult || !uploadResult.url) {
+              console.error(`Failed to upload frame at ${timestamp}`);
+              continue;
+            }
+            
+            // Add to extracted frames
+            extractedFrames.push({
+              timestamp,
+              imageUrl: uploadResult.url
+            });
+            
+            framesProcessed++;
+            console.log(`Processed ${framesProcessed} of ${timestamps.length} frames`);
+          } catch (frameError) {
+            console.error(`Error extracting frame at ${timestamp}:`, frameError);
+          }
+        }
+        
+        resolve({
+          success: true,
+          frames: extractedFrames
+        });
+      } catch (error) {
+        reject(error);
+      } finally {
+        // Clean up
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      }
+    };
+    
+    video.onerror = (e) => {
+      console.error('Video loading error:', e);
+      reject(new Error("Failed to load video"));
+    };
+    
+    // Set the source and load the video
+    video.src = videoUrl;
+    video.crossOrigin = "anonymous"; // Add cross-origin support
+    video.preload = 'auto';
+  });
 };
 
 /**
