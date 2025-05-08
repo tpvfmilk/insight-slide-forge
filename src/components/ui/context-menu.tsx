@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
@@ -179,7 +180,7 @@ const ContextMenuShortcut = ({
 }
 ContextMenuShortcut.displayName = "ContextMenuShortcut"
 
-// Fixed VideoFrameButton component with improved event handling and debugging
+// Enhanced VideoFrameButton component with reliable event handling and cleanup
 const ContextMenuVideoFrameButton = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -187,23 +188,48 @@ const ContextMenuVideoFrameButton = React.forwardRef<
     disabled?: boolean;
   }
 >(({ onClick, children, disabled, className, ...props }, ref) => {
-  // Create a memoized handler to prevent unnecessary re-renders and improve event handling
+  // Store the click handler in a ref to ensure consistent identity
+  const clickHandlerRef = React.useRef(onClick);
+  
+  // Update the ref when onClick changes
+  React.useEffect(() => {
+    clickHandlerRef.current = onClick;
+  }, [onClick]);
+  
+  // Create a handler that properly stops propagation and prevents default
   const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    // Stop event propagation to prevent the context menu from closing
+    // Prevent default behavior and stop propagation
     e.preventDefault();
     e.stopPropagation();
     
     console.log("ContextMenuVideoFrameButton clicked, disabled:", disabled);
     
-    if (onClick && !disabled) {
-      // Execute the callback with a slight delay to ensure UI updates first
-      setTimeout(() => {
-        console.log("Executing onClick handler");
-        onClick();
-      }, 50);
+    if (!disabled && clickHandlerRef.current) {
+      // Use a requestAnimationFrame to ensure UI updates first
+      window.requestAnimationFrame(() => {
+        // Close any open context menus using the uiUtils helper
+        const menuElements = document.querySelectorAll('[data-state="open"][role="menu"]');
+        menuElements.forEach(el => {
+          if (el.parentElement) {
+            try {
+              el.setAttribute('data-state', 'closed');
+            } catch (err) {
+              console.error("Error closing menu:", err);
+            }
+          }
+        });
+        
+        // Execute the callback with a slight delay
+        setTimeout(() => {
+          console.log("Executing onClick handler");
+          if (clickHandlerRef.current) {
+            clickHandlerRef.current();
+          }
+        }, 100);
+      });
     }
-  }, [onClick, disabled]);
-
+  }, [disabled]);
+  
   return (
     <button
       ref={ref}

@@ -15,6 +15,7 @@ import {
   ContextMenuVideoFrameButton,
 } from "@/components/ui/context-menu";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
+import { forceRemoveUIBlockers } from "@/utils/uiUtils";
 
 export interface Slide {
   id: string;
@@ -214,7 +215,7 @@ export const SlidePreview = () => {
     }
   };
 
-  // Enhanced frame picker handler with better error handling and debugging
+  // Enhanced frame picker handler with better error handling and UI cleanup
   const handleOpenFramePicker = useCallback(() => {
     console.log("Opening frame picker modal", {
       projectId,
@@ -226,15 +227,15 @@ export const SlidePreview = () => {
       return;
     }
     
-    // Explicitly set the modal state to open and log it
-    console.log("Setting isFramePickerModalOpen to true");
-    setIsFramePickerModalOpen(true);
+    // Force close any open menus to prevent UI blocking
+    forceRemoveUIBlockers();
     
-    // Add a delayed check to verify the state was updated
+    // Set the modal state to open with a slight delay to ensure menu closes first
     setTimeout(() => {
-      console.log("isFramePickerModalOpen state after update:", isFramePickerModalOpen);
-    }, 100);
-  }, [project, projectId]); // Removed isFramePickerModalOpen from dependencies to prevent stale state issues
+      console.log("Setting isFramePickerModalOpen to true");
+      setIsFramePickerModalOpen(true);
+    }, 50);
+  }, [project, projectId]);
 
   // New function to handle frame extraction with improved error handling
   const handleExtractFrames = useCallback(async () => {
@@ -246,6 +247,9 @@ export const SlidePreview = () => {
       });
       return;
     }
+    
+    // Force close any open menus to prevent UI blocking
+    forceRemoveUIBlockers();
     
     setIsExtractingFrames(true);
     try {
@@ -265,7 +269,10 @@ export const SlidePreview = () => {
 
   const handleFrameSelectionComplete = useCallback((selectedFrames: Array<{ timestamp: string; imageUrl: string; id?: string }>) => {
     console.log("Frame selection complete", selectedFrames);
+    
+    // Force close modal and any stray UI elements
     setIsFramePickerModalOpen(false);
+    forceRemoveUIBlockers();
     
     if (selectedFrames.length === 0) {
       toast.info("No frames were selected");
@@ -353,6 +360,12 @@ export const SlidePreview = () => {
     loadProject();
   }, [projectId]);
   
+  // Emergency reset function for UI
+  const handleEmergencyReset = () => {
+    forceRemoveUIBlockers();
+    toast.success("UI has been reset");
+  };
+  
   // Get animation classes based on transition settings
   const getSlideAnimationClasses = () => {
     // Base positioning classes
@@ -419,7 +432,7 @@ export const SlidePreview = () => {
                 <span className="sr-only">Frame tools</span>
               </Button>
             </ContextMenuTrigger>
-            <ContextMenuContent className="bg-background border border-border shadow-md w-56 right-0 mt-1">
+            <ContextMenuContent className="bg-background border border-border shadow-md w-56 right-0 mt-1 z-[100]">
               {project?.source_type === 'video' && project?.source_file_path && (
                 <>
                   <ContextMenuVideoFrameButton 
@@ -461,6 +474,11 @@ export const SlidePreview = () => {
               <ContextMenuItem onClick={toggleFullscreen}>
                 <Fullscreen className="h-4 w-4 mr-2" />
                 <span>Toggle Fullscreen</span>
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={handleEmergencyReset} className="text-red-500">
+                <X className="h-4 w-4 mr-2" />
+                <span>Reset UI (Emergency)</span>
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
@@ -534,6 +552,7 @@ export const SlidePreview = () => {
           onClose={() => {
             console.log("Closing frame picker modal");
             setIsFramePickerModalOpen(false);
+            forceRemoveUIBlockers(); // Ensure UI is reset when closing
           }} 
           videoPath={project.source_file_path} 
           projectId={projectId || ""} 
