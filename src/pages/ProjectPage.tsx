@@ -447,12 +447,19 @@ const ProjectPage = () => {
   
   const needsTranscription = project?.source_type === 'video' && !project?.transcript;
   
+  // New function to safely check and iterate over slides
+  const getSafeSlides = () => {
+    if (!project || !project.slides) return [];
+    return Array.isArray(project.slides) ? project.slides : [];
+  };
+  
   // New function to handle slide deletion with undo tracking
   const handleDeleteSlide = (index: number) => {
-    if (!project || !project.slides || index < 0 || index >= project.slides.length) return;
+    const slides = getSafeSlides();
+    if (index < 0 || index >= slides.length) return;
     
     // Save slide for undo
-    const deletedSlide = project.slides[index];
+    const deletedSlide = slides[index];
     
     // Add to undo history
     setUndoHistory(prev => [...prev, {
@@ -462,7 +469,7 @@ const ProjectPage = () => {
     }]);
     
     // Update project
-    const updatedSlides = [...project.slides];
+    const updatedSlides = [...slides];
     updatedSlides.splice(index, 1);
     
     setProject(prev => {
@@ -496,10 +503,10 @@ const ProjectPage = () => {
     
     if (lastAction.type === 'deleteSlide' && lastAction.slide) {
       try {
-        // Get current slides
-        if (!project || !project.slides) return;
+        // Get current slides safely
+        const slides = getSafeSlides();
         
-        const updatedSlides = [...project.slides];
+        const updatedSlides = [...slides];
         
         // Insert the slide back at its original position or at the end if index is out of bounds
         const insertIndex = Math.min(lastAction.index, updatedSlides.length);

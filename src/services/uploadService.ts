@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, Project } from "@/services/projectService";
 import { v4 as uuidv4 } from "uuid";
@@ -17,15 +16,20 @@ export const uploadFile = async (file: File): Promise<{ path: string; url: strin
     const filePath = `${fileName}`;
 
     // Check if we have enough storage space left
-    const { data: storageInfo } = await supabase.rpc('get_user_storage_info');
+    const { data: storageInfoArray } = await supabase.rpc('get_user_storage_info');
     
-    if (storageInfo) {
-      const storageUsed = storageInfo.storage_used || 0;
-      const storageLimit = storageInfo.storage_limit || 0;
+    if (storageInfoArray) {
+      // Handle the case where storageInfo comes as an array
+      const storageInfo = Array.isArray(storageInfoArray) ? storageInfoArray[0] : storageInfoArray;
       
-      if (storageUsed + file.size > storageLimit) {
-        toast.error(`Not enough storage space. Your current tier (${storageInfo.tier_name}) has a limit of ${(storageLimit / 1024 / 1024).toFixed(0)}MB.`);
-        return null;
+      if (storageInfo) {
+        const storageUsed = storageInfo.storage_used || 0;
+        const storageLimit = storageInfo.storage_limit || 0;
+        
+        if (storageUsed + file.size > storageLimit) {
+          toast.error(`Not enough storage space. Your current tier (${storageInfo.tier_name}) has a limit of ${(storageLimit / 1024 / 1024).toFixed(0)}MB.`);
+          return null;
+        }
       }
     }
 
