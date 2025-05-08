@@ -95,7 +95,7 @@ export const SlidePreview = () => {
     file_type?: string;
     file_size?: number;
   } | null>(null);
-  const [extractedFrames, setExtractedFrames] = useState<Array<{ timestamp: string; imageUrl: string }>>([]); 
+  const [extractedFrames, setExtractedFrames] = useState<Array<{ timestamp: string; imageUrl: string; id?: string }>>([]);
   const [needsFrameExtraction, setNeedsFrameExtraction] = useState<boolean>(false);
   const [isExtractingFrames, setIsExtractingFrames] = useState<boolean>(false);
   const [allTimestamps, setAllTimestamps] = useState<string[]>([]);
@@ -214,11 +214,18 @@ export const SlidePreview = () => {
     }
   };
 
+  // Improved frame picker handler with better error handling
   const handleOpenFramePicker = () => {
+    console.log("Opening frame picker modal", {
+      projectId,
+      hasSourceFilePath: !!project?.source_file_path,
+    });
+    
     if (!project?.source_file_path) {
-      toast.error("No video source available");
+      toast.error("No video source available for frame picking");
       return;
     }
+    
     setIsFramePickerModalOpen(true);
   };
 
@@ -244,13 +251,17 @@ export const SlidePreview = () => {
     }
   };
 
-  const handleFrameSelectionComplete = (selectedFrames: Array<{ timestamp: string; imageUrl: string }>) => {
+  const handleFrameSelectionComplete = (selectedFrames: Array<{ timestamp: string; imageUrl: string; id?: string }>) => {
+    console.log("Frame selection complete", selectedFrames);
     setIsFramePickerModalOpen(false);
+    
     if (selectedFrames.length === 0) {
       toast.info("No frames were selected");
       return;
     }
+    
     // Here you would normally update the slides with the selected frames
+    setExtractedFrames(selectedFrames); // Store the selected frames
     toast.success(`${selectedFrames.length} frames have been selected`);
   };
   
@@ -291,7 +302,7 @@ export const SlidePreview = () => {
 
         // Get previously extracted frames
         if (projectData?.extracted_frames && Array.isArray(projectData.extracted_frames)) {
-          setExtractedFrames(projectData.extracted_frames as Array<{ timestamp: string; imageUrl: string }>);
+          setExtractedFrames(projectData.extracted_frames as Array<{ timestamp: string; imageUrl: string; id?: string }>);
         }
 
         // Check if we need frame extraction
@@ -388,7 +399,7 @@ export const SlidePreview = () => {
         </div>
         
         <div className="flex gap-2">
-          {/* Frame Tools Dropdown */}
+          {/* Frame Tools Dropdown with improved handlers */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
@@ -399,7 +410,10 @@ export const SlidePreview = () => {
             <DropdownMenuContent align="end">
               {project?.source_type === 'video' && project?.source_file_path && (
                 <>
-                  <DropdownMenuVideoFrameButton onClick={handleOpenFramePicker}>
+                  <DropdownMenuVideoFrameButton 
+                    onClick={handleOpenFramePicker} 
+                    className="cursor-pointer"
+                  >
                     <Film className="h-4 w-4 mr-2" />
                     <span>Select Video Frames</span>
                   </DropdownMenuVideoFrameButton>
@@ -408,6 +422,7 @@ export const SlidePreview = () => {
                     <DropdownMenuVideoFrameButton 
                       onClick={handleExtractFrames} 
                       disabled={isExtractingFrames}
+                      className="cursor-pointer"
                     >
                       <Image className="h-4 w-4 mr-2" />
                       <span>
@@ -494,11 +509,14 @@ export const SlidePreview = () => {
         <kbd className="px-1 py-0.5 bg-white/20 rounded ml-1">T</kbd> for theme
       </div>
 
-      {/* Frame Picker Modal */}
+      {/* Frame Picker Modal with improved error handling and debugging */}
       {project && project.source_file_path && (
         <FramePickerModal 
           open={isFramePickerModalOpen} 
-          onClose={() => setIsFramePickerModalOpen(false)} 
+          onClose={() => {
+            console.log("Closing frame picker modal");
+            setIsFramePickerModalOpen(false);
+          }} 
           videoPath={project.source_file_path} 
           projectId={projectId || ""} 
           onComplete={handleFrameSelectionComplete} 

@@ -180,24 +180,38 @@ const ContextMenuShortcut = ({
 }
 ContextMenuShortcut.displayName = "ContextMenuShortcut"
 
-// Adding the VideoFrameButton component for consistency with the dropdown menu
+// Enhanced VideoFrameButton component for consistency with the dropdown menu 
+// and better handling of click events
 const ContextMenuVideoFrameButton = ({
   onClick,
   children,
   disabled,
+  className,
   ...props
 }: React.HTMLAttributes<HTMLButtonElement> & {
   onClick?: () => void;
   disabled?: boolean;
+  className?: string;
 }) => {
+  // Handle click event explicitly to improve reliability
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onClick && !disabled) {
+      onClick();
+    }
+  };
+
   return (
     <button
       className={cn(
         "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        disabled && "opacity-50 cursor-not-allowed"
+        disabled && "opacity-50 cursor-not-allowed",
+        className
       )}
-      onClick={onClick}
+      onClick={handleClick}
       disabled={disabled}
+      type="button" // Explicitly set button type to avoid form submission
       {...props}
     >
       {children}

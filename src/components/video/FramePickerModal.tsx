@@ -46,9 +46,22 @@ export const FramePickerModal = ({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
   const [isCaptureLoading, setIsCaptureLoading] = useState<boolean>(false);
+  const [isVideoReady, setIsVideoReady] = useState<boolean>(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Log state for debugging
+  useEffect(() => {
+    if (open) {
+      console.log("FramePickerModal opened with props:", {
+        videoPath,
+        projectId,
+        hasExistingFrames: existingFrames?.length > 0,
+        videoMetadata
+      });
+    }
+  }, [open]);
   
   // Load the video when the component mounts
   useEffect(() => {
@@ -57,13 +70,23 @@ export const FramePickerModal = ({
     const fetchVideo = async () => {
       setIsLoading(true);
       setError(null);
+      setIsVideoReady(false);
       
       try {
+        console.log("Fetching video from path:", videoPath);
+        
+        // Add cache busting parameter to prevent caching issues
+        const timestamp = Date.now();
+        
         // First try with 'video_uploads' bucket
         try {
           const { data, error } = await supabase.storage
             .from("video_uploads")
-            .createSignedUrl(videoPath, 3600); // 1 hour expiry
+            .createSignedUrl(videoPath, 3600, {
+              transform: {
+                width: 1280, // Set a reasonable max width
+              },
+            });
           
           if (error) throw error;
           
@@ -71,12 +94,20 @@ export const FramePickerModal = ({
             throw new Error("Failed to get video URL from video_uploads");
           }
           
-          setVideoUrl(data.signedUrl);
+          // Add cache busting parameter
+          const url = new URL(data.signedUrl);
+          url.searchParams.append('_cb', timestamp.toString());
+          
+          setVideoUrl(url.toString());
           console.log("Successfully loaded video from video_uploads bucket");
-          setIsLoading(false);
+          
+          // Wait a moment before considering loading complete
+          setTimeout(() => {
+            setIsLoading(false);
+          }, 500);
           return;
         } catch (videoUploadsError) {
-          console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...");
+          console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...", videoUploadsError);
           
           // Try with 'videos' bucket as alternative
           try {
@@ -94,9 +125,17 @@ export const FramePickerModal = ({
               throw new Error(`Error from videos bucket: ${error?.message}`);
             }
             
-            setVideoUrl(data.signedUrl);
+            // Add cache busting parameter
+            const url = new URL(data.signedUrl);
+            url.searchParams.append('_cb', timestamp.toString());
+            
+            setVideoUrl(url.toString());
             console.log("Successfully loaded video from videos bucket");
-            setIsLoading(false);
+            
+            // Wait a moment before considering loading complete
+            setTimeout(() => {
+              setIsLoading(false);
+            }, 500);
             return;
           } catch (videosBucketError) {
             console.error("Error creating signed URL for video:", { 
@@ -118,8 +157,17 @@ export const FramePickerModal = ({
             // If we have a source URL in the project, try that instead
             if (projectData?.source_url) {
               console.log("Found source URL in project, trying that instead:", projectData.source_url);
-              setVideoUrl(projectData.source_url);
-              setIsLoading(false);
+              
+              // Add cache busting parameter
+              const url = new URL(projectData.source_url);
+              url.searchParams.append('_cb', timestamp.toString());
+              
+              setVideoUrl(url.toString());
+              
+              // Wait a moment before considering loading complete
+              setTimeout(() => {
+                setIsLoading(false);
+              }, 500);
               return;
             }
             
@@ -129,7 +177,6 @@ export const FramePickerModal = ({
       } catch (err) {
         console.error("Error fetching video:", err);
         setError(err instanceof Error ? err.message : "Failed to load video");
-      } finally {
         setIsLoading(false);
       }
     };
@@ -138,6 +185,7 @@ export const FramePickerModal = ({
     
     // Initialize with existing frames if provided
     if (existingFrames && existingFrames.length > 0) {
+      console.log("Initializing with existing frames:", existingFrames.length);
       setCapturedFrames(existingFrames);
     }
   }, [open, videoPath, existingFrames, projectId]);
@@ -172,13 +220,52 @@ export const FramePickerModal = ({
     }
   }, [isPlaying]);
   
-  const handleVideoLoaded = () => {
+  // Enhanced video loading event handlers
+  const handleVideoEvents = () => {
     const video = videoRef.current;
     if (!video) return;
     
-    // Use the video's duration or fall back to the metadata
-    setVideoDuration(video.duration || videoMetadata?.duration || 0);
+    const handleCanPlay = () => {
+      console.log("Video can play now:", {
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+        duration: video.duration,
+        readyState: video.readyState
+      });
+      
+      // Use the video's duration or fall back to the metadata
+      setVideoDuration(video.duration || videoMetadata?.duration || 0);
+      setIsVideoReady(true);
+    };
+    
+    const handleLoadedData = () => {
+      console.log("Video data loaded with dimensions:", video.videoWidth, "x", video.videoHeight);
+      
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.warn("Video dimensions are zero, possible CORS issue");
+      }
+    };
+    
+    const handleError = () => {
+      const errorDetails = video.error 
+        ? `Code: ${video.error.code}, Message: ${video.error.message || "Unknown"}` 
+        : "Unknown error";
+      console.error("Video loading error:", errorDetails);
+      setError(`Video loading error: ${errorDetails}`);
+    };
+    
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('error', handleError);
+    
+    return () => {
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('error', handleError);
+    };
   };
+  
+  useEffect(handleVideoEvents, [videoRef.current, videoMetadata]);
   
   const handleTimeChange = (value: number[]) => {
     const newTime = value[0];
@@ -209,12 +296,23 @@ export const FramePickerModal = ({
     }
   };
   
+  // Enhanced frame capture with better error handling
   const captureFrame = async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
     if (!video || !canvas || !projectId) {
       toast.error("Cannot capture frame: missing video or canvas");
+      return;
+    }
+    
+    if (!isVideoReady) {
+      toast.error("Video is not ready yet. Please wait for it to load completely.");
+      return;
+    }
+    
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      toast.error("Cannot capture frame: video dimensions are invalid");
       return;
     }
     
@@ -232,24 +330,61 @@ export const FramePickerModal = ({
       canvas.height = video.videoHeight;
       
       // Draw the current frame on the canvas
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { alpha: false });
       if (!ctx) {
         throw new Error("Could not get canvas context");
       }
       
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // First clear the canvas to avoid ghost images
+      ctx.fillStyle = 'rgb(0, 0, 0)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Convert to blob
+      console.log("Capturing frame at time:", video.currentTime, "with dimensions:", canvas.width, "x", canvas.height);
+      
+      // Draw the video frame and check for errors
+      try {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Check if the canvas is empty/black (possible CORS issue)
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixelData = imageData.data;
+        
+        // Check if there are non-black pixels
+        const hasContent = Array.from(pixelData).some(
+          (value, index) => index % 4 !== 3 && value > 10
+        );
+        
+        if (!hasContent) {
+          console.warn("Canvas appears to be empty/black, possible CORS issue");
+          // Continue anyway, as sometimes the frame is just dark
+        }
+      } catch (drawError) {
+        console.error("Error drawing video to canvas:", drawError);
+        throw new Error(`Canvas drawing failed: ${drawError instanceof Error ? drawError.message : 'Unknown error'}. Possible CORS issue.`);
+      }
+      
+      // Convert to blob with better error handling
       const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(blob => {
-          if (blob) resolve(blob);
-          else reject(new Error("Failed to create blob from canvas"));
-        }, 'image/jpeg', 0.95);
+        try {
+          canvas.toBlob(blob => {
+            if (blob) resolve(blob);
+            else reject(new Error("Failed to create blob from canvas"));
+          }, 'image/jpeg', 0.92);
+        } catch (canvasError) {
+          reject(new Error(`Canvas toBlob failed: ${canvasError instanceof Error ? canvasError.message : 'Unknown error'}`));
+        }
       });
       
       // Create a file from the blob
       const timestamp = formatDuration(video.currentTime);
-      const file = new File([blob], `frame-${timestamp.replace(/:/g, "-")}.jpg`, { type: 'image/jpeg' });
+      const filename = `frame-${timestamp.replace(/:/g, "-")}-${Date.now()}.jpg`;
+      const file = new File([blob], filename, { type: 'image/jpeg' });
+      
+      console.log("Created file from blob:", {
+        filename,
+        size: blob.size,
+        type: blob.type
+      });
       
       // Upload to storage
       const uploadResult = await uploadSlideImage(file);
@@ -258,8 +393,14 @@ export const FramePickerModal = ({
         throw new Error("Failed to upload frame image");
       }
       
+      console.log("Successfully uploaded image:", uploadResult.url);
+      
+      // Generate a unique ID for the frame
+      const frameId = `frame-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
       // Add to captured frames
       const newFrame: ExtractedFrame = {
+        id: frameId,
         timestamp,
         imageUrl: uploadResult.url
       };
@@ -293,11 +434,20 @@ export const FramePickerModal = ({
   };
   
   const handleComplete = () => {
+    if (capturedFrames.length === 0) {
+      toast.warning("No frames selected. Please capture at least one frame.");
+      return;
+    }
     onComplete(capturedFrames);
   };
   
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!isOpen) {
+        console.log("Dialog closing via onOpenChange");
+        onClose();
+      }
+    }}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Select Video Frames</DialogTitle>
@@ -312,6 +462,13 @@ export const FramePickerModal = ({
           <div className="flex flex-col items-center justify-center p-8 text-destructive">
             <AlertCircle className="h-10 w-10 mb-2" />
             <p>{error}</p>
+            <Button 
+              variant="outline" 
+              onClick={onClose} 
+              className="mt-4"
+            >
+              Close
+            </Button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -321,14 +478,25 @@ export const FramePickerModal = ({
                 ref={videoRef}
                 src={videoUrl || undefined}
                 className="w-full h-full"
-                onLoadedMetadata={handleVideoLoaded}
-                onLoadedData={handleVideoLoaded}
+                onLoadedMetadata={() => console.log("Video metadata loaded")}
+                onCanPlay={() => console.log("Video can play event fired")}
                 controls={false}
                 crossOrigin="anonymous"
+                playsInline
+                preload="auto"
               />
               
               {/* Hidden canvas for frame capture */}
               <canvas ref={canvasRef} className="hidden" />
+              
+              {!isVideoReady && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                  <div className="text-white text-center">
+                    <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
+                    <p>Loading video...</p>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Video controls */}
@@ -347,6 +515,7 @@ export const FramePickerModal = ({
                 step={0.01}
                 onValueChange={handleTimeChange}
                 className="w-full"
+                disabled={!isVideoReady}
               />
               
               {/* Control buttons */}
@@ -356,7 +525,7 @@ export const FramePickerModal = ({
                     variant="outline" 
                     size="icon" 
                     onClick={seekBack}
-                    disabled={isLoading}
+                    disabled={isLoading || !isVideoReady}
                   >
                     <SkipBack className="h-4 w-4" />
                   </Button>
@@ -365,7 +534,7 @@ export const FramePickerModal = ({
                     variant="outline" 
                     size="icon" 
                     onClick={togglePlayPause}
-                    disabled={isLoading}
+                    disabled={isLoading || !isVideoReady}
                   >
                     {isPlaying ? (
                       <Pause className="h-4 w-4" />
@@ -378,7 +547,7 @@ export const FramePickerModal = ({
                     variant="outline" 
                     size="icon" 
                     onClick={seekForward}
-                    disabled={isLoading}
+                    disabled={isLoading || !isVideoReady}
                   >
                     <SkipForward className="h-4 w-4" />
                   </Button>
@@ -387,7 +556,7 @@ export const FramePickerModal = ({
                 <Button 
                   variant="default" 
                   onClick={captureFrame}
-                  disabled={isLoading || isCaptureLoading}
+                  disabled={isLoading || isCaptureLoading || !isVideoReady}
                   className="gap-2"
                 >
                   {isCaptureLoading ? (
@@ -419,11 +588,17 @@ export const FramePickerModal = ({
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   {capturedFrames.map((frame) => (
-                    <div key={frame.timestamp} className="relative border rounded-md overflow-hidden bg-muted/20">
+                    <div key={frame.id || frame.timestamp} className="relative border rounded-md overflow-hidden bg-muted/20">
                       <img 
                         src={frame.imageUrl} 
                         alt={`Frame at ${frame.timestamp}`} 
                         className="w-full aspect-video object-cover"
+                        onError={(e) => {
+                          console.error("Error loading frame image:", frame.imageUrl);
+                          // Set a placeholder for broken images
+                          (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/%3E%3C/svg%3E";
+                          (e.target as HTMLImageElement).classList.add("p-8", "opacity-30");
+                        }}
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-background/80 backdrop-blur-sm p-2 flex justify-between items-center">
                         <span className="text-xs font-mono">{frame.timestamp}</span>
