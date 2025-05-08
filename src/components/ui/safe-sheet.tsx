@@ -1,12 +1,17 @@
 
 import React, { useId, useEffect } from 'react';
 import { useUIReset } from '@/context/UIResetContext';
-import { Sheet, SheetContent, SheetProps } from '@/components/ui/sheet';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+
+// Define SheetProps interface since it's not exported from sheet.tsx
+interface SheetProps extends React.ComponentPropsWithoutRef<typeof Sheet> {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
 
 // Extended SheetProps with onOpenChange
 interface SafeSheetProps extends SheetProps {
   children: React.ReactNode;
-  onOpenChange?: (open: boolean) => void;
 }
 
 export const SafeSheet = ({ children, onOpenChange, open, ...props }: SafeSheetProps) => {

@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Droplet, CheckCircle, Key, FileText, Upload } from "lucide-react";
+import { ArrowRight, Droplet, CheckCircle, FileVideo, FileText, PenTool, Share } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
@@ -85,27 +85,32 @@ const LandingPage = () => {
       <section id="features" className="py-20">
         <div className="container">
           <div className="text-center mb-16 max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold mb-4">Powerful Features</h2>
+            <h2 className="text-3xl font-bold mb-4">Features You'll Love</h2>
             <p className="text-muted-foreground">
-              Built for educators, researchers, and students who need to extract structured information from video content.
+              Tools designed to transform your educational content into structured, accessible formats.
             </p>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             <FeatureCard
-              icon={<Upload className="h-8 w-8" />}
-              title="Flexible Input"
-              description="Upload video files, link to YouTube/Vimeo, or directly paste transcripts to generate slides."
+              icon={<FileVideo className="h-8 w-8" />}
+              title="Instant AI Slides From Video"
+              description="Convert long videos and dense texts into sharp, summarized slides instantly."
             />
             <FeatureCard
               icon={<FileText className="h-8 w-8" />}
-              title="Advanced Processing"
-              description="AI-powered extraction of key concepts, definitions, and hierarchical relationships."
+              title="Dynamic Content Extraction"
+              description="Extract crucial points from your materials automatically and accurately."
             />
             <FeatureCard
-              icon={<Key className="h-8 w-8" />}
-              title="Secure API Management"
-              description="Safely store and manage your OpenAI API keys with client-side encryption."
+              icon={<PenTool className="h-8 w-8" />}
+              title="Flexible Customization"
+              description="Easily modify slides to align with your teaching or studying style."
+            />
+            <FeatureCard
+              icon={<Share className="h-8 w-8" />}
+              title="Export and Share Effortlessly"
+              description="Quick and secure sharing for collaboration with colleagues, peers, or students."
             />
           </div>
         </div>

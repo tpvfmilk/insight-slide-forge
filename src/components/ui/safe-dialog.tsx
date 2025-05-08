@@ -1,13 +1,17 @@
 
 import React, { useId, useEffect } from 'react';
 import { useUIReset } from '@/context/UIResetContext';
-import { Dialog, DialogContent, DialogProps } from '@/components/ui/dialog';
-import { v4 as uuidv4 } from 'uuid';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+
+// Define DialogProps interface since it's not exported from dialog.tsx
+interface DialogProps extends React.ComponentPropsWithoutRef<typeof Dialog> {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
 
 // Extended DialogProps with onOpenChange
 interface SafeDialogProps extends DialogProps {
   children: React.ReactNode;
-  onOpenChange?: (open: boolean) => void;
 }
 
 export const SafeDialog = ({ children, onOpenChange, open, ...props }: SafeDialogProps) => {

@@ -87,6 +87,7 @@ export const createProject = async (projectData: Omit<Project, 'id' | 'created_a
   // Handle extracted_frames casting if present
   const supabaseProjectData = { ...projectData };
   if (supabaseProjectData.extracted_frames) {
+    // Fix the type casting issue - use type assertion to Json
     supabaseProjectData.extracted_frames = supabaseProjectData.extracted_frames as unknown as Json;
   }
 
@@ -124,7 +125,7 @@ export const updateProject = async (id: string, projectData: Partial<Project>): 
   
   // If projectData contains extracted_frames, ensure it's cast correctly for Supabase
   if (updatedData.extracted_frames) {
-    // Cast the extracted_frames to Json before sending to Supabase
+    // Fix the type casting issue - use type assertion to Json
     updatedData.extracted_frames = updatedData.extracted_frames as unknown as Json;
   }
     
