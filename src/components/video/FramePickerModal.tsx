@@ -68,15 +68,16 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     onClose();
   }, [onClose]);
   
-  // Log state for debugging
+  // Log when modal opens/closes
   useEffect(() => {
+    console.log("FramePickerModal open state changed:", open);
+    
     if (open) {
       console.log("FramePickerModal opened with props:", {
         videoPath,
         projectId,
         hasExistingFrames: existingFrames?.length > 0,
         videoMetadata,
-        open
       });
     }
   }, [open, existingFrames, projectId, videoMetadata, videoPath]);
@@ -491,8 +492,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     <Dialog 
       open={open} 
       onOpenChange={(isOpen) => {
+        console.log("Dialog onOpenChange triggered with isOpen:", isOpen);
         if (!isOpen) {
-          console.log("Dialog closing via onOpenChange");
           closeModal();
         }
       }}

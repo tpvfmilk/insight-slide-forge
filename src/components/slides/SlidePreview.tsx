@@ -234,7 +234,7 @@ export const SlidePreview = () => {
     setTimeout(() => {
       console.log("isFramePickerModalOpen state after update:", isFramePickerModalOpen);
     }, 100);
-  }, [project, projectId, isFramePickerModalOpen]);
+  }, [project, projectId]); // Removed isFramePickerModalOpen from dependencies to prevent stale state issues
 
   // New function to handle frame extraction with improved error handling
   const handleExtractFrames = useCallback(async () => {
@@ -419,7 +419,7 @@ export const SlidePreview = () => {
                 <span className="sr-only">Frame tools</span>
               </Button>
             </ContextMenuTrigger>
-            <ContextMenuContent align="end" className="bg-background border border-border shadow-md">
+            <ContextMenuContent className="bg-background border border-border shadow-md w-56 right-0 mt-1">
               {project?.source_type === 'video' && project?.source_file_path && (
                 <>
                   <ContextMenuVideoFrameButton 

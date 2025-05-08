@@ -1,4 +1,3 @@
-
 import * as React from "react"
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
@@ -180,7 +179,7 @@ const ContextMenuShortcut = ({
 }
 ContextMenuShortcut.displayName = "ContextMenuShortcut"
 
-// Fixed VideoFrameButton component to ensure proper event propagation and UI interaction
+// Fixed VideoFrameButton component with improved event handling and debugging
 const ContextMenuVideoFrameButton = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -188,19 +187,20 @@ const ContextMenuVideoFrameButton = React.forwardRef<
     disabled?: boolean;
   }
 >(({ onClick, children, disabled, className, ...props }, ref) => {
-  // Create a memoized handler to prevent unnecessary re-renders
+  // Create a memoized handler to prevent unnecessary re-renders and improve event handling
   const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    // Stop event propagation to prevent the context menu from closing
     e.preventDefault();
     e.stopPropagation();
     
-    // Add debugging logs
-    console.log("Button clicked, executing onClick handler");
+    console.log("ContextMenuVideoFrameButton clicked, disabled:", disabled);
     
     if (onClick && !disabled) {
       // Execute the callback with a slight delay to ensure UI updates first
       setTimeout(() => {
+        console.log("Executing onClick handler");
         onClick();
-      }, 10);
+      }, 50);
     }
   }, [onClick, disabled]);
 
@@ -215,6 +215,7 @@ const ContextMenuVideoFrameButton = React.forwardRef<
       onClick={handleClick}
       disabled={disabled}
       type="button" // Explicitly set button type to avoid form submission
+      tabIndex={0} // Ensure the button is focusable
       {...props}
     >
       {children}
