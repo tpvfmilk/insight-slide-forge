@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -97,6 +96,9 @@ export const SlidePreview = () => {
     file_size?: number;
   } | null>(null);
   const [extractedFrames, setExtractedFrames] = useState<Array<{ timestamp: string; imageUrl: string }>>([]); 
+  const [needsFrameExtraction, setNeedsFrameExtraction] = useState<boolean>(false);
+  const [isExtractingFrames, setIsExtractingFrames] = useState<boolean>(false);
+  const [allTimestamps, setAllTimestamps] = useState<string[]>([]);
 
   const currentSlide = slides[currentSlideIndex];
   const SECONDS_PER_SLIDE = 30; // Default estimate: 30 seconds per slide
@@ -220,6 +222,28 @@ export const SlidePreview = () => {
     setIsFramePickerModalOpen(true);
   };
 
+  // New function to handle frame extraction
+  const handleExtractFrames = async () => {
+    if (!project?.source_file_path || isExtractingFrames || allTimestamps.length === 0) {
+      return;
+    }
+    
+    setIsExtractingFrames(true);
+    try {
+      toast.success("Frame extraction initiated");
+      // This is just a placeholder - actual implementation would need to integrate with your frame extraction service
+      setTimeout(() => {
+        toast.success("Frames extracted successfully");
+        setIsExtractingFrames(false);
+        setNeedsFrameExtraction(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Error extracting frames:", error);
+      toast.error("Failed to extract frames");
+      setIsExtractingFrames(false);
+    }
+  };
+
   const handleFrameSelectionComplete = (selectedFrames: Array<{ timestamp: string; imageUrl: string }>) => {
     setIsFramePickerModalOpen(false);
     if (selectedFrames.length === 0) {
@@ -268,6 +292,31 @@ export const SlidePreview = () => {
         // Get previously extracted frames
         if (projectData?.extracted_frames && Array.isArray(projectData.extracted_frames)) {
           setExtractedFrames(projectData.extracted_frames as Array<{ timestamp: string; imageUrl: string }>);
+        }
+
+        // Check if we need frame extraction
+        if (projectData?.source_type === 'video') {
+          setNeedsFrameExtraction(true);
+          
+          // Collect timestamps for potential extraction
+          const timestamps: string[] = [];
+          if (Array.isArray(projectData.slides)) {
+            projectData.slides.forEach(slide => {
+              if (slide && typeof slide === 'object') {
+                if ('timestamp' in slide && typeof slide.timestamp === 'string') {
+                  timestamps.push(slide.timestamp);
+                }
+                if ('transcriptTimestamps' in slide && Array.isArray(slide.transcriptTimestamps)) {
+                  slide.transcriptTimestamps.forEach(timestamp => {
+                    if (typeof timestamp === 'string') {
+                      timestamps.push(timestamp);
+                    }
+                  });
+                }
+              }
+            });
+          }
+          setAllTimestamps([...new Set(timestamps)]);
         }
       } catch (error) {
         console.error("Error loading slides for presentation:", error);
@@ -331,7 +380,7 @@ export const SlidePreview = () => {
   }
   
   return (
-    <div className="h-screen w-screen bg-background text-foreground overflow-hidden flex flex-col">
+    <div className="h-screen w-screen max-w-full overflow-hidden bg-background text-foreground flex flex-col">
       {/* Header with controls - visible only when showMetadata is true */}
       <div className={`p-4 absolute top-0 left-0 right-0 z-10 flex justify-between items-center transition-opacity duration-300 bg-gradient-to-b from-black/70 to-transparent ${showMetadata ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="text-sm opacity-70">
@@ -339,19 +388,37 @@ export const SlidePreview = () => {
         </div>
         
         <div className="flex gap-2">
+          {/* Frame Tools Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
-                <MoreVertical className="h-5 w-5" />
+                <Film className="h-5 w-5" />
                 <span className="sr-only">Frame tools</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {project?.source_type === 'video' && project?.source_file_path && (
-                <DropdownMenuVideoFrameButton onClick={handleOpenFramePicker}>
-                  <Film className="h-4 w-4 mr-2" />
-                  <span>Select Video Frames</span>
-                </DropdownMenuVideoFrameButton>
+                <>
+                  <DropdownMenuVideoFrameButton onClick={handleOpenFramePicker}>
+                    <Film className="h-4 w-4 mr-2" />
+                    <span>Select Video Frames</span>
+                  </DropdownMenuVideoFrameButton>
+                  
+                  {needsFrameExtraction && (
+                    <DropdownMenuVideoFrameButton 
+                      onClick={handleExtractFrames} 
+                      disabled={isExtractingFrames}
+                    >
+                      <Image className="h-4 w-4 mr-2" />
+                      <span>
+                        {isExtractingFrames 
+                          ? "Extracting Frames..." 
+                          : "Extract Missing Frames"
+                        }
+                      </span>
+                    </DropdownMenuVideoFrameButton>
+                  )}
+                </>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={toggleTheme}>

@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
@@ -179,6 +180,32 @@ const ContextMenuShortcut = ({
 }
 ContextMenuShortcut.displayName = "ContextMenuShortcut"
 
+// Adding the VideoFrameButton component for consistency with the dropdown menu
+const ContextMenuVideoFrameButton = ({
+  onClick,
+  children,
+  disabled,
+  ...props
+}: React.HTMLAttributes<HTMLButtonElement> & {
+  onClick?: () => void;
+  disabled?: boolean;
+}) => {
+  return (
+    <button
+      className={cn(
+        "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        disabled && "opacity-50 cursor-not-allowed"
+      )}
+      onClick={onClick}
+      disabled={disabled}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+ContextMenuVideoFrameButton.displayName = "ContextMenuVideoFrameButton";
+
 export {
   ContextMenu,
   ContextMenuTrigger,
@@ -195,4 +222,5 @@ export {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuRadioGroup,
+  ContextMenuVideoFrameButton,
 }
