@@ -1,6 +1,5 @@
 
 import { ApiKeyCard } from "@/components/dashboard/ApiKeyCard";
-import { ModelSelector } from "@/components/dashboard/ModelSelector";
 import { RecentProjects } from "@/components/dashboard/RecentProjects";
 import { UsageStats } from "@/components/dashboard/UsageStats";
 import { InsightLayout } from "@/components/layout/InsightLayout";
@@ -27,9 +26,10 @@ const DashboardPage = () => {
           </Button>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          <ApiKeyCard />
-          <ModelSelector />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          <div className="xl:col-span-2">
+            <ApiKeyCard />
+          </div>
           <RecentProjects />
           <UsageStats />
         </div>
