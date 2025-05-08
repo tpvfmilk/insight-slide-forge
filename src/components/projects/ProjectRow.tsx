@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { FileText, Edit, Download, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Project } from "@/services/projectService";
-import { ExpirationBadge } from "./ExpirationBadge";
+import { FileSizeBadge } from "./FileSizeBadge";
 import { formatDate } from "@/utils/formatUtils";
 import { formatDuration } from "@/utils/formatUtils";
 import { 
@@ -31,15 +31,13 @@ interface ProjectRowProps {
   handleDeleteProject: (id: string) => Promise<void>;
   handleEditTitle: (project: Project) => void;
   handleExport: (projectId: string, format: string) => void;
-  calculateExpiresIn: (expiresAt: string) => number;
 }
 
 export function ProjectRow({
   project,
   handleDeleteProject,
   handleEditTitle,
-  handleExport,
-  calculateExpiresIn
+  handleExport
 }: ProjectRowProps) {
   return (
     <tr key={project.id} className="border-t hover:bg-muted/30">
@@ -79,7 +77,7 @@ export function ProjectRow({
           : 0}
       </td>
       <td className="p-4">
-        <ExpirationBadge hours={calculateExpiresIn(project.expires_at)} />
+        <FileSizeBadge fileSize={project.video_metadata?.file_size} />
       </td>
       <td className="p-4 text-right">
         <div className="flex justify-end items-center gap-2">

@@ -12,7 +12,6 @@ interface ProjectsTableProps {
   handleDeleteProject: (id: string) => Promise<void>;
   handleEditTitle: (project: Project) => void;
   handleExport: (projectId: string, format: string) => void;
-  calculateExpiresIn: (expiresAt: string) => number;
 }
 
 export function ProjectsTable({
@@ -20,8 +19,7 @@ export function ProjectsTable({
   filteredProjects,
   handleDeleteProject,
   handleEditTitle,
-  handleExport,
-  calculateExpiresIn
+  handleExport
 }: ProjectsTableProps) {
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -39,7 +37,6 @@ export function ProjectsTable({
                   handleDeleteProject={handleDeleteProject}
                   handleEditTitle={handleEditTitle}
                   handleExport={handleExport}
-                  calculateExpiresIn={calculateExpiresIn}
                 />
               ))
             ) : (

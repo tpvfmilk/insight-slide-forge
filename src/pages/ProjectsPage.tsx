@@ -70,15 +70,6 @@ const ProjectsPage = () => {
     project.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
   
-  // Calculate hours remaining until expiration
-  const calculateExpiresIn = (expiresAt: string) => {
-    const now = new Date();
-    const expiration = new Date(expiresAt);
-    const diffMs = expiration.getTime() - now.getTime();
-    const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
-    return Math.max(0, diffHours); // Ensure we don't return negative hours
-  };
-  
   const handleExport = (projectId: string, format: string) => {
     // This would be implemented in exportService.ts
     toast.success(`Exporting as ${format}...`);
@@ -98,7 +89,6 @@ const ProjectsPage = () => {
           handleDeleteProject={handleDeleteProject}
           handleEditTitle={handleEditTitle}
           handleExport={handleExport}
-          calculateExpiresIn={calculateExpiresIn}
         />
       </div>
 
