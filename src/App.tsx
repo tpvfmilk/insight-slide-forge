@@ -6,7 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { useEffect } from "react";
+import { UIResetProvider } from "@/context/UIResetContext";
+import { EmergencyResetButton } from "@/components/ui/EmergencyResetButton";
 
 // Pages
 import LandingPage from "./pages/LandingPage";
@@ -27,11 +28,11 @@ import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  // No longer initializing storage here, as it will be done after authentication
   return (
     <>
       <Toaster />
       <Sonner />
+      <EmergencyResetButton />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
@@ -64,7 +65,9 @@ const App = () => (
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
-          <AppContent />
+          <UIResetProvider>
+            <AppContent />
+          </UIResetProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
