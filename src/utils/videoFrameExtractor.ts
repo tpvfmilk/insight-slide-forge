@@ -45,11 +45,11 @@ export async function extractFramesFromVideoUrl(
     
     // Critical event: Wait until the video can actually play
     video.oncanplay = function() {
-      console.log(`Video is ready to play. Dimensions: ${video.videoWidth}x${video.videoHeight}`);
+      console.log(`Video is ready to play. Dimensions: ${video.videoWidth}x${video.videoHeight}, Network state: ${video.networkState}, Ready state: ${video.readyState}`);
       
       // If video dimensions are 0, we have an issue
       if (video.videoWidth === 0 || video.videoHeight === 0) {
-        reject(new Error("Video dimensions could not be determined. Check CORS settings."));
+        reject(new Error("Video dimensions could not be determined. Check CORS settings and ensure the video is properly loaded."));
         return;
       }
       
@@ -70,7 +70,7 @@ export async function extractFramesFromVideoUrl(
         console.log("Canvas test successful, pixel data available:", testData.data.some(val => val !== 0));
       } catch (e) {
         console.error("Canvas error on test draw:", e);
-        reject(new Error(`Canvas drawing failed: ${e.message}. Possible CORS issue.`));
+        reject(new Error(`Canvas drawing failed: ${e.message}. Possible CORS issue. Try using a different video source or ensure proper CORS headers are set.`));
         return;
       }
       
@@ -163,7 +163,7 @@ export async function extractFramesFromVideoUrl(
             );
             
             if (!hasContent) {
-              console.warn(`Frame at ${timestamp} appears to be empty/black`);
+              console.warn(`Frame at ${timestamp} appears to be empty/black - this may be due to CORS restrictions or a dark video frame`);
             }
             
             // Add timestamp as text overlay for debugging (can be commented out in production)

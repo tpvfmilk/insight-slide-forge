@@ -197,7 +197,12 @@ const ContextMenuVideoFrameButton = ({
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Log when the button is clicked for debugging
+    console.log("ContextMenuVideoFrameButton clicked");
+    
     if (onClick && !disabled) {
+      console.log("Executing onClick handler");
       onClick();
     }
   };
@@ -205,7 +210,7 @@ const ContextMenuVideoFrameButton = ({
   return (
     <button
       className={cn(
-        "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         disabled && "opacity-50 cursor-not-allowed",
         className
       )}

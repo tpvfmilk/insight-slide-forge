@@ -58,14 +58,17 @@ export const FramePickerModal = ({
         videoPath,
         projectId,
         hasExistingFrames: existingFrames?.length > 0,
-        videoMetadata
+        videoMetadata,
+        open
       });
     }
-  }, [open]);
+  }, [open, existingFrames, projectId, videoMetadata, videoPath]);
   
-  // Load the video when the component mounts
+  // Load the video when the component mounts or when open changes
   useEffect(() => {
     if (!open) return;
+    
+    console.log("FramePickerModal is open, loading video");
     
     const fetchVideo = async () => {
       setIsLoading(true);
@@ -99,7 +102,7 @@ export const FramePickerModal = ({
           url.searchParams.append('_cb', timestamp.toString());
           
           setVideoUrl(url.toString());
-          console.log("Successfully loaded video from video_uploads bucket");
+          console.log("Successfully loaded video from video_uploads bucket:", url.toString());
           
           // Wait a moment before considering loading complete
           setTimeout(() => {
@@ -130,7 +133,7 @@ export const FramePickerModal = ({
             url.searchParams.append('_cb', timestamp.toString());
             
             setVideoUrl(url.toString());
-            console.log("Successfully loaded video from videos bucket");
+            console.log("Successfully loaded video from videos bucket:", url.toString());
             
             // Wait a moment before considering loading complete
             setTimeout(() => {
@@ -163,6 +166,7 @@ export const FramePickerModal = ({
               url.searchParams.append('_cb', timestamp.toString());
               
               setVideoUrl(url.toString());
+              console.log("Using project source URL:", url.toString());
               
               // Wait a moment before considering loading complete
               setTimeout(() => {
@@ -220,7 +224,7 @@ export const FramePickerModal = ({
     }
   }, [isPlaying]);
   
-  // Enhanced video loading event handlers
+  // Enhanced video loading event handlers with better debugging
   const handleVideoEvents = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -230,12 +234,21 @@ export const FramePickerModal = ({
         videoWidth: video.videoWidth,
         videoHeight: video.videoHeight,
         duration: video.duration,
-        readyState: video.readyState
+        readyState: video.readyState,
+        networkState: video.networkState
       });
       
       // Use the video's duration or fall back to the metadata
       setVideoDuration(video.duration || videoMetadata?.duration || 0);
       setIsVideoReady(true);
+      
+      // Manually set poster frame by seeking to the first frame
+      if (video.duration > 0) {
+        video.currentTime = 0.1;
+      }
+      
+      // Log for debugging
+      toast.success("Video loaded successfully");
     };
     
     const handleLoadedData = () => {
@@ -243,7 +256,16 @@ export const FramePickerModal = ({
       
       if (video.videoWidth === 0 || video.videoHeight === 0) {
         console.warn("Video dimensions are zero, possible CORS issue");
+        toast.warning("Video dimensions could not be determined, frames may not capture correctly");
       }
+    };
+    
+    const handleLoadedMetadata = () => {
+      console.log("Video metadata loaded:", {
+        duration: video.duration,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight
+      });
     };
     
     const handleError = () => {
@@ -256,11 +278,13 @@ export const FramePickerModal = ({
     
     video.addEventListener('canplay', handleCanPlay);
     video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('error', handleError);
     
     return () => {
       video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('error', handleError);
     };
   };
@@ -356,7 +380,7 @@ export const FramePickerModal = ({
         
         if (!hasContent) {
           console.warn("Canvas appears to be empty/black, possible CORS issue");
-          // Continue anyway, as sometimes the frame is just dark
+          toast.warning("Frame may appear blank due to video security restrictions. Try a different video source if available.");
         }
       } catch (drawError) {
         console.error("Error drawing video to canvas:", drawError);

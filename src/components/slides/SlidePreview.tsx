@@ -226,7 +226,9 @@ export const SlidePreview = () => {
       return;
     }
     
+    // Explicitly set the modal state to open
     setIsFramePickerModalOpen(true);
+    console.log("isFramePickerModalOpen set to true", { isFramePickerModalOpen: true });
   };
 
   // New function to handle frame extraction
