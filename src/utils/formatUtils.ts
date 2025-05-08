@@ -1,4 +1,3 @@
-
 /**
  * Format a file size from bytes to human readable format
  * @param bytes File size in bytes
@@ -51,4 +50,14 @@ export const timestampToSeconds = (timestamp: string): number => {
   }
   
   return 0;
+};
+
+/**
+ * Format a date string to a human readable format
+ * @param dateString Date string
+ * @returns Formatted date string
+ */
+export const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString();
 };
