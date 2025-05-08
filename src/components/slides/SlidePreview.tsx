@@ -437,7 +437,7 @@ export const SlidePreview = () => {
                 <>
                   <ContextMenuVideoFrameButton 
                     onClick={() => {
-                      console.log("Select Video Frames button clicked");
+                      console.log("Manual Frame Selection button clicked");
                       handleOpenFramePicker();
                     }} 
                     className="cursor-pointer"
@@ -561,6 +561,9 @@ export const SlidePreview = () => {
           existingFrames={extractedFrames} 
         />
       )}
+      
+      {/* Emergency Reset Button to help when UI gets stuck */}
+      <EmergencyResetButton />
     </div>
   );
 };

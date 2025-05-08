@@ -24,35 +24,81 @@ export const detectBlockingUI = (): boolean => {
       highZIndexElements.push(element);
     }
   }
+
+  // Check specifically for modal backdrops and context menus
+  const modalBackdrops = document.querySelectorAll('.bg-black/80, [aria-hidden="true"]');
+  const contextMenus = document.querySelectorAll('[role="menu"]');
   
-  return openRadixElements.length > 0 || highZIndexElements.length > 0;
+  return openRadixElements.length > 0 || 
+         highZIndexElements.length > 0 || 
+         modalBackdrops.length > 0 || 
+         contextMenus.length > 0;
 };
 
 /**
  * Force removes any potential UI blockers from the DOM
  */
 export const forceRemoveUIBlockers = (): void => {
-  // Remove any overlay elements that might be stuck
-  const overlays = document.querySelectorAll('[role="dialog"], [role="tooltip"], [role="menu"]');
-  overlays.forEach(overlay => {
-    if (overlay.parentNode) {
-      try {
-        // First try to set data-state to closed for smooth animation
-        overlay.setAttribute('data-state', 'closed');
-        
-        // After animation time, remove if still in DOM
-        setTimeout(() => {
-          if (document.body.contains(overlay) && overlay.parentNode) {
-            overlay.parentNode.removeChild(overlay);
-          }
-        }, 300);
-      } catch (error) {
-        console.error('Error removing overlay:', error);
-      }
+  console.log("Removing UI blockers...");
+  
+  // Set all open dialogs and sheets to closed state
+  const openElements = document.querySelectorAll('[data-state="open"]');
+  openElements.forEach(element => {
+    try {
+      element.setAttribute('data-state', 'closed');
+      console.log("Set element to closed state:", element);
+    } catch (err) {
+      console.error("Error setting element state:", err);
     }
   });
   
-  // Reset body styles that might have been set by modal libraries
+  // Find and remove modal overlays
+  const modalOverlays = document.querySelectorAll('.bg-black/80, [role="dialog"]');
+  modalOverlays.forEach(overlay => {
+    try {
+      if (overlay.parentNode) {
+        // For RadixUI components, first try closing them gracefully
+        overlay.setAttribute('data-state', 'closed');
+        
+        // Then after a short delay remove them if they're still in the DOM
+        setTimeout(() => {
+          if (document.body.contains(overlay) && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+            console.log("Removed overlay:", overlay);
+          }
+        }, 100);
+      }
+    } catch (err) {
+      console.error("Error removing overlay:", err);
+    }
+  });
+
+  // Remove any open context menus
+  const contextMenus = document.querySelectorAll('[role="menu"]');
+  contextMenus.forEach(menu => {
+    try {
+      if (menu.parentNode) {
+        menu.setAttribute('data-state', 'closed');
+        
+        setTimeout(() => {
+          if (document.body.contains(menu) && menu.parentNode) {
+            menu.parentNode.removeChild(menu);
+            console.log("Removed context menu:", menu);
+          }
+        }, 100);
+      }
+    } catch (err) {
+      console.error("Error removing context menu:", err);
+    }
+  });
+  
+  // Make sure body is scrollable again
   document.body.style.overflow = '';
   document.body.style.paddingRight = '';
+  document.body.style.pointerEvents = '';
+  
+  // Remove any inline styles that might be blocking clicks
+  document.querySelectorAll('[style*="pointer-events: none"]').forEach(el => {
+    (el as HTMLElement).style.pointerEvents = 'auto';
+  });
 };

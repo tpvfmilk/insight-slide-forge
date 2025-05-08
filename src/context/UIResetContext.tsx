@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { toast } from "sonner";
+import { forceRemoveUIBlockers } from "@/utils/uiUtils";
 
 // Type for the UI elements that can be registered
 type RegisteredUIElement = {
@@ -61,16 +62,8 @@ export const UIResetProvider = ({ children }: UIResetProviderProps) => {
       }
     });
     
-    // Clear any stuck overlays by finding and removing them from the DOM
-    const overlays = document.querySelectorAll('[data-state="open"]');
-    overlays.forEach(overlay => {
-      try {
-        // For RadixUI components, setting data-state to closed often helps
-        overlay.setAttribute('data-state', 'closed');
-      } catch (error) {
-        console.error('Failed to clear overlay:', error);
-      }
-    });
+    // Use our enhanced utility function to force remove UI blockers
+    forceRemoveUIBlockers();
 
     // Reset active elements state
     setActiveUIElements([]);
@@ -120,6 +113,25 @@ export const UIResetProvider = ({ children }: UIResetProviderProps) => {
   useEffect(() => {
     setIsEmergencyVisible(activeUIElements.length >= 2);
   }, [activeUIElements]);
+
+  // Global click handler to detect possible stuck UI states
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      const blockedUI = document.querySelectorAll('[data-state="open"]');
+      const blockedOverlays = document.querySelectorAll('.bg-black/80');
+      
+      // If we detect open UI elements but no registered active elements,
+      // something might be stuck
+      if ((blockedUI.length > 0 || blockedOverlays.length > 0) && activeUIElements.length === 0) {
+        setIsEmergencyVisible(true);
+      }
+    };
+    
+    document.addEventListener('click', handleGlobalClick);
+    return () => {
+      document.removeEventListener('click', handleGlobalClick);
+    };
+  }, [activeUIElements.length]);
 
   const value = {
     registerUIElement,
