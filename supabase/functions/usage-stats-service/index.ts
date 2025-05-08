@@ -70,22 +70,20 @@ serve(async (req) => {
 
 // Get total token usage statistics for a user
 async function getTotalStats(userId: string) {
-  const { data, error } = await supabase.rpc('get_user_token_stats', { 
-    uid: userId 
-  });
+  const { data, error } = await supabase.rpc('get_user_token_stats');
 
   if (error) {
     console.error("Error fetching total usage stats:", error);
     throw error;
   }
 
-  return data;
+  // The RPC function returns an array with one object
+  return Array.isArray(data) ? data[0] : data;
 }
 
 // Get daily token usage for a specified number of days
 async function getDailyUsage(userId: string, days: number) {
   const { data, error } = await supabase.rpc('get_daily_token_usage', { 
-    uid: userId, 
     days_to_fetch: days 
   });
 
@@ -99,9 +97,7 @@ async function getDailyUsage(userId: string, days: number) {
 
 // Reset token usage statistics for a user
 async function resetStats(userId: string) {
-  const { data, error } = await supabase.rpc('reset_user_token_stats', { 
-    uid: userId 
-  });
+  const { data, error } = await supabase.rpc('reset_user_token_stats');
 
   if (error) {
     console.error("Error resetting usage stats:", error);

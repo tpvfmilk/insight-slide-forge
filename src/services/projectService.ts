@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
@@ -86,8 +87,9 @@ export const createProject = async (projectData: Omit<Project, 'id' | 'created_a
   // Handle extracted_frames casting if present
   const supabaseProjectData = { ...projectData };
   if (supabaseProjectData.extracted_frames) {
-    // Fix the type casting issue by ensuring it's properly converted to Json type
-    supabaseProjectData.extracted_frames = supabaseProjectData.extracted_frames as unknown as Json;
+    // Fix the type casting issue
+    const jsonFrames = supabaseProjectData.extracted_frames as any;
+    supabaseProjectData.extracted_frames = jsonFrames;
   }
 
   const { data, error } = await supabase
@@ -124,8 +126,9 @@ export const updateProject = async (id: string, projectData: Partial<Project>): 
   
   // If projectData contains extracted_frames, ensure it's cast correctly for Supabase
   if (updatedData.extracted_frames) {
-    // Fix the type casting issue by ensuring it's properly converted to Json type
-    updatedData.extracted_frames = updatedData.extracted_frames as unknown as Json;
+    // Fix the type casting issue
+    const jsonFrames = updatedData.extracted_frames as any;
+    updatedData.extracted_frames = jsonFrames;
   }
     
   const { error } = await supabase

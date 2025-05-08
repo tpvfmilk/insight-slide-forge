@@ -1,6 +1,5 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/context/AuthContext";
 
 export interface UsageStatistics {
   totalTokens: number;
@@ -37,12 +36,15 @@ export const fetchTotalUsageStats = async (): Promise<UsageStatistics> => {
     };
   }
 
-  // Return the first row of the result
+  // The data comes as an array with a single row, so we need to extract the first element
+  const statsData = Array.isArray(data) ? data[0] : data;
+
+  // Return the data
   return {
-    totalTokens: data.total_tokens || 0,
-    apiRequests: data.api_requests || 0,
-    estimatedCost: data.estimated_cost || 0,
-    lastUsed: data.last_used || null,
+    totalTokens: statsData.total_tokens || 0,
+    apiRequests: statsData.api_requests || 0,
+    estimatedCost: statsData.estimated_cost || 0,
+    lastUsed: statsData.last_used || null,
   };
 };
 
