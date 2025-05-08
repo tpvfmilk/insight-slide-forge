@@ -179,94 +179,6 @@ const ContextMenuShortcut = ({
 }
 ContextMenuShortcut.displayName = "ContextMenuShortcut"
 
-// Enhanced VideoFrameButton component with reliable event handling and cleanup
-const ContextMenuVideoFrameButton = React.forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement> & {
-    onClick?: () => void;
-    disabled?: boolean;
-  }
->(({ onClick, children, disabled, className, ...props }, ref) => {
-  // Store the click handler in a ref to ensure consistent identity
-  const clickHandlerRef = React.useRef(onClick);
-  
-  // Update the ref when onClick changes
-  React.useEffect(() => {
-    clickHandlerRef.current = onClick;
-  }, [onClick]);
-  
-  // Create a handler that properly stops propagation and prevents default
-  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    // Prevent default behavior and stop propagation
-    e.preventDefault();
-    e.stopPropagation();
-    
-    console.log("ContextMenuVideoFrameButton clicked, disabled:", disabled);
-    
-    if (!disabled && clickHandlerRef.current) {
-      // Use a requestAnimationFrame to ensure UI updates first
-      window.requestAnimationFrame(() => {
-        // Immediately close the context menu by finding and closing its parent
-        let menuElement: HTMLElement | null = e.currentTarget;
-        while (menuElement && !menuElement.hasAttribute('role')) {
-          menuElement = menuElement.parentElement as HTMLElement | null;
-        }
-        
-        // Once we've found the menu element, force it closed
-        if (menuElement && menuElement.getAttribute('role') === 'menu') {
-          console.log("Found menu element, closing it");
-          try {
-            menuElement.setAttribute('data-state', 'closed');
-            
-            // Try to find and remove the portal container
-            const portals = document.querySelectorAll('[data-radix-portal]');
-            portals.forEach(portal => {
-              if (portal.contains(menuElement) && portal.parentElement) {
-                setTimeout(() => {
-                  if (document.body.contains(portal) && portal.parentElement) {
-                    console.log("Removing portal containing menu");
-                    portal.parentElement.removeChild(portal);
-                  }
-                }, 50);
-              }
-            });
-          } catch (err) {
-            console.error("Error closing menu:", err);
-          }
-        }
-        
-        // Execute the callback with a slight delay
-        setTimeout(() => {
-          console.log("Executing onClick handler");
-          if (clickHandlerRef.current) {
-            clickHandlerRef.current();
-          }
-        }, 200);
-      });
-    }
-  }, [disabled]);
-  
-  return (
-    <button
-      ref={ref}
-      className={cn(
-        "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        disabled && "opacity-50 cursor-not-allowed",
-        className
-      )}
-      onClick={handleClick}
-      disabled={disabled}
-      type="button" // Explicitly set button type to avoid form submission
-      tabIndex={0} // Ensure the button is focusable
-      {...props}
-    >
-      {children}
-    </button>
-  );
-});
-
-ContextMenuVideoFrameButton.displayName = "ContextMenuVideoFrameButton";
-
 export {
   ContextMenu,
   ContextMenuTrigger,
@@ -283,5 +195,4 @@ export {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuRadioGroup,
-  ContextMenuVideoFrameButton,
 }

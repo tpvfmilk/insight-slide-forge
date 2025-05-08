@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,16 +8,14 @@ import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { 
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-  ContextMenuVideoFrameButton,
-} from "@/components/ui/context-menu";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuVideoFrameButton,
+} from "@/components/ui/dropdown-menu";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
-import { forceRemoveUIBlockers } from "@/utils/uiUtils";
-import { EmergencyResetButton } from "@/components/ui/EmergencyResetButton";
 
 export interface Slide {
   id: string;
@@ -97,10 +96,7 @@ export const SlidePreview = () => {
     file_type?: string;
     file_size?: number;
   } | null>(null);
-  const [extractedFrames, setExtractedFrames] = useState<Array<{ timestamp: string; imageUrl: string; id?: string }>>([]);
-  const [needsFrameExtraction, setNeedsFrameExtraction] = useState<boolean>(false);
-  const [isExtractingFrames, setIsExtractingFrames] = useState<boolean>(false);
-  const [allTimestamps, setAllTimestamps] = useState<string[]>([]);
+  const [extractedFrames, setExtractedFrames] = useState<Array<{ timestamp: string; imageUrl: string }>>([]); 
 
   const currentSlide = slides[currentSlideIndex];
   const SECONDS_PER_SLIDE = 30; // Default estimate: 30 seconds per slide
@@ -216,69 +212,23 @@ export const SlidePreview = () => {
     }
   };
 
-  // Enhanced frame picker handler with better error handling and UI cleanup
-  const handleOpenFramePicker = useCallback(() => {
-    console.log("Opening frame picker modal", {
-      projectId,
-      hasSourceFilePath: !!project?.source_file_path,
-    });
-    
-    // Force close any open menus to prevent UI blocking
-    forceRemoveUIBlockers();
-    
-    // Set the modal state to open with a slightly longer delay to ensure menu closes first
-    setTimeout(() => {
-      console.log("Setting isFramePickerModalOpen to true");
-      setIsFramePickerModalOpen(true);
-    }, 150); // Increased delay for better sequencing
-  }, [project, projectId]);
-
-  // New function to handle frame extraction with improved error handling
-  const handleExtractFrames = useCallback(async () => {
-    if (!project?.source_file_path || isExtractingFrames || allTimestamps.length === 0) {
-      console.log("Cannot extract frames:", { 
-        hasSourceFilePath: !!project?.source_file_path,
-        isExtractingFrames,
-        timestampsCount: allTimestamps.length
-      });
+  const handleOpenFramePicker = () => {
+    if (!project?.source_file_path) {
+      toast.error("No video source available");
       return;
     }
-    
-    // Force close any open menus to prevent UI blocking
-    forceRemoveUIBlockers();
-    
-    setIsExtractingFrames(true);
-    try {
-      toast.success("Frame extraction initiated");
-      // This is just a placeholder - actual implementation would need to integrate with your frame extraction service
-      setTimeout(() => {
-        toast.success("Frames extracted successfully");
-        setIsExtractingFrames(false);
-        setNeedsFrameExtraction(false);
-      }, 2000);
-    } catch (error) {
-      console.error("Error extracting frames:", error);
-      toast.error("Failed to extract frames");
-      setIsExtractingFrames(false);
-    }
-  }, [project, isExtractingFrames, allTimestamps]);
+    setIsFramePickerModalOpen(true);
+  };
 
-  const handleFrameSelectionComplete = useCallback((selectedFrames: Array<{ timestamp: string; imageUrl: string; id?: string }>) => {
-    console.log("Frame selection complete", selectedFrames);
-    
-    // Force close modal and any stray UI elements
+  const handleFrameSelectionComplete = (selectedFrames: Array<{ timestamp: string; imageUrl: string }>) => {
     setIsFramePickerModalOpen(false);
-    forceRemoveUIBlockers();
-    
     if (selectedFrames.length === 0) {
       toast.info("No frames were selected");
       return;
     }
-    
     // Here you would normally update the slides with the selected frames
-    setExtractedFrames(selectedFrames); // Store the selected frames
     toast.success(`${selectedFrames.length} frames have been selected`);
-  }, []);
+  };
   
   useEffect(() => {
     const loadProject = async () => {
@@ -317,32 +267,7 @@ export const SlidePreview = () => {
 
         // Get previously extracted frames
         if (projectData?.extracted_frames && Array.isArray(projectData.extracted_frames)) {
-          setExtractedFrames(projectData.extracted_frames as Array<{ timestamp: string; imageUrl: string; id?: string }>);
-        }
-
-        // Check if we need frame extraction
-        if (projectData?.source_type === 'video') {
-          setNeedsFrameExtraction(true);
-          
-          // Collect timestamps for potential extraction
-          const timestamps: string[] = [];
-          if (Array.isArray(projectData.slides)) {
-            projectData.slides.forEach(slide => {
-              if (slide && typeof slide === 'object') {
-                if ('timestamp' in slide && typeof slide.timestamp === 'string') {
-                  timestamps.push(slide.timestamp);
-                }
-                if ('transcriptTimestamps' in slide && Array.isArray(slide.transcriptTimestamps)) {
-                  slide.transcriptTimestamps.forEach(timestamp => {
-                    if (typeof timestamp === 'string') {
-                      timestamps.push(timestamp);
-                    }
-                  });
-                }
-              }
-            });
-          }
-          setAllTimestamps([...new Set(timestamps)]);
+          setExtractedFrames(projectData.extracted_frames as Array<{ timestamp: string; imageUrl: string }>);
         }
       } catch (error) {
         console.error("Error loading slides for presentation:", error);
@@ -355,12 +280,6 @@ export const SlidePreview = () => {
     
     loadProject();
   }, [projectId]);
-  
-  // Emergency reset function for UI
-  const handleEmergencyReset = () => {
-    forceRemoveUIBlockers();
-    toast.success("UI has been reset");
-  };
   
   // Get animation classes based on transition settings
   const getSlideAnimationClasses = () => {
@@ -412,7 +331,7 @@ export const SlidePreview = () => {
   }
   
   return (
-    <div className="h-screen w-screen max-w-full overflow-hidden bg-background text-foreground flex flex-col">
+    <div className="h-screen w-screen bg-background text-foreground overflow-hidden flex flex-col">
       {/* Header with controls - visible only when showMetadata is true */}
       <div className={`p-4 absolute top-0 left-0 right-0 z-10 flex justify-between items-center transition-opacity duration-300 bg-gradient-to-b from-black/70 to-transparent ${showMetadata ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="text-sm opacity-70">
@@ -420,67 +339,31 @@ export const SlidePreview = () => {
         </div>
         
         <div className="flex gap-2">
-          {/* Frame Tools Context Menu with explicit logging and debugging */}
-          <ContextMenu>
-            <ContextMenuTrigger asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
-                <Film className="h-5 w-5" />
+                <MoreVertical className="h-5 w-5" />
                 <span className="sr-only">Frame tools</span>
               </Button>
-            </ContextMenuTrigger>
-            <ContextMenuContent className="bg-background border border-border shadow-md w-56 right-0 mt-1 z-[100]">
-              {/* Always show Frame Selection option */}
-              <ContextMenuVideoFrameButton 
-                onClick={() => {
-                  console.log("Manual Frame Selection button clicked");
-                  handleOpenFramePicker();
-                }} 
-                className="cursor-pointer"
-              >
-                <Film className="h-4 w-4 mr-2" />
-                <span>Select Video Frames</span>
-              </ContextMenuVideoFrameButton>
-              
-              {/* Only show extraction option if needed */}
-              {needsFrameExtraction && (
-                <ContextMenuVideoFrameButton 
-                  onClick={() => {
-                    console.log("Extract Missing Frames button clicked");
-                    handleExtractFrames();
-                  }}
-                  disabled={isExtractingFrames}
-                  className="cursor-pointer"
-                >
-                  <Image className="h-4 w-4 mr-2" />
-                  <span>
-                    {isExtractingFrames 
-                      ? "Extracting Frames..." 
-                      : "Extract Missing Frames"
-                    }
-                  </span>
-                </ContextMenuVideoFrameButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {project?.source_type === 'video' && project?.source_file_path && (
+                <DropdownMenuVideoFrameButton onClick={handleOpenFramePicker}>
+                  <Film className="h-4 w-4 mr-2" />
+                  <span>Select Video Frames</span>
+                </DropdownMenuVideoFrameButton>
               )}
-              
-              <ContextMenuSeparator />
-              <ContextMenuItem onClick={toggleTheme}>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={toggleTheme}>
                 {isDarkTheme ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
                 <span>{isDarkTheme ? "Light Mode" : "Dark Mode"}</span>
-              </ContextMenuItem>
-              <ContextMenuItem onClick={toggleFullscreen}>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={toggleFullscreen}>
                 <Fullscreen className="h-4 w-4 mr-2" />
                 <span>Toggle Fullscreen</span>
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem onClick={() => {
-                console.log("Manual UI reset triggered");
-                forceRemoveUIBlockers();
-                toast.success("UI reset complete");
-              }} className="text-red-500">
-                <X className="h-4 w-4 mr-2" />
-                <span>Reset UI (Emergency)</span>
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           <Button variant="ghost" size="icon" onClick={exitPresentation} className="text-white hover:bg-white/10">
             <X className="h-5 w-5" />
@@ -544,34 +427,18 @@ export const SlidePreview = () => {
         <kbd className="px-1 py-0.5 bg-white/20 rounded ml-1">T</kbd> for theme
       </div>
 
-      {/* Frame Picker Modal with improved error handling and debugging */}
-      {project && (
+      {/* Frame Picker Modal */}
+      {project && project.source_file_path && (
         <FramePickerModal 
           open={isFramePickerModalOpen} 
-          onClose={() => {
-            console.log("Closing frame picker modal");
-            setIsFramePickerModalOpen(false);
-            // Add a small delay before cleaning up UI blockers
-            setTimeout(() => {
-              console.log("Running cleanup after modal close");
-              forceRemoveUIBlockers(); // Ensure UI is reset when closing
-            }, 100);
-          }} 
-          videoPath={project.source_file_path || ""} 
+          onClose={() => setIsFramePickerModalOpen(false)} 
+          videoPath={project.source_file_path} 
           projectId={projectId || ""} 
-          onComplete={(frames) => {
-            console.log("Frame selection complete, frames:", frames.length);
-            handleFrameSelectionComplete(frames);
-            // Add a small delay before cleaning up UI blockers
-            setTimeout(forceRemoveUIBlockers, 100);
-          }} 
+          onComplete={handleFrameSelectionComplete} 
           videoMetadata={videoMetadata || undefined} 
           existingFrames={extractedFrames} 
         />
       )}
-      
-      {/* Always ensure EmergencyResetButton is present */}
-      <EmergencyResetButton />
     </div>
   );
 };

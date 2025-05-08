@@ -21,14 +21,6 @@ import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, Extracte
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-
 const ProjectPage = () => {
   const {
     id: projectId
@@ -62,7 +54,6 @@ const ProjectPage = () => {
     file_size?: number;
   } | null>(null);
   const [extractedFrames, setExtractedFrames] = useState<ExtractedFrame[]>([]);
-
   const loadProject = async () => {
     if (!projectId) return;
     try {
@@ -156,11 +147,9 @@ const ProjectPage = () => {
       setIsLoading(false);
     }
   };
-  
   useEffect(() => {
     loadProject();
   }, [projectId]);
-  
   const handleGenerateSlides = async () => {
     if (!projectId || isGenerating) return;
     setIsGenerating(true);
@@ -186,7 +175,6 @@ const ProjectPage = () => {
       setIsGenerating(false);
     }
   };
-  
   const handleTranscribeVideo = async () => {
     if (!projectId || isTranscribing) return;
     setIsTranscribing(true);
@@ -212,7 +200,6 @@ const ProjectPage = () => {
       setIsTranscribing(false);
     }
   };
-  
   const handleExtractFrames = async () => {
     if (!projectId || !project?.source_file_path || isExtractingFrames || allTimestamps.length === 0) {
       return;
@@ -253,7 +240,6 @@ const ProjectPage = () => {
       setIsExtractingFrames(false);
     }
   };
-  
   const handleFrameExtractionComplete = async (frames: Array<{
     timestamp: string;
     imageUrl: string;
@@ -274,7 +260,6 @@ const ProjectPage = () => {
       toast.success("Frame extraction completed successfully");
     }
   };
-  
   const handleManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]) => {
     if (!projectId) return;
     setIsFramePickerModalOpen(false);
@@ -292,7 +277,6 @@ const ProjectPage = () => {
       toast.success(`${selectedFrames.length} frames have been applied to your slides`);
     }
   };
-  
   const handleOpenManualFramePicker = () => {
     if (!project?.source_file_path) {
       toast.error("No video source available");
@@ -300,7 +284,6 @@ const ProjectPage = () => {
     }
     setIsFramePickerModalOpen(true);
   };
-  
   const handleSaveContext = async () => {
     if (!projectId || !project) return;
     setIsSaving(true);
@@ -326,7 +309,6 @@ const ProjectPage = () => {
       setIsSaving(false);
     }
   };
-  
   const handleSaveTranscript = async () => {
     if (!projectId || !project) return;
     setIsSaving(true);
@@ -352,7 +334,6 @@ const ProjectPage = () => {
       setIsSaving(false);
     }
   };
-  
   const handleSaveDensity = async () => {
     if (!projectId || !project) return;
     setIsSaving(true);
@@ -378,7 +359,6 @@ const ProjectPage = () => {
       setIsSaving(false);
     }
   };
-  
   const handleSaveTitle = async () => {
     if (!projectId || !project) return;
     setIsSaving(true);
@@ -404,12 +384,9 @@ const ProjectPage = () => {
       setIsSaving(false);
     }
   };
-  
   const needsTranscription = project?.source_type === 'video' && !project?.transcript;
-  
-  return (
-    <InsightLayout>
-      <div className="h-full flex flex-col w-full max-w-full overflow-x-hidden">
+  return <InsightLayout>
+      <div className="h-full flex flex-col">
         <div className="border-b p-4 flex items-center justify-between">
           <div className="flex items-center">
             <Button variant="outline" size="sm" asChild className="mr-4">
@@ -429,11 +406,10 @@ const ProjectPage = () => {
                 </Button>
               </div>
               <div className="flex items-center gap-2">
-                {videoFileName && (
-                  <Badge variant="outline" className="text-xs font-normal">
+                
+                {videoFileName && <Badge variant="outline" className="text-xs font-normal">
                     {videoFileName}
-                  </Badge>
-                )}
+                  </Badge>}
               </div>
             </div>
           </div>
@@ -453,12 +429,10 @@ const ProjectPage = () => {
                       Cancel
                     </Button>
                     <Button onClick={handleSaveTitle} disabled={isSaving || !title.trim()}>
-                      {isSaving ? (
-                        <>
+                      {isSaving ? <>
                           <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                           Saving...
-                        </>
-                      ) : "Save Title"}
+                        </> : "Save Title"}
                     </Button>
                   </div>
                 </div>
@@ -467,6 +441,12 @@ const ProjectPage = () => {
             
             {/* Transcript Dialog */}
             <Dialog open={isTranscriptDialogOpen} onOpenChange={setIsTranscriptDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FileText className="h-4 w-4 mr-1" />
+                  {project?.transcript ? "Edit Transcript" : "Add Transcript"}
+                </Button>
+              </DialogTrigger>
               <DialogContent className="max-w-4xl">
                 <DialogHeader>
                   <DialogTitle>Video Transcript</DialogTitle>
@@ -479,12 +459,10 @@ const ProjectPage = () => {
                       Cancel
                     </Button>
                     <Button onClick={handleSaveTranscript} disabled={isSaving}>
-                      {isSaving ? (
-                        <>
+                      {isSaving ? <>
                           <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                           Saving...
-                        </>
-                      ) : "Save Transcript"}
+                        </> : "Save Transcript"}
                     </Button>
                   </div>
                 </div>
@@ -493,6 +471,12 @@ const ProjectPage = () => {
             
             {/* Slide Density Dialog */}
             <Dialog open={isDensityDialogOpen} onOpenChange={setIsDensityDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <SlidersIcon className="h-4 w-4 mr-1" />
+                  Slide Density
+                </Button>
+              </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Slide Density Control</DialogTitle>
@@ -524,12 +508,10 @@ const ProjectPage = () => {
                       Cancel
                     </Button>
                     <Button onClick={handleSaveDensity} disabled={isSaving}>
-                      {isSaving ? (
-                        <>
+                      {isSaving ? <>
                           <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                           Saving...
-                        </>
-                      ) : "Save Setting"}
+                        </> : "Save Setting"}
                     </Button>
                   </div>
                 </div>
@@ -538,6 +520,12 @@ const ProjectPage = () => {
             
             {/* Context Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Settings2 className="h-4 w-4 mr-1" />
+                  Context Settings
+                </Button>
+              </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Slide Generation Context</DialogTitle>
@@ -550,123 +538,72 @@ const ProjectPage = () => {
                       Cancel
                     </Button>
                     <Button onClick={handleSaveContext} disabled={isSaving}>
-                      {isSaving ? (
-                        <>
+                      {isSaving ? <>
                           <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                           Saving...
-                        </>
-                      ) : "Save Context"}
+                        </> : "Save Context"}
                     </Button>
                   </div>
                 </div>
               </DialogContent>
             </Dialog>
             
-            {/* Settings Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Settings2 className="h-4 w-4 mr-2" />
-                  Settings
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setIsTranscriptDialogOpen(true)}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  {project?.transcript ? "Edit Transcript" : "Add Transcript"}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsDensityDialogOpen(true)}>
-                  <SlidersIcon className="h-4 w-4 mr-2" />
-                  Slide Density
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsDialogOpen(true)}>
-                  <Settings2 className="h-4 w-4 mr-2" />
-                  Context Settings
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Frame Selection Button */}
+            {project?.source_type === 'video' && project?.source_file_path && <Button variant="outline" size="sm" onClick={handleOpenManualFramePicker}>
+                <Film className="h-4 w-4 mr-2" />
+                Select Video Frames
+              </Button>}
             
-            {/* Transcribe Button (only shown when needed) */}
-            {needsTranscription && (
-              <Button variant="outline" size="sm" onClick={handleTranscribeVideo} disabled={isTranscribing}>
-                {isTranscribing ? (
-                  <>
+            {/* Extract Frames Button */}
+            {needsFrameExtraction && <Button variant="outline" size="sm" onClick={handleExtractFrames} disabled={isExtractingFrames}>
+                {isExtractingFrames ? <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Preparing...
+                  </> : <>
+                    <Image className="h-4 w-4 mr-2" />
+                    {extractedFrames.length > 0 ? "Extract Missing Frames" : "Extract Video Frames"}
+                  </>}
+              </Button>}
+            
+            {/* Transcribe Button */}
+            {needsTranscription && <Button variant="outline" size="sm" onClick={handleTranscribeVideo} disabled={isTranscribing}>
+                {isTranscribing ? <>
                     <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                     Transcribing...
-                  </>
-                ) : (
-                  <>
+                  </> : <>
                     <FileText className="h-4 w-4 mr-1" />
                     Transcribe Video
-                  </>
-                )}
-              </Button>
-            )}
+                  </>}
+              </Button>}
             
             {/* Generate Slides Button */}
-            <Button 
-              variant={needsTranscription ? "outline" : "default"} 
-              size="sm" 
-              onClick={handleGenerateSlides} 
-              disabled={isGenerating || (project?.source_type === 'video' && !project?.transcript)}
-            >
-              {isGenerating ? (
-                <>
+            <Button variant={needsTranscription ? "outline" : "default"} size="sm" onClick={handleGenerateSlides} disabled={isGenerating || project?.source_type === 'video' && !project?.transcript}>
+              {isGenerating ? <>
                   <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                   Generating...
-                </>
-              ) : (
-                <>
+                </> : <>
                   <RefreshCw className="h-4 w-4 mr-1" />
                   Generate Slides
-                </>
-              )}
+                </>}
             </Button>
           </div>
         </div>
         
         <div className="flex-1 overflow-hidden">
-          {isLoading ? (
-            <div className="h-full flex items-center justify-center">
+          {isLoading ? <div className="h-full flex items-center justify-center">
               <div className="text-center">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
                 <p className="text-sm text-muted-foreground">Loading project...</p>
               </div>
-            </div>
-          ) : (
-            <SlideEditor />
-          )}
+            </div> : <SlideEditor />}
         </div>
         
         {/* Frame Extraction Modal */}
-        {project && project.source_file_path && (
-          <FrameExtractionModal 
-            open={isFrameExtractionModalOpen} 
-            onClose={() => setIsFrameExtractionModalOpen(false)} 
-            videoPath={project.source_file_path} 
-            projectId={projectId || ""} 
-            timestamps={allTimestamps.filter(timestamp => !extractedFrames.some(frame => frame.timestamp === timestamp))} 
-            onComplete={handleFrameExtractionComplete} 
-            videoMetadata={videoMetadata || undefined} 
-            previouslyExtractedFrames={extractedFrames} 
-          />
-        )}
+        {project && project.source_file_path && <FrameExtractionModal open={isFrameExtractionModalOpen} onClose={() => setIsFrameExtractionModalOpen(false)} videoPath={project.source_file_path} projectId={projectId || ""} timestamps={allTimestamps.filter(timestamp => !extractedFrames.some(frame => frame.timestamp === timestamp))} onComplete={handleFrameExtractionComplete} videoMetadata={videoMetadata || undefined} previouslyExtractedFrames={extractedFrames} />}
         
         {/* Frame Picker Modal */}
-        {project && project.source_file_path && (
-          <FramePickerModal 
-            open={isFramePickerModalOpen} 
-            onClose={() => setIsFramePickerModalOpen(false)} 
-            videoPath={project.source_file_path} 
-            projectId={projectId || ""} 
-            onComplete={handleManualFrameSelectionComplete} 
-            videoMetadata={videoMetadata || undefined} 
-            existingFrames={extractedFrames} 
-          />
-        )}
+        {project && project.source_file_path && <FramePickerModal open={isFramePickerModalOpen} onClose={() => setIsFramePickerModalOpen(false)} videoPath={project.source_file_path} projectId={projectId || ""} onComplete={handleManualFrameSelectionComplete} videoMetadata={videoMetadata || undefined} existingFrames={extractedFrames} />}
       </div>
-    </InsightLayout>
-  );
+    </InsightLayout>;
 };
-
 export default ProjectPage;
