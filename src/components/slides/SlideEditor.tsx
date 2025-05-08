@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +14,6 @@ import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, Extracte
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FrameSelector } from "@/components/slides/FrameSelector";
 import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
-
 interface Slide {
   id: string;
   title: string;
@@ -32,9 +30,12 @@ interface LocalExtractedFrame {
   timestamp: string;
   id: string;
 }
-
 export const SlideEditor = () => {
-  const { id: projectId } = useParams<{ id: string }>();
+  const {
+    id: projectId
+  } = useParams<{
+    id: string;
+  }>();
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   const [editedTitle, setEditedTitle] = useState<string>("");
@@ -55,28 +56,23 @@ export const SlideEditor = () => {
   const [allExtractedFrames, setAllExtractedFrames] = useState<LocalExtractedFrame[]>([]);
   const [videoPath, setVideoPath] = useState<string>("");
   const [timestamps, setTimestamps] = useState<string[]>([]);
-  
   const currentSlide = slides[currentSlideIndex];
-  
   const loadProject = async () => {
     if (!projectId) return;
-    
     try {
       setIsLoading(true);
       const project = await fetchProjectById(projectId);
-      
       if (!project) {
         toast.error("Project not found");
         return;
       }
-
       setProjectTitle(project.title || "Untitled Project");
-      
+
       // Store video path for frame extraction
       if (project.source_type === 'video' && project.source_file_path) {
         setVideoPath(project.source_file_path);
       }
-      
+
       // Load all extracted frames
       if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
         // Transform the API ExtractedFrame format to our local format
@@ -87,13 +83,12 @@ export const SlideEditor = () => {
         }));
         setAllExtractedFrames(frames);
       }
-      
       if (project.slides && Array.isArray(project.slides)) {
         // Convert from Json to Slide array with proper type checking
         const slidesData = project.slides as unknown as Slide[];
         if (slidesData.length > 0) {
           setSlides(slidesData);
-          
+
           // Collect all timestamps for potential frame extraction
           const allTimestamps: string[] = [];
           slidesData.forEach(slide => {
@@ -108,28 +103,24 @@ export const SlideEditor = () => {
               });
             }
           });
-          
+
           // Remove duplicates
           setTimestamps([...new Set(allTimestamps)]);
         } else {
           // Default placeholder slide if slides array is empty
-          setSlides([
-            {
-              id: "slide-placeholder",
-              title: "Generate Your Slides",
-              content: "Click the 'Generate Slides' button to process your content and create presentation slides."
-            }
-          ]);
-        }
-      } else {
-        // Default placeholder slide if no slides exist yet
-        setSlides([
-          {
+          setSlides([{
             id: "slide-placeholder",
             title: "Generate Your Slides",
             content: "Click the 'Generate Slides' button to process your content and create presentation slides."
-          }
-        ]);
+          }]);
+        }
+      } else {
+        // Default placeholder slide if no slides exist yet
+        setSlides([{
+          id: "slide-placeholder",
+          title: "Generate Your Slides",
+          content: "Click the 'Generate Slides' button to process your content and create presentation slides."
+        }]);
       }
     } catch (error) {
       console.error("Error loading project slides:", error);
@@ -138,25 +129,22 @@ export const SlideEditor = () => {
       setIsLoading(false);
     }
   };
-  
   useEffect(() => {
     loadProject();
   }, [projectId]);
-  
   useEffect(() => {
     if (currentSlide) {
       setEditedTitle(currentSlide.title);
       setEditedContent(currentSlide.content);
     }
   }, [currentSlide, currentSlideIndex]);
-  
   const generateSlides = async () => {
     if (!projectId) return;
-    
     try {
       setIsGenerating(true);
-      toast.loading("Generating slides...", { id: "generate-slides" });
-      
+      toast.loading("Generating slides...", {
+        id: "generate-slides"
+      });
       const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/generate-slides`, {
         method: "POST",
         headers: {
@@ -167,37 +155,38 @@ export const SlideEditor = () => {
           projectId
         })
       });
-      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to generate slides");
       }
-      
-      const { slides: generatedSlides } = await response.json();
-      
+      const {
+        slides: generatedSlides
+      } = await response.json();
       if (!generatedSlides || !Array.isArray(generatedSlides) || generatedSlides.length === 0) {
         throw new Error("No slides were generated");
       }
-      
+
       // Type assertion to ensure we're setting the proper Slide[] type
       setSlides(generatedSlides as Slide[]);
       setCurrentSlideIndex(0);
-      
+
       // Update edited fields with the first slide
       if (generatedSlides[0]) {
         setEditedTitle(generatedSlides[0].title);
         setEditedContent(generatedSlides[0].content);
       }
-      
-      toast.success("Slides generated successfully!", { id: "generate-slides" });
+      toast.success("Slides generated successfully!", {
+        id: "generate-slides"
+      });
     } catch (error) {
       console.error("Error generating slides:", error);
-      toast.error(`Failed to generate slides: ${error.message}`, { id: "generate-slides" });
+      toast.error(`Failed to generate slides: ${error.message}`, {
+        id: "generate-slides"
+      });
     } finally {
       setIsGenerating(false);
     }
   };
-  
   const handleExtractFrames = async () => {
     if (!projectId || !videoPath || isExtractingFrames || timestamps.length === 0) {
       if (!videoPath) {
@@ -207,34 +196,29 @@ export const SlideEditor = () => {
       }
       return;
     }
-    
     setIsExtractingFrames(true);
-    toast.loading("Preparing video frames extraction...", { id: "extract-prep" });
-    
+    toast.loading("Preparing video frames extraction...", {
+      id: "extract-prep"
+    });
     try {
       let result;
-      
+
       // Try with the current path first
       result = await clientExtractFramesFromVideo(projectId, videoPath, timestamps);
-      
       if (!result.success && result.error?.includes("Failed to get video URL")) {
         // If that fails, try getting the source_url from the project and see if we can use that
         console.log("Original video path failed, checking project for alternate sources");
-        
-        const { data: project } = await supabase
-          .from('projects')
-          .select('source_url')
-          .eq('id', projectId)
-          .maybeSingle();
-          
+        const {
+          data: project
+        } = await supabase.from('projects').select('source_url').eq('id', projectId).maybeSingle();
         if (project?.source_url) {
-          toast.info("Trying alternate video source...", { id: "extract-prep" });
+          toast.info("Trying alternate video source...", {
+            id: "extract-prep"
+          });
           result = await clientExtractFramesFromVideo(projectId, project.source_url, timestamps);
         }
       }
-      
       toast.dismiss("extract-prep");
-      
       if (result.success) {
         setIsFrameExtractionModalOpen(true);
       } else {
@@ -244,27 +228,25 @@ export const SlideEditor = () => {
       setIsExtractingFrames(false);
     }
   };
-  
-  const handleFrameExtractionComplete = async (frames: Array<{ timestamp: string, imageUrl: string }>) => {
+  const handleFrameExtractionComplete = async (frames: Array<{
+    timestamp: string;
+    imageUrl: string;
+  }>) => {
     if (!projectId) return;
-    
     setIsFrameExtractionModalOpen(false);
-    
     if (frames.length === 0) {
       toast.info("No frames were extracted");
       return;
     }
-    
+
     // Update the project's slides with the extracted frames
     const success = await updateSlidesWithExtractedFrames(projectId, frames);
-    
     if (success) {
       // Reload the project to get the updated slides with images
       await loadProject();
       toast.success("Frame extraction completed successfully");
     }
   };
-  
   const handleSelectFrames = () => {
     if (allExtractedFrames.length === 0) {
       toast.warning("No frames available. Extract frames or use the manual frame picker first.");
@@ -272,170 +254,180 @@ export const SlideEditor = () => {
     }
     setIsFrameSelectorOpen(true);
   };
-  
   const handleFrameSelection = (selectedFrames: LocalExtractedFrame[]) => {
     if (!selectedFrames.length) return;
-    
+
     // Update current slide with selected frames
     const updatedSlides = [...slides];
     updatedSlides[currentSlideIndex] = {
       ...updatedSlides[currentSlideIndex],
       imageUrls: selectedFrames.map(frame => frame.imageUrl)
     };
-    
     setSlides(updatedSlides);
-    
+
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
-    
     toast.success(`${selectedFrames.length} frame${selectedFrames.length !== 1 ? 's' : ''} applied to slide`);
   };
-  
   const goToNextSlide = () => {
     if (currentSlideIndex < slides.length - 1) {
       saveChanges();
       setCurrentSlideIndex(prev => prev + 1);
     }
   };
-  
   const goToPrevSlide = () => {
     if (currentSlideIndex > 0) {
       saveChanges();
       setCurrentSlideIndex(prev => prev - 1);
     }
   };
-  
   const saveChanges = () => {
     if (isEditing) {
       const updatedSlides = [...slides];
       updatedSlides[currentSlideIndex] = {
         ...updatedSlides[currentSlideIndex],
         title: editedTitle,
-        content: editedContent,
+        content: editedContent
       };
       setSlides(updatedSlides);
-      
+
       // Also update in the database
       updateSlidesInDatabase(updatedSlides);
-      
       setIsEditing(false);
       toast.success("Slide updated");
     }
   };
-  
   const updateSlidesInDatabase = async (updatedSlides: Slide[]) => {
     if (!projectId) return;
-    
     try {
       // Ensure we're passing the slides in a format compatible with Json type
-      const { error } = await supabase
-        .from('projects')
-        .update({ slides: updatedSlides as any })
-        .eq('id', projectId);
-        
+      const {
+        error
+      } = await supabase.from('projects').update({
+        slides: updatedSlides as any
+      }).eq('id', projectId);
       if (error) throw error;
     } catch (error) {
       console.error("Error updating slides in database:", error);
       // We don't show a toast here since it's a background operation
     }
   };
-  
   const startEditing = () => {
     setIsEditing(true);
   };
-  
   const copyToClipboard = () => {
     const slideText = `${currentSlide.title}\n\n${currentSlide.content}`;
     navigator.clipboard.writeText(slideText);
     toast.success("Slide content copied to clipboard");
   };
-  
   const exportPDF = async () => {
     if (!slides || slides.length === 0) {
       toast.error("No slides to export");
       return;
     }
-    
     try {
-      setIsExporting(prev => ({ ...prev, pdf: true }));
-      toast.loading("Generating PDF...", { id: "export-pdf" });
-      
+      setIsExporting(prev => ({
+        ...prev,
+        pdf: true
+      }));
+      toast.loading("Generating PDF...", {
+        id: "export-pdf"
+      });
       const pdfBlob = await exportToPDF(slides, projectTitle);
       downloadFile(pdfBlob, `${projectTitle || 'presentation'}.pdf`);
-      
-      toast.success("PDF exported successfully!", { id: "export-pdf" });
+      toast.success("PDF exported successfully!", {
+        id: "export-pdf"
+      });
     } catch (error) {
       console.error("Error exporting PDF:", error);
-      toast.error("Failed to export PDF", { id: "export-pdf" });
+      toast.error("Failed to export PDF", {
+        id: "export-pdf"
+      });
     } finally {
-      setIsExporting(prev => ({ ...prev, pdf: false }));
+      setIsExporting(prev => ({
+        ...prev,
+        pdf: false
+      }));
     }
   };
-  
   const exportAnki = async () => {
     if (!slides || slides.length === 0) {
       toast.error("No slides to export");
       return;
     }
-    
     try {
-      setIsExporting(prev => ({ ...prev, anki: true }));
-      toast.loading("Generating Anki deck...", { id: "export-anki" });
-      
+      setIsExporting(prev => ({
+        ...prev,
+        anki: true
+      }));
+      toast.loading("Generating Anki deck...", {
+        id: "export-anki"
+      });
       const ankiBlob = exportToAnki(slides, projectTitle);
       downloadFile(ankiBlob, `${projectTitle || 'anki-cards'}.csv`);
-      
-      toast.success("Anki cards exported successfully!", { id: "export-anki" });
+      toast.success("Anki cards exported successfully!", {
+        id: "export-anki"
+      });
     } catch (error) {
       console.error("Error exporting Anki cards:", error);
-      toast.error("Failed to export Anki cards", { id: "export-anki" });
+      toast.error("Failed to export Anki cards", {
+        id: "export-anki"
+      });
     } finally {
-      setIsExporting(prev => ({ ...prev, anki: false }));
+      setIsExporting(prev => ({
+        ...prev,
+        anki: false
+      }));
     }
   };
-  
   const exportCSV = async () => {
     if (!slides || slides.length === 0) {
       toast.error("No slides to export");
       return;
     }
-    
     try {
-      setIsExporting(prev => ({ ...prev, csv: true }));
-      toast.loading("Generating CSV...", { id: "export-csv" });
-      
+      setIsExporting(prev => ({
+        ...prev,
+        csv: true
+      }));
+      toast.loading("Generating CSV...", {
+        id: "export-csv"
+      });
       const csvBlob = exportToCSV(slides, projectTitle);
       downloadFile(csvBlob, `${projectTitle || 'slides'}.csv`);
-      
-      toast.success("CSV exported successfully!", { id: "export-csv" });
+      toast.success("CSV exported successfully!", {
+        id: "export-csv"
+      });
     } catch (error) {
       console.error("Error exporting CSV:", error);
-      toast.error("Failed to export CSV", { id: "export-csv" });
+      toast.error("Failed to export CSV", {
+        id: "export-csv"
+      });
     } finally {
-      setIsExporting(prev => ({ ...prev, csv: false }));
+      setIsExporting(prev => ({
+        ...prev,
+        csv: false
+      }));
     }
   };
-  
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {
       return;
     }
-    
     const file = event.target.files[0];
-    
     try {
       setIsUploadingImage(true);
-      toast.loading("Uploading image...", { id: "upload-image" });
-      
+      toast.loading("Uploading image...", {
+        id: "upload-image"
+      });
       const uploadResult = await uploadSlideImage(file);
-      
       if (!uploadResult) {
         throw new Error("Failed to upload image");
       }
-      
+
       // Update the current slide with the image URL
       const updatedSlides = [...slides];
-      
+
       // Check if the slide already has images
       if (updatedSlides[currentSlideIndex].imageUrls && updatedSlides[currentSlideIndex].imageUrls!.length > 0) {
         // Add to the existing imageUrls array
@@ -457,19 +449,20 @@ export const SlideEditor = () => {
           imageUrls: [uploadResult.url]
         };
       }
-      
       setSlides(updatedSlides);
       updateSlidesInDatabase(updatedSlides);
-      
-      toast.success("Image uploaded successfully!", { id: "upload-image" });
+      toast.success("Image uploaded successfully!", {
+        id: "upload-image"
+      });
     } catch (error) {
       console.error("Error uploading image:", error);
-      toast.error(`Failed to upload image: ${error.message}`, { id: "upload-image" });
+      toast.error(`Failed to upload image: ${error.message}`, {
+        id: "upload-image"
+      });
     } finally {
       setIsUploadingImage(false);
     }
   };
-  
   const handleDeleteFrame = (frameIndex: number) => {
     if (!currentSlide.imageUrls || currentSlide.imageUrls.length === 0) {
       return;
@@ -483,44 +476,31 @@ export const SlideEditor = () => {
     const updatedSlides = [...slides];
     updatedSlides[currentSlideIndex] = {
       ...updatedSlides[currentSlideIndex],
-      imageUrls: updatedImageUrls.length > 0 ? updatedImageUrls : undefined,
+      imageUrls: updatedImageUrls.length > 0 ? updatedImageUrls : undefined
     };
-
     setSlides(updatedSlides);
-    
+
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
     toast.success("Frame removed");
   };
-  
   if (isLoading) {
-    return (
-      <div className="h-full w-full flex items-center justify-center">
+    return <div className="h-full w-full flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
           <p className="text-sm text-muted-foreground">Loading slides...</p>
         </div>
-      </div>
-    );
+      </div>;
   }
-  
-  return (
-    <div className="flex flex-col h-full">
+  return <div className="flex flex-col h-full">
       <div className="flex justify-between items-center p-4 border-b">
         <div className="text-sm text-muted-foreground flex items-center">
           <Clock className="h-4 w-4 mr-1" />
           <span>Slide {currentSlideIndex + 1} of {slides.length}</span>
-          {currentSlide?.timestamp && (
-            <span className="ml-2">• Timestamp: {currentSlide.timestamp}</span>
-          )}
+          {currentSlide?.timestamp && <span className="ml-2">• Timestamp: {currentSlide.timestamp}</span>}
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            asChild
-            disabled={slides.length <= 1 || slides[0].id === "slide-placeholder"}
-          >
+          <Button variant="outline" size="sm" asChild disabled={slides.length <= 1 || slides[0].id === "slide-placeholder"}>
             <Link to={`/projects/${projectId}/present`}>
               <Presentation className="h-4 w-4 mr-1" />
               Present
@@ -537,68 +517,32 @@ export const SlideEditor = () => {
               <div className="space-y-4 p-4">
                 <h3 className="text-lg font-semibold">Export Options</h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Button 
-                    onClick={generateSlides} 
-                    variant="outline" 
-                    className="justify-start"
-                    disabled={isGenerating}
-                  >
-                    {isGenerating ? (
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                    )}
+                  <Button onClick={generateSlides} variant="outline" className="justify-start" disabled={isGenerating}>
+                    {isGenerating ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
                     {slides.length <= 1 ? "Generate Slides" : "Regenerate Slides"}
                   </Button>
                   
-                  <Button 
-                    onClick={exportPDF} 
-                    variant="outline" 
-                    className="justify-start"
-                    disabled={isExporting.pdf}
-                  >
-                    {isExporting.pdf ? (
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <Button onClick={exportPDF} variant="outline" className="justify-start" disabled={isExporting.pdf}>
+                    {isExporting.pdf ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                         <polyline points="14 2 14 8 20 8"></polyline>
-                      </svg>
-                    )}
+                      </svg>}
                     PDF
                   </Button>
-                  <Button 
-                    onClick={exportAnki} 
-                    variant="outline" 
-                    className="justify-start"
-                    disabled={isExporting.anki}
-                  >
-                    {isExporting.anki ? (
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <Button onClick={exportAnki} variant="outline" className="justify-start" disabled={isExporting.anki}>
+                    {isExporting.anki ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
                         <line x1="8" y1="21" x2="16" y2="21"></line>
                         <line x1="12" y1="17" x2="12" y2="21"></line>
-                      </svg>
-                    )}
+                      </svg>}
                     Anki
                   </Button>
-                  <Button 
-                    onClick={exportCSV} 
-                    variant="outline" 
-                    className="justify-start"
-                    disabled={isExporting.csv}
-                  >
-                    {isExporting.csv ? (
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <Button onClick={exportCSV} variant="outline" className="justify-start" disabled={isExporting.csv}>
+                    {isExporting.csv ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polyline points="8 17 12 21 16 17"></polyline>
                         <line x1="12" y1="12" x2="12" y2="21"></line>
                         <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path>
-                      </svg>
-                    )}
+                      </svg>}
                     CSV
                   </Button>
                 </div>
@@ -615,148 +559,69 @@ export const SlideEditor = () => {
             <h3 className="font-medium">Slide Visual</h3>
             {/* Converted dropdown to individual buttons */}
             <div className="flex gap-2">
-              {videoPath && timestamps.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExtractFrames}
-                  disabled={isExtractingFrames}
-                >
-                  {isExtractingFrames ? (
-                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                  ) : (
-                    <FrameIcon className="h-4 w-4 mr-1" />
-                  )}
+              {videoPath && timestamps.length > 0 && <Button variant="outline" size="sm" onClick={handleExtractFrames} disabled={isExtractingFrames}>
+                  {isExtractingFrames ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <FrameIcon className="h-4 w-4 mr-1" />}
                   Extract Frames
-                </Button>
-              )}
+                </Button>}
               
-              {allExtractedFrames.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSelectFrames}
-                >
+              {allExtractedFrames.length > 0 && <Button variant="outline" size="sm" onClick={handleSelectFrames}>
                   <ImageIcon className="h-4 w-4 mr-1" />
                   Select Frames
-                </Button>
-              )}
+                </Button>}
             </div>
           </div>
           
           <div className="flex-1 flex items-center justify-center p-4">
-            {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? (
-              <div className="relative w-full h-full">
+            {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? <div className="relative w-full h-full">
                 <div className={`grid ${currentSlide.imageUrls.length === 1 ? 'grid-cols-1' : currentSlide.imageUrls.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'} gap-4`}>
                   {/* First, render all existing images with delete buttons */}
-                  {currentSlide.imageUrls.map((url, index) => (
-                    <div key={`slide-image-${index}`} className="relative group aspect-video">
-                      <img 
-                        src={url} 
-                        alt={`Slide visual ${index + 1}`} 
-                        className="w-full h-full object-cover rounded-md"
-                      />
+                  {currentSlide.imageUrls.map((url, index) => <div key={`slide-image-${index}`} className="relative group aspect-video">
+                      <img src={url} alt={`Slide visual ${index + 1}`} className="w-full h-full object-cover rounded-md" />
                       {/* Individual frame delete button - always visible */}
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="absolute top-2 right-2 h-8 w-8"
-                        onClick={() => handleDeleteFrame(index)}
-                      >
+                      <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8" onClick={() => handleDeleteFrame(index)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                    </div>
-                  ))}
+                    </div>)}
                   
                   {/* Add the "Add Image" button as the last item */}
-                  <label 
-                    htmlFor="image-upload-grid" 
-                    className="relative aspect-video flex items-center justify-center border-2 border-dashed rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
-                  >
+                  <label htmlFor="image-upload-grid" className="relative aspect-video flex items-center justify-center border-2 border-dashed rounded-md cursor-pointer hover:bg-muted/50 transition-colors">
                     <div className="flex flex-col items-center justify-center text-muted-foreground">
                       <Plus className="h-8 w-8 mb-2" />
-                      <span>Add Image</span>
+                      <span>Upload Image</span>
                     </div>
-                    <input 
-                      id="image-upload-grid" 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden" 
-                      onChange={handleImageUpload}
-                      disabled={isUploadingImage}
-                    />
+                    <input id="image-upload-grid" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploadingImage} />
                   </label>
                 </div>
-              </div>
-            ) : currentSlide?.imageUrl ? (
-              <div className="relative w-full h-full group">
-                <img 
-                  src={currentSlide.imageUrl} 
-                  alt="Slide visual" 
-                  className="w-full h-full object-contain"
-                />
+              </div> : currentSlide?.imageUrl ? <div className="relative w-full h-full group">
+                <img src={currentSlide.imageUrl} alt="Slide visual" className="w-full h-full object-contain" />
                 {/* Delete button for single imageUrl */}
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-2 right-2 h-8 w-8"
-                  onClick={() => handleDeleteFrame(0)}
-                >
+                <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8" onClick={() => handleDeleteFrame(0)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
                 
                 {/* Add upload button next to the single image */}
-                <label 
-                  htmlFor="image-upload-single" 
-                  className="absolute bottom-2 right-2"
-                >
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="bg-background/80 backdrop-blur-sm"
-                  >
+                <label htmlFor="image-upload-single" className="absolute bottom-2 right-2">
+                  <Button variant="outline" size="sm" className="bg-background/80 backdrop-blur-sm">
                     <Plus className="h-4 w-4 mr-1" />
                     Add More
                   </Button>
-                  <input 
-                    id="image-upload-single" 
-                    type="file" 
-                    accept="image/*"
-                    className="hidden" 
-                    onChange={handleImageUpload}
-                    disabled={isUploadingImage}
-                  />
+                  <input id="image-upload-single" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploadingImage} />
                 </label>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center text-muted-foreground h-full">
+              </div> : <div className="flex flex-col items-center justify-center text-muted-foreground h-full">
                 <ImageIcon className="h-10 w-10 mb-2" />
                 <p>No image available</p>
                 <div className="flex flex-col gap-2 mt-4">
                   {/* Buttons for when no images exist */}
                   <div className="flex gap-2">
-                    {videoPath && timestamps.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleExtractFrames}
-                        disabled={isExtractingFrames}
-                      >
+                    {videoPath && timestamps.length > 0 && <Button variant="outline" size="sm" onClick={handleExtractFrames} disabled={isExtractingFrames}>
                         <FrameIcon className="h-4 w-4 mr-1" />
                         Extract Frames
-                      </Button>
-                    )}
+                      </Button>}
                     
-                    {allExtractedFrames.length > 0 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleSelectFrames}
-                      >
+                    {allExtractedFrames.length > 0 && <Button variant="outline" size="sm" onClick={handleSelectFrames}>
                         <ImageIcon className="h-4 w-4 mr-1" />
                         Select Frames
-                      </Button>
-                    )}
+                      </Button>}
                   </div>
                   
                   <label htmlFor="image-upload-empty" className="w-full">
@@ -764,17 +629,10 @@ export const SlideEditor = () => {
                       <Upload className="h-4 w-4 mr-1" />
                       Upload Image
                     </Button>
-                    <input 
-                      id="image-upload-empty" 
-                      type="file" 
-                      accept="image/*"
-                      className="hidden" 
-                      onChange={handleImageUpload}
-                    />
+                    <input id="image-upload-empty" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                   </label>
                 </div>
-              </div>
-            )}
+              </div>}
           </div>
         </div>
         
@@ -782,40 +640,22 @@ export const SlideEditor = () => {
         <div className="min-h-[300px] flex flex-col">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Content</h3>
-            {isEditing ? (
-              <Button size="sm" onClick={saveChanges}>Save Changes</Button>
-            ) : (
-              <Button size="sm" variant="ghost" onClick={startEditing}>Edit</Button>
-            )}
+            {isEditing ? <Button size="sm" onClick={saveChanges}>Save Changes</Button> : <Button size="sm" variant="ghost" onClick={startEditing}>Edit</Button>}
           </div>
           <div className="flex-1 p-4">
-            {isEditing ? (
-              <div className="space-y-4 h-full">
+            {isEditing ? <div className="space-y-4 h-full">
                 <div className="space-y-2">
                   <label htmlFor="slide-title" className="text-sm font-medium">Title</label>
-                  <Textarea
-                    id="slide-title"
-                    value={editedTitle}
-                    onChange={(e) => setEditedTitle(e.target.value)}
-                    className="resize-none"
-                  />
+                  <Textarea id="slide-title" value={editedTitle} onChange={e => setEditedTitle(e.target.value)} className="resize-none" />
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="slide-content" className="text-sm font-medium">Content</label>
-                  <Textarea
-                    id="slide-content"
-                    value={editedContent}
-                    onChange={(e) => setEditedContent(e.target.value)}
-                    className="resize-none flex-1 min-h-[200px]"
-                  />
+                  <Textarea id="slide-content" value={editedContent} onChange={e => setEditedContent(e.target.value)} className="resize-none flex-1 min-h-[200px]" />
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
+              </div> : <div className="space-y-4">
                 <h2 className="text-xl font-semibold">{currentSlide?.title}</h2>
                 <div className="whitespace-pre-line">{currentSlide?.content}</div>
-              </div>
-            )}
+              </div>}
           </div>
         </div>
       </div>
@@ -824,70 +664,42 @@ export const SlideEditor = () => {
       
       {/* Bottom navigation */}
       <div className="flex justify-between items-center p-4">
-        <Button 
-          variant="outline" 
-          onClick={goToPrevSlide} 
-          disabled={currentSlideIndex === 0}
-        >
+        <Button variant="outline" onClick={goToPrevSlide} disabled={currentSlideIndex === 0}>
           <ChevronLeft className="h-4 w-4 mr-1" />
           Previous
         </Button>
         
         <div className="flex gap-1">
-          {slides.map((_, index) => (
-            <Button 
-              key={index}
-              variant={index === currentSlideIndex ? "default" : "ghost"}
-              size="icon"
-              className="w-8 h-8 rounded-full"
-              onClick={() => {
-                saveChanges();
-                setCurrentSlideIndex(index);
-              }}
-            >
+          {slides.map((_, index) => <Button key={index} variant={index === currentSlideIndex ? "default" : "ghost"} size="icon" className="w-8 h-8 rounded-full" onClick={() => {
+          saveChanges();
+          setCurrentSlideIndex(index);
+        }}>
               {index + 1}
-            </Button>
-          ))}
+            </Button>)}
         </div>
         
-        <Button 
-          variant="outline" 
-          onClick={goToNextSlide} 
-          disabled={currentSlideIndex === slides.length - 1}
-        >
+        <Button variant="outline" onClick={goToNextSlide} disabled={currentSlideIndex === slides.length - 1}>
           Next
           <ChevronRight className="h-4 w-4 ml-1" />
         </Button>
       </div>
 
       {/* Frame Selection Modal with fixed height/overflow */}
-      <FrameSelector
-        open={isFrameSelectorOpen}
-        onClose={() => {
-          setIsFrameSelectorOpen(false);
-          // Ensure proper cleanup
-          cleanupFrameSelectorDialog();
-        }}
-        availableFrames={allExtractedFrames}
-        selectedFrames={currentSlide?.imageUrls?.map(url => {
-          // Find frame with matching URL
-          const frame = allExtractedFrames.find(f => f.imageUrl === url);
-          return frame || { imageUrl: url, timestamp: "unknown", id: `unknown-${url}` };
-        }) || []}
-        onSelect={handleFrameSelection}
-      />
+      <FrameSelector open={isFrameSelectorOpen} onClose={() => {
+      setIsFrameSelectorOpen(false);
+      // Ensure proper cleanup
+      cleanupFrameSelectorDialog();
+    }} availableFrames={allExtractedFrames} selectedFrames={currentSlide?.imageUrls?.map(url => {
+      // Find frame with matching URL
+      const frame = allExtractedFrames.find(f => f.imageUrl === url);
+      return frame || {
+        imageUrl: url,
+        timestamp: "unknown",
+        id: `unknown-${url}`
+      };
+    }) || []} onSelect={handleFrameSelection} />
       
       {/* Frame Extraction Modal */}
-      {videoPath && (
-        <FrameExtractionModal
-          open={isFrameExtractionModalOpen}
-          onClose={() => setIsFrameExtractionModalOpen(false)}
-          videoPath={videoPath}
-          projectId={projectId || ""}
-          timestamps={timestamps}
-          onComplete={handleFrameExtractionComplete}
-        />
-      )}
-    </div>
-  );
+      {videoPath && <FrameExtractionModal open={isFrameExtractionModalOpen} onClose={() => setIsFrameExtractionModalOpen(false)} videoPath={videoPath} projectId={projectId || ""} timestamps={timestamps} onComplete={handleFrameExtractionComplete} />}
+    </div>;
 };
