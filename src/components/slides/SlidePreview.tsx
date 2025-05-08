@@ -222,11 +222,6 @@ export const SlidePreview = () => {
       hasSourceFilePath: !!project?.source_file_path,
     });
     
-    if (!project?.source_file_path) {
-      toast.error("No video source available for frame picking");
-      return;
-    }
-    
     // Force close any open menus to prevent UI blocking
     forceRemoveUIBlockers();
     
@@ -433,39 +428,38 @@ export const SlidePreview = () => {
               </Button>
             </ContextMenuTrigger>
             <ContextMenuContent className="bg-background border border-border shadow-md w-56 right-0 mt-1 z-[100]">
-              {project?.source_type === 'video' && project?.source_file_path && (
-                <>
-                  <ContextMenuVideoFrameButton 
-                    onClick={() => {
-                      console.log("Manual Frame Selection button clicked");
-                      handleOpenFramePicker();
-                    }} 
-                    className="cursor-pointer"
-                  >
-                    <Film className="h-4 w-4 mr-2" />
-                    <span>Select Video Frames</span>
-                  </ContextMenuVideoFrameButton>
-                  
-                  {needsFrameExtraction && (
-                    <ContextMenuVideoFrameButton 
-                      onClick={() => {
-                        console.log("Extract Missing Frames button clicked");
-                        handleExtractFrames();
-                      }}
-                      disabled={isExtractingFrames}
-                      className="cursor-pointer"
-                    >
-                      <Image className="h-4 w-4 mr-2" />
-                      <span>
-                        {isExtractingFrames 
-                          ? "Extracting Frames..." 
-                          : "Extract Missing Frames"
-                        }
-                      </span>
-                    </ContextMenuVideoFrameButton>
-                  )}
-                </>
+              {/* Always show Frame Selection option */}
+              <ContextMenuVideoFrameButton 
+                onClick={() => {
+                  console.log("Manual Frame Selection button clicked");
+                  handleOpenFramePicker();
+                }} 
+                className="cursor-pointer"
+              >
+                <Film className="h-4 w-4 mr-2" />
+                <span>Select Video Frames</span>
+              </ContextMenuVideoFrameButton>
+              
+              {/* Only show extraction option if needed */}
+              {needsFrameExtraction && (
+                <ContextMenuVideoFrameButton 
+                  onClick={() => {
+                    console.log("Extract Missing Frames button clicked");
+                    handleExtractFrames();
+                  }}
+                  disabled={isExtractingFrames}
+                  className="cursor-pointer"
+                >
+                  <Image className="h-4 w-4 mr-2" />
+                  <span>
+                    {isExtractingFrames 
+                      ? "Extracting Frames..." 
+                      : "Extract Missing Frames"
+                    }
+                  </span>
+                </ContextMenuVideoFrameButton>
               )}
+              
               <ContextMenuSeparator />
               <ContextMenuItem onClick={toggleTheme}>
                 {isDarkTheme ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
@@ -546,7 +540,7 @@ export const SlidePreview = () => {
       </div>
 
       {/* Frame Picker Modal with improved error handling and debugging */}
-      {project && project.source_file_path && (
+      {project && (
         <FramePickerModal 
           open={isFramePickerModalOpen} 
           onClose={() => {
@@ -554,7 +548,7 @@ export const SlidePreview = () => {
             setIsFramePickerModalOpen(false);
             forceRemoveUIBlockers(); // Ensure UI is reset when closing
           }} 
-          videoPath={project.source_file_path} 
+          videoPath={project.source_file_path || ""} 
           projectId={projectId || ""} 
           onComplete={handleFrameSelectionComplete} 
           videoMetadata={videoMetadata || undefined} 

@@ -206,15 +206,20 @@ const ContextMenuVideoFrameButton = React.forwardRef<
     if (!disabled && clickHandlerRef.current) {
       // Use a requestAnimationFrame to ensure UI updates first
       window.requestAnimationFrame(() => {
-        // Close any open context menus using the uiUtils helper
-        const menuElements = document.querySelectorAll('[data-state="open"][role="menu"]');
-        menuElements.forEach(el => {
-          if (el.parentElement) {
-            try {
-              el.setAttribute('data-state', 'closed');
-            } catch (err) {
-              console.error("Error closing menu:", err);
+        // Immediately force close any open context menus
+        document.querySelectorAll('[role="menu"][data-state="open"]').forEach(el => {
+          try {
+            el.setAttribute('data-state', 'closed');
+            // Try to remove from DOM if possible
+            if (el.parentElement) {
+              setTimeout(() => {
+                if (document.body.contains(el)) {
+                  el.parentElement?.removeChild(el);
+                }
+              }, 50);
             }
+          } catch (err) {
+            console.error("Error closing menu:", err);
           }
         });
         
@@ -224,7 +229,7 @@ const ContextMenuVideoFrameButton = React.forwardRef<
           if (clickHandlerRef.current) {
             clickHandlerRef.current();
           }
-        }, 100);
+        }, 150);
       });
     }
   }, [disabled]);

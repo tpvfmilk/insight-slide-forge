@@ -25,8 +25,9 @@ export const detectBlockingUI = (): boolean => {
     }
   }
 
-  // Check specifically for modal backdrops and context menus
-  const modalBackdrops = document.querySelectorAll('.bg-black/80, [aria-hidden="true"]');
+  // Check specifically for modal backdrops and context menus using attribute selectors
+  // instead of class selectors which can be more reliable
+  const modalBackdrops = document.querySelectorAll('[role="dialog"], [data-radix-portal], [aria-hidden="true"]');
   const contextMenus = document.querySelectorAll('[role="menu"]');
   
   return openRadixElements.length > 0 || 
@@ -52,8 +53,8 @@ export const forceRemoveUIBlockers = (): void => {
     }
   });
   
-  // Find and remove modal overlays
-  const modalOverlays = document.querySelectorAll('.bg-black/80, [role="dialog"]');
+  // Find and remove modal overlays using more reliable attribute selectors
+  const modalOverlays = document.querySelectorAll('[aria-hidden="true"], [data-radix-portal], [role="dialog"]');
   modalOverlays.forEach(overlay => {
     try {
       if (overlay.parentNode) {
@@ -92,6 +93,19 @@ export const forceRemoveUIBlockers = (): void => {
     }
   });
   
+  // Find any elements with background-color that might be modal backgrounds
+  const potentialBackdrops = document.querySelectorAll('[style*="background-color: rgba(0, 0, 0,"]');
+  potentialBackdrops.forEach(backdrop => {
+    try {
+      if (backdrop.parentNode) {
+        backdrop.parentNode.removeChild(backdrop);
+        console.log("Removed potential backdrop:", backdrop);
+      }
+    } catch (err) {
+      console.error("Error removing backdrop:", err);
+    }
+  });
+  
   // Make sure body is scrollable again
   document.body.style.overflow = '';
   document.body.style.paddingRight = '';
@@ -100,5 +114,27 @@ export const forceRemoveUIBlockers = (): void => {
   // Remove any inline styles that might be blocking clicks
   document.querySelectorAll('[style*="pointer-events: none"]').forEach(el => {
     (el as HTMLElement).style.pointerEvents = 'auto';
+  });
+
+  // Fix for stray elements that might not have proper attributes
+  document.querySelectorAll('div').forEach(div => {
+    const style = window.getComputedStyle(div);
+    if (
+      style.position === 'fixed' && 
+      style.top === '0px' && 
+      style.left === '0px' && 
+      style.right === '0px' && 
+      style.bottom === '0px' && 
+      (style.backgroundColor.includes('rgba') || style.backgroundColor.includes('rgb'))
+    ) {
+      try {
+        if (div.parentNode) {
+          div.parentNode.removeChild(div);
+          console.log("Removed stray backdrop div:", div);
+        }
+      } catch (err) {
+        console.error("Error removing stray div:", err);
+      }
+    }
   });
 };
