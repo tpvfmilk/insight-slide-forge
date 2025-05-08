@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -87,13 +88,35 @@ serve(async (req) => {
       ? Math.round((wordCount / 150) * project.slides_per_minute) // 150 words per minute is a rough estimate
       : 0; // 0 means AI decides
 
-    // Process with AI
-    const slideDeck: Slide[] = await generateSlidesWithAI(
+    // Process with AI and track token usage
+    const { slideDeck, usageData } = await generateSlidesWithAI(
       contentForProcessing, 
       project.title, 
       finalContextPrompt,
-      targetSlideCount
+      targetSlideCount,
+      project.user_id,
+      projectId
     );
+    
+    // Insert usage data into openai_usage table
+    if (usageData) {
+      const { error: usageError } = await supabase
+        .from('openai_usage')
+        .insert({
+          user_id: project.user_id,
+          project_id: projectId,
+          model_id: usageData.model,
+          input_tokens: usageData.inputTokens,
+          output_tokens: usageData.outputTokens,
+          total_tokens: usageData.totalTokens,
+          estimated_cost: usageData.estimatedCost
+        });
+
+      if (usageError) {
+        console.error("Error recording token usage:", usageError);
+        // Continue with the function even if usage tracking fails
+      }
+    }
     
     // Update project with generated slides
     const { error: updateError } = await supabase
@@ -125,12 +148,23 @@ serve(async (req) => {
   }
 });
 
+// Define a type for token usage data
+interface UsageData {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+}
+
 async function generateSlidesWithAI(
   content: string, 
   title: string, 
   contextPrompt: string = '', 
-  targetSlideCount: number = 0
-): Promise<Slide[]> {
+  targetSlideCount: number = 0,
+  userId: string,
+  projectId: string
+): Promise<{ slideDeck: Slide[], usageData: UsageData }> {
   if (!openAIKey) {
     throw new Error("OpenAI API key not configured");
   }
@@ -174,6 +208,8 @@ async function generateSlidesWithAI(
     - The goal is to extract frames from these timestamps to provide visual context for each slide
     `;
 
+    const model = "gpt-4o-mini"; // Using the faster model for cost and speed
+    
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -181,7 +217,7 @@ async function generateSlidesWithAI(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini", // Using the faster model for cost and speed
+        model: model,
         messages: [
           {
             role: "system",
@@ -212,6 +248,26 @@ async function generateSlidesWithAI(
       slidesContent = slidesContent.split("```")[1].split("```")[0].trim();
     }
 
+    // Calculate token usage and cost
+    // GPT-4o mini pricing: $0.15 per 1M input tokens, $0.6 per 1M output tokens
+    const inputTokens = data.usage.prompt_tokens;
+    const outputTokens = data.usage.completion_tokens;
+    const totalTokens = data.usage.total_tokens;
+    
+    const inputCost = (inputTokens / 1000000) * 0.15;
+    const outputCost = (outputTokens / 1000000) * 0.6;
+    const estimatedCost = inputCost + outputCost;
+    
+    const usageData: UsageData = {
+      model: model,
+      inputTokens: inputTokens,
+      outputTokens: outputTokens,
+      totalTokens: totalTokens,
+      estimatedCost: estimatedCost
+    };
+
+    console.log(`Token usage - Input: ${inputTokens}, Output: ${outputTokens}, Total: ${totalTokens}, Cost: $${estimatedCost.toFixed(4)}`);
+
     // Parse JSON safely
     try {
       const slides: Slide[] = JSON.parse(slidesContent);
@@ -233,19 +289,22 @@ async function generateSlidesWithAI(
         };
       });
       
-      return processedSlides;
+      return { slideDeck: processedSlides, usageData };
     } catch (e) {
       console.error("Failed to parse AI response as JSON:", e);
       console.log("Raw response:", slidesContent);
       
       // Return a fallback slide deck
-      return [
-        {
-          id: "slide-1",
-          title: title || "Introduction",
-          content: "• Failed to generate slides\n• Please try again later"
-        }
-      ];
+      return { 
+        slideDeck: [
+          {
+            id: "slide-1",
+            title: title || "Introduction",
+            content: "• Failed to generate slides\n• Please try again later"
+          }
+        ],
+        usageData: usageData 
+      };
     }
   } catch (error) {
     console.error("Error generating slides with AI:", error);

@@ -1,5 +1,6 @@
 
-import { Calendar, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Calendar, Clock, RefreshCcw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -12,56 +13,134 @@ import {
   Legend, 
   ResponsiveContainer 
 } from 'recharts';
-
-// Sample data
-const usage = {
-  tokens: 1342567,
-  requests: 42,
-  cost: 12.85,
-  lastUsed: "2025-05-07T10:30:00Z"
-};
-
-const usageByDay = [
-  { day: 'Mon', tokens: 125000, cost: 1.25 },
-  { day: 'Tue', tokens: 210000, cost: 2.10 },
-  { day: 'Wed', tokens: 325000, cost: 3.25 },
-  { day: 'Thu', tokens: 240000, cost: 2.40 },
-  { day: 'Fri', tokens: 190000, cost: 1.90 },
-  { day: 'Sat', tokens: 90000, cost: 0.90 },
-  { day: 'Sun', tokens: 162567, cost: 1.05 },
-];
+import { fetchTotalUsageStats, fetchDailyUsage, resetUsageStats, UsageStatistics, DailyUsage } from "@/services/usageService";
+import { Button } from "@/components/ui/button";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export const UsageStats = () => {
+  const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('week');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Query for fetching total usage statistics
+  const { data: totalStats, isLoading: isLoadingTotal, error: totalError } = useQuery({
+    queryKey: ['totalUsageStats'],
+    queryFn: fetchTotalUsageStats,
+  });
+
+  // Query for fetching daily usage data
+  const { data: usageByDay, isLoading: isLoadingDaily, error: dailyError } = useQuery({
+    queryKey: ['dailyUsage', timeRange],
+    queryFn: () => fetchDailyUsage(timeRange === 'day' ? 1 : timeRange === 'week' ? 7 : 30),
+  });
+
+  // Mutation for resetting usage statistics
+  const resetMutation = useMutation({
+    mutationFn: resetUsageStats,
+    onSuccess: () => {
+      // Invalidate queries to refetch data
+      queryClient.invalidateQueries({ queryKey: ['totalUsageStats'] });
+      queryClient.invalidateQueries({ queryKey: ['dailyUsage'] });
+      toast.success("Usage statistics have been reset");
+      setIsDialogOpen(false);
+    },
+    onError: (error) => {
+      toast.error("Failed to reset statistics: " + error.message);
+    }
+  });
+
+  const handleReset = () => {
+    resetMutation.mutate();
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Never';
+    return new Date(dateString).toLocaleString();
+  };
+
+  // Show error if there's any
+  if (totalError || dailyError) {
+    const errorMessage = (totalError || dailyError)?.toString() || "Error fetching usage data";
+    return (
+      <Card className="col-span-2">
+        <CardHeader>
+          <CardTitle>Token Usage Statistics</CardTitle>
+          <CardDescription>Error loading data</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="col-span-2">
-      <CardHeader>
-        <CardTitle>Token Usage Statistics</CardTitle>
-        <CardDescription>
-          Track your OpenAI API consumption and costs
-        </CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Token Usage Statistics</CardTitle>
+          <CardDescription>
+            Track your OpenAI API consumption and costs
+          </CardDescription>
+        </div>
+        <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <AlertDialogTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm"
+              title="Reset Statistics"
+              className="h-8 w-8 p-0"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              <span className="sr-only">Reset Statistics</span>
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reset Usage Statistics</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will clear all your token usage history. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleReset}
+                disabled={resetMutation.isPending}
+              >
+                {resetMutation.isPending ? "Resetting..." : "Reset"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <StatCard 
             label="Total Tokens" 
-            value={`${(usage.tokens / 1000).toFixed(1)}K`} 
+            value={isLoadingTotal ? "Loading..." : `${((totalStats?.totalTokens || 0) / 1000).toFixed(1)}K`} 
           />
           <StatCard 
             label="API Requests" 
-            value={usage.requests.toString()} 
+            value={isLoadingTotal ? "Loading..." : String(totalStats?.apiRequests || 0)} 
           />
           <StatCard 
             label="Estimated Cost" 
-            value={`$${usage.cost.toFixed(2)}`} 
+            value={isLoadingTotal ? "Loading..." : `$${(totalStats?.estimatedCost || 0).toFixed(2)}`} 
           />
           <StatCard 
             label="Last Used" 
-            value={new Date(usage.lastUsed).toLocaleDateString()} 
+            value={isLoadingTotal ? "Loading..." : formatDate(totalStats?.lastUsed || null)} 
             icon={<Clock className="h-4 w-4 text-muted-foreground" />}
           />
         </div>
         
-        <Tabs defaultValue="week">
+        <Tabs defaultValue="week" value={timeRange} onValueChange={(value) => setTimeRange(value as 'day' | 'week' | 'month')}>
           <div className="flex justify-between items-center mb-4">
             <TabsList>
               <TabsTrigger value="day">Day</TabsTrigger>
@@ -70,18 +149,32 @@ export const UsageStats = () => {
             </TabsList>
             <div className="flex items-center text-sm text-muted-foreground">
               <Calendar className="h-4 w-4 mr-1" />
-              <span>May 1 - May 7, 2025</span>
+              <span>
+                {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </span>
             </div>
           </div>
           
           <TabsContent value="day" className="mt-0">
-            <UsageChart data={usageByDay} />
+            {isLoadingDaily ? (
+              <div className="h-72 w-full flex items-center justify-center">Loading...</div>
+            ) : (
+              <UsageChart data={usageByDay || []} />
+            )}
           </TabsContent>
           <TabsContent value="week" className="mt-0">
-            <UsageChart data={usageByDay} />
+            {isLoadingDaily ? (
+              <div className="h-72 w-full flex items-center justify-center">Loading...</div>
+            ) : (
+              <UsageChart data={usageByDay || []} />
+            )}
           </TabsContent>
           <TabsContent value="month" className="mt-0">
-            <UsageChart data={usageByDay} />
+            {isLoadingDaily ? (
+              <div className="h-72 w-full flex items-center justify-center">Loading...</div>
+            ) : (
+              <UsageChart data={usageByDay || []} />
+            )}
           </TabsContent>
         </Tabs>
       </CardContent>
@@ -108,7 +201,7 @@ const StatCard = ({ label, value, icon }: StatCardProps) => {
 };
 
 interface UsageChartProps {
-  data: { day: string; tokens: number; cost: number }[];
+  data: DailyUsage[];
 }
 
 const UsageChart = ({ data }: UsageChartProps) => {

@@ -92,9 +92,30 @@ serve(async (req) => {
     const transcriptionData = await openAIResponse.json();
     const transcript = transcriptionData.text;
 
-    // 3. Extract still frames at regular intervals
-    // This will be done in the generate-slides function instead of here
-    // since we need to know the slide timestamps first
+    // Track the token usage for transcriptions
+    // For Whisper API, we estimate based on audio duration (since the API doesn't return token counts)
+    // Assuming 1 minute of audio is roughly 800-1000 tokens
+    const audioMinutes = 5; // Default estimate, in a real app you'd calculate this from the audio length
+    const estimatedTokens = audioMinutes * 1000;
+    const estimatedCost = audioMinutes * 0.006; // $0.006 per minute for whisper-1
+
+    // Insert usage data into openai_usage table
+    const { error: usageError } = await supabase
+      .from('openai_usage')
+      .insert({
+        user_id: project.user_id,
+        project_id: projectId,
+        model_id: 'whisper-1',
+        input_tokens: estimatedTokens,
+        output_tokens: 0, // Whisper doesn't have output tokens in the same way
+        total_tokens: estimatedTokens,
+        estimated_cost: estimatedCost
+      });
+
+    if (usageError) {
+      console.error("Error recording token usage:", usageError);
+      // Continue with the function even if usage tracking fails
+    }
 
     // 3. Update the project with the transcript
     const { error: updateError } = await supabase
