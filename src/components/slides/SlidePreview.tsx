@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/context-menu";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { forceRemoveUIBlockers } from "@/utils/uiUtils";
+import { EmergencyResetButton } from "@/components/ui/EmergencyResetButton";
 
 export interface Slide {
   id: string;
@@ -229,7 +230,7 @@ export const SlidePreview = () => {
     setTimeout(() => {
       console.log("Setting isFramePickerModalOpen to true");
       setIsFramePickerModalOpen(true);
-    }, 50);
+    }, 100); // Increased delay for better sequencing
   }, [project, projectId]);
 
   // New function to handle frame extraction with improved error handling

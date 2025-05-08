@@ -108,17 +108,47 @@ export const UIResetProvider = ({ children }: UIResetProviderProps) => {
     };
   }, []);
 
-  // Show emergency button if there are more than 2 active UI elements
-  // or if some UI elements have been open for too long
+  // More aggressively check for blocked UI
   useEffect(() => {
-    setIsEmergencyVisible(activeUIElements.length >= 2);
-  }, [activeUIElements]);
-
+    // Show emergency button if there are active UI elements
+    setIsEmergencyVisible(activeUIElements.length > 0);
+    
+    // Also periodically check for blocking UI elements that might not be registered
+    const checkForBlockingUI = () => {
+      // Look for various indicators of blocking UI
+      const hasOpenDialogs = document.querySelectorAll('[data-state="open"]').length > 0;
+      const hasFixedOverlays = Array.from(document.querySelectorAll('div')).some(div => {
+        const style = window.getComputedStyle(div as HTMLElement);
+        return (
+          style.position === 'fixed' && 
+          style.backgroundColor.includes('rgba') &&
+          style.top === '0px' && 
+          style.left === '0px' &&
+          (style.right === '0px' || style.width === '100%') &&
+          (style.bottom === '0px' || style.height === '100%')
+        );
+      });
+      
+      // Show emergency button if we detect UI blockers
+      if ((hasOpenDialogs || hasFixedOverlays) && activeUIElements.length === 0) {
+        setIsEmergencyVisible(true);
+      }
+    };
+    
+    // Check immediately and then periodically
+    checkForBlockingUI();
+    const interval = setInterval(checkForBlockingUI, 2000);
+    
+    return () => {
+      clearInterval(interval);
+    };
+  }, [activeUIElements.length]);
+  
   // Global click handler to detect possible stuck UI states
   useEffect(() => {
     const handleGlobalClick = () => {
       const blockedUI = document.querySelectorAll('[data-state="open"]');
-      const blockedOverlays = document.querySelectorAll('.bg-black/80');
+      const blockedOverlays = document.querySelectorAll('[role="dialog"], [aria-hidden="true"]');
       
       // If we detect open UI elements but no registered active elements,
       // something might be stuck

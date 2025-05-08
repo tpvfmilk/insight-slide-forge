@@ -206,22 +206,34 @@ const ContextMenuVideoFrameButton = React.forwardRef<
     if (!disabled && clickHandlerRef.current) {
       // Use a requestAnimationFrame to ensure UI updates first
       window.requestAnimationFrame(() => {
-        // Immediately force close any open context menus
-        document.querySelectorAll('[role="menu"][data-state="open"]').forEach(el => {
+        // Immediately close the context menu by finding and closing its parent
+        let menuElement = e.currentTarget;
+        while (menuElement && !menuElement.hasAttribute('role')) {
+          menuElement = menuElement.parentElement as HTMLElement;
+        }
+        
+        // Once we've found the menu element, force it closed
+        if (menuElement && menuElement.getAttribute('role') === 'menu') {
+          console.log("Found menu element, closing it");
           try {
-            el.setAttribute('data-state', 'closed');
-            // Try to remove from DOM if possible
-            if (el.parentElement) {
-              setTimeout(() => {
-                if (document.body.contains(el)) {
-                  el.parentElement?.removeChild(el);
-                }
-              }, 50);
-            }
+            menuElement.setAttribute('data-state', 'closed');
+            
+            // Try to find and remove the portal container
+            const portals = document.querySelectorAll('[data-radix-portal]');
+            portals.forEach(portal => {
+              if (portal.contains(menuElement)) {
+                setTimeout(() => {
+                  if (document.body.contains(portal) && portal.parentElement) {
+                    console.log("Removing portal containing menu");
+                    portal.parentElement.removeChild(portal);
+                  }
+                }, 50);
+              }
+            });
           } catch (err) {
             console.error("Error closing menu:", err);
           }
-        });
+        }
         
         // Execute the callback with a slight delay
         setTimeout(() => {
@@ -229,7 +241,7 @@ const ContextMenuVideoFrameButton = React.forwardRef<
           if (clickHandlerRef.current) {
             clickHandlerRef.current();
           }
-        }, 150);
+        }, 200);
       });
     }
   }, [disabled]);

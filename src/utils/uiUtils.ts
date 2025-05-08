@@ -30,10 +30,26 @@ export const detectBlockingUI = (): boolean => {
   const modalBackdrops = document.querySelectorAll('[role="dialog"], [data-radix-portal], [aria-hidden="true"]');
   const contextMenus = document.querySelectorAll('[role="menu"]');
   
+  // Check for any semi-transparent overlays that might be blocking interaction
+  const possibleOverlays = document.querySelectorAll('div[style*="position: fixed"]');
+  let hasBlockingOverlay = false;
+  
+  possibleOverlays.forEach(overlay => {
+    const style = window.getComputedStyle(overlay as HTMLElement);
+    if (
+      style.position === 'fixed' && 
+      style.inset === '0px' || (style.top === '0px' && style.left === '0px' && style.right === '0px' && style.bottom === '0px') && 
+      style.backgroundColor.includes('rgba')
+    ) {
+      hasBlockingOverlay = true;
+    }
+  });
+  
   return openRadixElements.length > 0 || 
          highZIndexElements.length > 0 || 
          modalBackdrops.length > 0 || 
-         contextMenus.length > 0;
+         contextMenus.length > 0 ||
+         hasBlockingOverlay;
 };
 
 /**
@@ -93,16 +109,38 @@ export const forceRemoveUIBlockers = (): void => {
     }
   });
   
-  // Find any elements with background-color that might be modal backgrounds
-  const potentialBackdrops = document.querySelectorAll('[style*="background-color: rgba(0, 0, 0,"]');
-  potentialBackdrops.forEach(backdrop => {
+  // Find and remove any full-screen semi-transparent overlays that might be blocking interactions
+  const allDivs = document.querySelectorAll('div');
+  allDivs.forEach(div => {
     try {
-      if (backdrop.parentNode) {
-        backdrop.parentNode.removeChild(backdrop);
-        console.log("Removed potential backdrop:", backdrop);
+      const style = window.getComputedStyle(div as HTMLElement);
+      
+      // Check for fixed position elements that cover the entire screen
+      if (
+        style.position === 'fixed' && 
+        ((style.inset === '0px') || (style.top === '0px' && style.left === '0px' && style.right === '0px' && style.bottom === '0px')) && 
+        (style.backgroundColor.includes('rgba') || style.backgroundColor.includes('rgb'))
+      ) {
+        if (div.parentNode) {
+          console.log("Removing potential overlay div:", div);
+          div.parentNode.removeChild(div);
+        }
       }
     } catch (err) {
-      console.error("Error removing backdrop:", err);
+      console.error("Error checking div for overlay:", err);
+    }
+  });
+
+  // Clean up Radix Portal elements that might be left behind
+  const portalRoots = document.querySelectorAll('[data-radix-portal]');
+  portalRoots.forEach(portal => {
+    try {
+      if (portal.parentNode) {
+        portal.parentNode.removeChild(portal);
+        console.log("Removed RadixUI portal:", portal);
+      }
+    } catch (err) {
+      console.error("Error removing portal:", err);
     }
   });
   
@@ -114,27 +152,5 @@ export const forceRemoveUIBlockers = (): void => {
   // Remove any inline styles that might be blocking clicks
   document.querySelectorAll('[style*="pointer-events: none"]').forEach(el => {
     (el as HTMLElement).style.pointerEvents = 'auto';
-  });
-
-  // Fix for stray elements that might not have proper attributes
-  document.querySelectorAll('div').forEach(div => {
-    const style = window.getComputedStyle(div);
-    if (
-      style.position === 'fixed' && 
-      style.top === '0px' && 
-      style.left === '0px' && 
-      style.right === '0px' && 
-      style.bottom === '0px' && 
-      (style.backgroundColor.includes('rgba') || style.backgroundColor.includes('rgb'))
-    ) {
-      try {
-        if (div.parentNode) {
-          div.parentNode.removeChild(div);
-          console.log("Removed stray backdrop div:", div);
-        }
-      } catch (err) {
-        console.error("Error removing stray div:", err);
-      }
-    }
   });
 };
