@@ -7,13 +7,13 @@ import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuVideoFrameButton,
-} from "@/components/ui/dropdown-menu";
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+  ContextMenuVideoFrameButton,
+} from "@/components/ui/context-menu";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
 
 export interface Slide {
@@ -214,8 +214,8 @@ export const SlidePreview = () => {
     }
   };
 
-  // Improved frame picker handler with better error handling
-  const handleOpenFramePicker = () => {
+  // Enhanced frame picker handler with better error handling and debugging
+  const handleOpenFramePicker = useCallback(() => {
     console.log("Opening frame picker modal", {
       projectId,
       hasSourceFilePath: !!project?.source_file_path,
@@ -226,14 +226,24 @@ export const SlidePreview = () => {
       return;
     }
     
-    // Explicitly set the modal state to open
+    // Explicitly set the modal state to open and log it
+    console.log("Setting isFramePickerModalOpen to true");
     setIsFramePickerModalOpen(true);
-    console.log("isFramePickerModalOpen set to true", { isFramePickerModalOpen: true });
-  };
+    
+    // Add a delayed check to verify the state was updated
+    setTimeout(() => {
+      console.log("isFramePickerModalOpen state after update:", isFramePickerModalOpen);
+    }, 100);
+  }, [project, projectId, isFramePickerModalOpen]);
 
-  // New function to handle frame extraction
-  const handleExtractFrames = async () => {
+  // New function to handle frame extraction with improved error handling
+  const handleExtractFrames = useCallback(async () => {
     if (!project?.source_file_path || isExtractingFrames || allTimestamps.length === 0) {
+      console.log("Cannot extract frames:", { 
+        hasSourceFilePath: !!project?.source_file_path,
+        isExtractingFrames,
+        timestampsCount: allTimestamps.length
+      });
       return;
     }
     
@@ -251,9 +261,9 @@ export const SlidePreview = () => {
       toast.error("Failed to extract frames");
       setIsExtractingFrames(false);
     }
-  };
+  }, [project, isExtractingFrames, allTimestamps]);
 
-  const handleFrameSelectionComplete = (selectedFrames: Array<{ timestamp: string; imageUrl: string; id?: string }>) => {
+  const handleFrameSelectionComplete = useCallback((selectedFrames: Array<{ timestamp: string; imageUrl: string; id?: string }>) => {
     console.log("Frame selection complete", selectedFrames);
     setIsFramePickerModalOpen(false);
     
@@ -265,7 +275,7 @@ export const SlidePreview = () => {
     // Here you would normally update the slides with the selected frames
     setExtractedFrames(selectedFrames); // Store the selected frames
     toast.success(`${selectedFrames.length} frames have been selected`);
-  };
+  }, []);
   
   useEffect(() => {
     const loadProject = async () => {
@@ -401,28 +411,34 @@ export const SlidePreview = () => {
         </div>
         
         <div className="flex gap-2">
-          {/* Frame Tools Dropdown with improved handlers */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          {/* Frame Tools Context Menu with explicit logging and debugging */}
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
                 <Film className="h-5 w-5" />
                 <span className="sr-only">Frame tools</span>
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            </ContextMenuTrigger>
+            <ContextMenuContent align="end" className="bg-background border border-border shadow-md">
               {project?.source_type === 'video' && project?.source_file_path && (
                 <>
-                  <DropdownMenuVideoFrameButton 
-                    onClick={handleOpenFramePicker} 
+                  <ContextMenuVideoFrameButton 
+                    onClick={() => {
+                      console.log("Select Video Frames button clicked");
+                      handleOpenFramePicker();
+                    }} 
                     className="cursor-pointer"
                   >
                     <Film className="h-4 w-4 mr-2" />
                     <span>Select Video Frames</span>
-                  </DropdownMenuVideoFrameButton>
+                  </ContextMenuVideoFrameButton>
                   
                   {needsFrameExtraction && (
-                    <DropdownMenuVideoFrameButton 
-                      onClick={handleExtractFrames} 
+                    <ContextMenuVideoFrameButton 
+                      onClick={() => {
+                        console.log("Extract Missing Frames button clicked");
+                        handleExtractFrames();
+                      }}
                       disabled={isExtractingFrames}
                       className="cursor-pointer"
                     >
@@ -433,21 +449,21 @@ export const SlidePreview = () => {
                           : "Extract Missing Frames"
                         }
                       </span>
-                    </DropdownMenuVideoFrameButton>
+                    </ContextMenuVideoFrameButton>
                   )}
                 </>
               )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={toggleTheme}>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={toggleTheme}>
                 {isDarkTheme ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
                 <span>{isDarkTheme ? "Light Mode" : "Dark Mode"}</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={toggleFullscreen}>
+              </ContextMenuItem>
+              <ContextMenuItem onClick={toggleFullscreen}>
                 <Fullscreen className="h-4 w-4 mr-2" />
                 <span>Toggle Fullscreen</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
           
           <Button variant="ghost" size="icon" onClick={exitPresentation} className="text-white hover:bg-white/10">
             <X className="h-5 w-5" />

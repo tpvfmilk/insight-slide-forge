@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
@@ -29,7 +29,7 @@ interface FramePickerModalProps {
   existingFrames?: ExtractedFrame[];
 }
 
-export const FramePickerModal = ({
+export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   open,
   onClose,
   videoPath,
@@ -37,7 +37,7 @@ export const FramePickerModal = ({
   onComplete,
   videoMetadata,
   existingFrames = [],
-}: FramePickerModalProps) => {
+}) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -50,6 +50,23 @@ export const FramePickerModal = ({
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Ensure stable references to callback functions
+  const closeModal = useCallback(() => {
+    console.log("Modal close callback triggered");
+    
+    // Pause video if playing
+    if (videoRef.current && !videoRef.current.paused) {
+      videoRef.current.pause();
+    }
+    
+    // Reset state
+    setIsPlaying(false);
+    setVideoUrl(null);
+    
+    // Call parent close handler
+    onClose();
+  }, [onClose]);
   
   // Log state for debugging
   useEffect(() => {
@@ -102,7 +119,7 @@ export const FramePickerModal = ({
           url.searchParams.append('_cb', timestamp.toString());
           
           setVideoUrl(url.toString());
-          console.log("Successfully loaded video from video_uploads bucket:", url.toString());
+          console.log("Successfully loaded video URL:", url.toString());
           
           // Wait a moment before considering loading complete
           setTimeout(() => {
@@ -207,7 +224,7 @@ export const FramePickerModal = ({
     return () => {
       video.removeEventListener('timeupdate', updateTime);
     };
-  }, [videoRef.current]);
+  }, []);
   
   // Sync video play state with isPlaying
   useEffect(() => {
@@ -218,6 +235,7 @@ export const FramePickerModal = ({
       video.play().catch(err => {
         console.error("Error playing video:", err);
         setIsPlaying(false);
+        toast.error("Could not play video. Try clicking the video first.");
       });
     } else {
       video.pause();
@@ -225,7 +243,7 @@ export const FramePickerModal = ({
   }, [isPlaying]);
   
   // Enhanced video loading event handlers with better debugging
-  const handleVideoEvents = () => {
+  const handleVideoEvents = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     
@@ -287,41 +305,45 @@ export const FramePickerModal = ({
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('error', handleError);
     };
-  };
+  }, [videoMetadata]);
   
-  useEffect(handleVideoEvents, [videoRef.current, videoMetadata]);
+  // Set up video event handlers
+  useEffect(() => {
+    const cleanup = handleVideoEvents();
+    return cleanup;
+  }, [handleVideoEvents]);
   
-  const handleTimeChange = (value: number[]) => {
+  const handleTimeChange = useCallback((value: number[]) => {
     const newTime = value[0];
     setCurrentTime(newTime);
     
     if (videoRef.current) {
       videoRef.current.currentTime = newTime;
     }
-  };
+  }, []);
   
-  const togglePlayPause = () => {
-    setIsPlaying(!isPlaying);
-  };
+  const togglePlayPause = useCallback(() => {
+    setIsPlaying(prev => !prev);
+  }, []);
   
-  const seekBack = () => {
+  const seekBack = useCallback(() => {
     if (videoRef.current) {
       const newTime = Math.max(0, videoRef.current.currentTime - 5);
       videoRef.current.currentTime = newTime;
       setCurrentTime(newTime);
     }
-  };
+  }, []);
   
-  const seekForward = () => {
+  const seekForward = useCallback(() => {
     if (videoRef.current && videoDuration) {
       const newTime = Math.min(videoDuration, videoRef.current.currentTime + 5);
       videoRef.current.currentTime = newTime;
       setCurrentTime(newTime);
     }
-  };
+  }, [videoDuration]);
   
   // Enhanced frame capture with better error handling
-  const captureFrame = async () => {
+  const captureFrame = useCallback(async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
@@ -450,28 +472,31 @@ export const FramePickerModal = ({
     } finally {
       setIsCaptureLoading(false);
     }
-  };
+  }, [isVideoReady, projectId]);
   
-  const deleteFrame = (timestamp: string) => {
+  const deleteFrame = useCallback((timestamp: string) => {
     setCapturedFrames(prev => prev.filter(frame => frame.timestamp !== timestamp));
     toast.success(`Removed frame at ${timestamp}`);
-  };
+  }, []);
   
-  const handleComplete = () => {
+  const handleComplete = useCallback(() => {
     if (capturedFrames.length === 0) {
       toast.warning("No frames selected. Please capture at least one frame.");
       return;
     }
     onComplete(capturedFrames);
-  };
+  }, [capturedFrames, onComplete]);
   
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isOpen) {
-        console.log("Dialog closing via onOpenChange");
-        onClose();
-      }
-    }}>
+    <Dialog 
+      open={open} 
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          console.log("Dialog closing via onOpenChange");
+          closeModal();
+        }
+      }}
+    >
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Select Video Frames</DialogTitle>
@@ -488,7 +513,7 @@ export const FramePickerModal = ({
             <p>{error}</p>
             <Button 
               variant="outline" 
-              onClick={onClose} 
+              onClick={closeModal} 
               className="mt-4"
             >
               Close
@@ -504,6 +529,10 @@ export const FramePickerModal = ({
                 className="w-full h-full"
                 onLoadedMetadata={() => console.log("Video metadata loaded")}
                 onCanPlay={() => console.log("Video can play event fired")}
+                onClick={() => {
+                  // Allow user to click on video to restart playback if it fails
+                  if (!isPlaying) togglePlayPause();
+                }}
                 controls={false}
                 crossOrigin="anonymous"
                 playsInline
@@ -643,7 +672,7 @@ export const FramePickerModal = ({
             
             {/* Footer actions */}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" onClick={closeModal}>
                 <X className="h-4 w-4 mr-2" /> 
                 Cancel
               </Button>

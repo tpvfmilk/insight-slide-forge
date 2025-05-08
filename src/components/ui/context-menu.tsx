@@ -180,37 +180,35 @@ const ContextMenuShortcut = ({
 }
 ContextMenuShortcut.displayName = "ContextMenuShortcut"
 
-// Enhanced VideoFrameButton component for consistency with the dropdown menu 
-// and better handling of click events
-const ContextMenuVideoFrameButton = ({
-  onClick,
-  children,
-  disabled,
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLButtonElement> & {
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
-}) => {
-  // Handle click event explicitly to improve reliability
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+// Fixed VideoFrameButton component to ensure proper event propagation and UI interaction
+const ContextMenuVideoFrameButton = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    onClick?: () => void;
+    disabled?: boolean;
+  }
+>(({ onClick, children, disabled, className, ...props }, ref) => {
+  // Create a memoized handler to prevent unnecessary re-renders
+  const handleClick = React.useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Log when the button is clicked for debugging
-    console.log("ContextMenuVideoFrameButton clicked");
+    // Add debugging logs
+    console.log("Button clicked, executing onClick handler");
     
     if (onClick && !disabled) {
-      console.log("Executing onClick handler");
-      onClick();
+      // Execute the callback with a slight delay to ensure UI updates first
+      setTimeout(() => {
+        onClick();
+      }, 10);
     }
-  };
+  }, [onClick, disabled]);
 
   return (
     <button
+      ref={ref}
       className={cn(
-        "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         disabled && "opacity-50 cursor-not-allowed",
         className
       )}
@@ -222,7 +220,8 @@ const ContextMenuVideoFrameButton = ({
       {children}
     </button>
   );
-};
+});
+
 ContextMenuVideoFrameButton.displayName = "ContextMenuVideoFrameButton";
 
 export {
