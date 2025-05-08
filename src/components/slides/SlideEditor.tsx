@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -509,6 +509,30 @@ export const SlideEditor = () => {
     toast.success("New slide added");
   };
   
+  const deleteCurrentSlide = () => {
+    // Don't allow deleting the last slide
+    if (slides.length <= 1) {
+      toast.error("Cannot delete the last slide");
+      return;
+    }
+    
+    // Create updated slides array without the current slide
+    const newSlides = [...slides];
+    newSlides.splice(currentSlideIndex, 1);
+    
+    // Update the state
+    setSlides(newSlides);
+    
+    // Save to database
+    updateSlidesInDatabase(newSlides);
+    
+    // Navigate to previous slide or stay at current index if it was the first slide
+    const newIndex = currentSlideIndex > 0 ? currentSlideIndex - 1 : 0;
+    setCurrentSlideIndex(newIndex);
+    
+    toast.success("Slide deleted");
+  };
+  
   if (isLoading) {
     return <div className="h-full w-full flex items-center justify-center">
         <div className="text-center">
@@ -577,9 +601,10 @@ export const SlideEditor = () => {
         </div>
       </div>
       
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-0">
+      {/* Changed from grid to flex for better responsiveness */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Left pane - Image */}
-        <div className="border-r min-h-[300px] flex flex-col">
+        <div className="flex-1 min-w-0 flex flex-col border-b md:border-b-0 md:border-r">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Visual</h3>
             {/* Separate buttons for frame tools */}
@@ -596,9 +621,10 @@ export const SlideEditor = () => {
             </div>
           </div>
           
-          <div className="flex-1 flex items-center justify-center p-4">
-            {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? <div className="relative w-full h-full">
-                <div className="grid grid-cols-2 gap-4">
+          <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+            {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? <div className="w-full h-full">
+                {/* Responsive grid that stacks vertically when space is limited */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
                   {/* First, render all existing images with delete buttons */}
                   {currentSlide.imageUrls.map((url, index) => <div key={`slide-image-${index}`} className="relative group aspect-video">
                       <img src={url} alt={`Slide visual ${index + 1}`} className="w-full h-full object-cover rounded-md" />
@@ -662,12 +688,12 @@ export const SlideEditor = () => {
         </div>
         
         {/* Right pane - Content */}
-        <div className="min-h-[300px] flex flex-col">
+        <div className="flex-1 min-w-0 flex flex-col">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Content</h3>
             {isEditing ? <Button size="sm" onClick={saveChanges}>Save Changes</Button> : <Button size="sm" variant="ghost" onClick={startEditing}>Edit</Button>}
           </div>
-          <div className="flex-1 p-4">
+          <div className="flex-1 p-4 overflow-auto">
             {isEditing ? <div className="space-y-4 h-full">
                 <div className="space-y-2">
                   <label htmlFor="slide-title" className="text-sm font-medium">Title</label>
@@ -687,7 +713,7 @@ export const SlideEditor = () => {
       
       <Separator />
       
-      {/* Bottom navigation with added new slide button */}
+      {/* Bottom navigation with added new slide and delete slide buttons */}
       <div className="flex justify-between items-center p-4">
         <Button variant="outline" onClick={goToPrevSlide} disabled={currentSlideIndex === 0}>
           <ChevronLeft className="h-4 w-4 mr-1" />
@@ -711,6 +737,18 @@ export const SlideEditor = () => {
             title="Add new slide"
           >
             <Plus className="h-4 w-4" />
+          </Button>
+          
+          {/* Delete current slide button */}
+          <Button 
+            variant="destructive" 
+            size="icon" 
+            className="w-8 h-8 rounded-full ml-1" 
+            onClick={deleteCurrentSlide}
+            title="Delete current slide"
+            disabled={slides.length <= 1}
+          >
+            <X className="h-4 w-4" />
           </Button>
         </div>
         
