@@ -1,7 +1,8 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -13,12 +14,7 @@ import { exportToPDF, exportToCSV, exportToAnki, downloadFile } from "@/services
 import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FrameSelector } from "@/components/slides/FrameSelector";
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 
 interface Slide {
   id: string;
@@ -439,10 +435,28 @@ export const SlideEditor = () => {
       
       // Update the current slide with the image URL
       const updatedSlides = [...slides];
-      updatedSlides[currentSlideIndex] = {
-        ...updatedSlides[currentSlideIndex],
-        imageUrl: uploadResult.url
-      };
+      
+      // Check if the slide already has images
+      if (updatedSlides[currentSlideIndex].imageUrls && updatedSlides[currentSlideIndex].imageUrls!.length > 0) {
+        // Add to the existing imageUrls array
+        updatedSlides[currentSlideIndex] = {
+          ...updatedSlides[currentSlideIndex],
+          imageUrls: [...updatedSlides[currentSlideIndex].imageUrls!, uploadResult.url]
+        };
+      } else if (updatedSlides[currentSlideIndex].imageUrl) {
+        // Convert from single imageUrl to imageUrls array
+        updatedSlides[currentSlideIndex] = {
+          ...updatedSlides[currentSlideIndex],
+          imageUrls: [updatedSlides[currentSlideIndex].imageUrl!, uploadResult.url],
+          imageUrl: undefined // Clear the single imageUrl
+        };
+      } else {
+        // First image for this slide
+        updatedSlides[currentSlideIndex] = {
+          ...updatedSlides[currentSlideIndex],
+          imageUrls: [uploadResult.url]
+        };
+      }
       
       setSlides(updatedSlides);
       updateSlidesInDatabase(updatedSlides);
@@ -453,22 +467,6 @@ export const SlideEditor = () => {
       toast.error(`Failed to upload image: ${error.message}`, { id: "upload-image" });
     } finally {
       setIsUploadingImage(false);
-    }
-  };
-  
-  const removeImage = () => {
-    if (currentSlide?.imageUrl || (currentSlide?.imageUrls && currentSlide.imageUrls.length > 0)) {
-      const updatedSlides = [...slides];
-      updatedSlides[currentSlideIndex] = {
-        ...updatedSlides[currentSlideIndex],
-        imageUrl: undefined,
-        imageUrls: []
-      };
-      
-      setSlides(updatedSlides);
-      updateSlidesInDatabase(updatedSlides);
-      
-      toast.success("Images removed");
     }
   };
   
@@ -615,95 +613,79 @@ export const SlideEditor = () => {
         <div className="border-r min-h-[300px] flex flex-col">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Visual</h3>
+            {/* Converted dropdown to individual buttons */}
             <div className="flex gap-2">
-              {/* Replaced separate buttons with dropdown menu */}
-              {videoPath && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <FrameIcon className="h-4 w-4 mr-1" />
-                      Frame Tools
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-background border">
-                    <DropdownMenuItem 
-                      onClick={handleExtractFrames} 
-                      disabled={isExtractingFrames || timestamps.length === 0}
-                      className="cursor-pointer"
-                    >
-                      {isExtractingFrames ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          Preparing...
-                        </>
-                      ) : (
-                        <>
-                          <FrameIcon className="h-4 w-4 mr-2" />
-                          Extract Frames
-                        </>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={handleSelectFrames}
-                      disabled={allExtractedFrames.length === 0}
-                      className="cursor-pointer"
-                    >
-                      <ImageIcon className="h-4 w-4 mr-2" />
-                      Select Frames
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              
-              <label htmlFor="image-upload" className="flex">
-                <Button variant="outline" size="sm" disabled={isUploadingImage} className="cursor-pointer">
-                  {isUploadingImage ? (
+              {videoPath && timestamps.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExtractFrames}
+                  disabled={isExtractingFrames}
+                >
+                  {isExtractingFrames ? (
                     <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                   ) : (
-                    <Upload className="h-4 w-4 mr-1" />
+                    <FrameIcon className="h-4 w-4 mr-1" />
                   )}
-                  Upload Image
+                  Extract Frames
                 </Button>
-                <input 
-                  id="image-upload" 
-                  type="file" 
-                  accept="image/*"
-                  className="hidden" 
-                  onChange={handleImageUpload}
-                  disabled={isUploadingImage}
-                />
-              </label>
+              )}
               
-              {(currentSlide?.imageUrl || (currentSlide?.imageUrls && currentSlide.imageUrls.length > 0)) && (
-                <Button variant="outline" size="sm" onClick={removeImage}>
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Remove All
+              {allExtractedFrames.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectFrames}
+                >
+                  <ImageIcon className="h-4 w-4 mr-1" />
+                  Select Frames
                 </Button>
               )}
             </div>
           </div>
+          
           <div className="flex-1 flex items-center justify-center p-4">
             {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? (
               <div className="relative w-full h-full">
-                <div className={`grid ${currentSlide.imageUrls.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
+                <div className={`grid ${currentSlide.imageUrls.length === 1 ? 'grid-cols-1' : currentSlide.imageUrls.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'} gap-4`}>
+                  {/* First, render all existing images with delete buttons */}
                   {currentSlide.imageUrls.map((url, index) => (
-                    <div key={`slide-image-${index}`} className="relative group">
+                    <div key={`slide-image-${index}`} className="relative group aspect-video">
                       <img 
                         src={url} 
                         alt={`Slide visual ${index + 1}`} 
-                        className="w-full object-contain rounded-md"
+                        className="w-full h-full object-cover rounded-md"
                       />
-                      {/* Individual frame delete button */}
+                      {/* Individual frame delete button - always visible */}
                       <Button
                         variant="destructive"
                         size="icon"
-                        className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 h-8 w-8"
                         onClick={() => handleDeleteFrame(index)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
+                  
+                  {/* Add the "Add Image" button as the last item */}
+                  <label 
+                    htmlFor="image-upload-grid" 
+                    className="relative aspect-video flex items-center justify-center border-2 border-dashed rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex flex-col items-center justify-center text-muted-foreground">
+                      <Plus className="h-8 w-8 mb-2" />
+                      <span>Add Image</span>
+                    </div>
+                    <input 
+                      id="image-upload-grid" 
+                      type="file" 
+                      accept="image/*"
+                      className="hidden" 
+                      onChange={handleImageUpload}
+                      disabled={isUploadingImage}
+                    />
+                  </label>
                 </div>
               </div>
             ) : currentSlide?.imageUrl ? (
@@ -713,51 +695,72 @@ export const SlideEditor = () => {
                   alt="Slide visual" 
                   className="w-full h-full object-contain"
                 />
-                {/* Add delete button for single imageUrl too */}
+                {/* Delete button for single imageUrl */}
                 <Button
                   variant="destructive"
                   size="icon"
-                  className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={removeImage}
+                  className="absolute top-2 right-2 h-8 w-8"
+                  onClick={() => handleDeleteFrame(0)}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
+                
+                {/* Add upload button next to the single image */}
+                <label 
+                  htmlFor="image-upload-single" 
+                  className="absolute bottom-2 right-2"
+                >
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="bg-background/80 backdrop-blur-sm"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add More
+                  </Button>
+                  <input 
+                    id="image-upload-single" 
+                    type="file" 
+                    accept="image/*"
+                    className="hidden" 
+                    onChange={handleImageUpload}
+                    disabled={isUploadingImage}
+                  />
+                </label>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center text-muted-foreground h-full">
                 <ImageIcon className="h-10 w-10 mb-2" />
                 <p>No image available</p>
-                <div className="flex gap-2 mt-4">
-                  {videoPath && timestamps.length > 0 && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <FrameIcon className="h-4 w-4 mr-1" />
-                          Frame Tools
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-background border">
-                        <DropdownMenuItem 
-                          onClick={handleExtractFrames} 
-                          disabled={isExtractingFrames}
-                          className="cursor-pointer"
-                        >
-                          <FrameIcon className="h-4 w-4 mr-2" />
-                          Extract Frames
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={handleSelectFrames}
-                          disabled={allExtractedFrames.length === 0}
-                          className="cursor-pointer"
-                        >
-                          <ImageIcon className="h-4 w-4 mr-2" />
-                          Select Frames
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                  <label htmlFor="image-upload-empty">
-                    <Button variant="outline" size="sm" className="cursor-pointer">
+                <div className="flex flex-col gap-2 mt-4">
+                  {/* Buttons for when no images exist */}
+                  <div className="flex gap-2">
+                    {videoPath && timestamps.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExtractFrames}
+                        disabled={isExtractingFrames}
+                      >
+                        <FrameIcon className="h-4 w-4 mr-1" />
+                        Extract Frames
+                      </Button>
+                    )}
+                    
+                    {allExtractedFrames.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSelectFrames}
+                      >
+                        <ImageIcon className="h-4 w-4 mr-1" />
+                        Select Frames
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <label htmlFor="image-upload-empty" className="w-full">
+                    <Button variant="outline" size="sm" className="cursor-pointer w-full">
                       <Upload className="h-4 w-4 mr-1" />
                       Upload Image
                     </Button>
@@ -860,7 +863,11 @@ export const SlideEditor = () => {
       {/* Frame Selection Modal with fixed height/overflow */}
       <FrameSelector
         open={isFrameSelectorOpen}
-        onClose={() => setIsFrameSelectorOpen(false)}
+        onClose={() => {
+          setIsFrameSelectorOpen(false);
+          // Ensure proper cleanup
+          cleanupFrameSelectorDialog();
+        }}
         availableFrames={allExtractedFrames}
         selectedFrames={currentSlide?.imageUrls?.map(url => {
           // Find frame with matching URL

@@ -51,6 +51,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
       
       return () => {
         unregisterUIElement(elementId.current);
+        cleanupFrameSelectorDialog();
       };
     }
   }, [open, registerUIElement, unregisterUIElement]);
@@ -89,13 +90,6 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
   const isSelected = (frame: ExtractedFrame) => {
     return localSelected.some(f => f.id === frame.id);
   };
-
-  // Cleanup when unmounting, regardless of open state
-  useEffect(() => {
-    return () => {
-      cleanupFrameSelectorDialog();
-    };
-  }, []);
 
   return (
     <Dialog 

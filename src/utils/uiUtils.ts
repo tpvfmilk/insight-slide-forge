@@ -32,6 +32,8 @@ export const detectBlockingUI = (): boolean => {
  * Force removes any potential UI blockers from the DOM
  */
 export const forceRemoveUIBlockers = (): void => {
+  console.log("Force removing UI blockers...");
+  
   // Remove any overlay elements that might be stuck
   const overlays = document.querySelectorAll(
     '[role="dialog"], [role="tooltip"], [role="menu"], [data-radix-popper-content-wrapper], .radix-dropdown-menu-content, .radix-context-menu-content, [data-state="open"]'
@@ -90,45 +92,57 @@ export const forceRemoveUIBlockers = (): void => {
 export const cleanupFrameSelectorDialog = (): void => {
   console.log("Cleaning up frame selector dialog...");
   
-  // Force any dropdowns to close
-  const dropdowns = document.querySelectorAll('[data-radix-dropdown-menu-content], [data-radix-context-menu-content]');
-  dropdowns.forEach(dropdown => {
-    if (dropdown.parentNode) {
-      dropdown.setAttribute('data-state', 'closed');
-      setTimeout(() => {
-        if (document.body.contains(dropdown) && dropdown.parentNode) {
-          dropdown.parentNode.removeChild(dropdown);
-        }
-      }, 300);
-    }
-  });
-  
-  // Ensure any portals created by the frame selector are removed
-  const framePortals = document.querySelectorAll('[data-radix-portal]');
-  framePortals.forEach(portal => {
-    try {
-      // Only remove if it seems to be related to dialogs or dropdowns
-      const content = portal.querySelector('[role="dialog"], [role="menu"]');
-      if (content && portal.parentNode) {
-        portal.parentNode.removeChild(portal);
-      }
-    } catch (error) {
-      console.error('Error removing frame selector portal:', error);
-    }
-  });
-  
-  // Reset body styles
+  // Reset body overflow and styles
   document.body.style.overflow = '';
   document.body.style.paddingRight = '';
   document.body.style.pointerEvents = '';
   
-  // Re-enable pointer events on main content
+  // Force close any open radix dialogs by finding all portal roots
+  const portalRoots = document.querySelectorAll('[data-radix-portal]');
+  portalRoots.forEach(root => {
+    try {
+      if (root.parentNode) {
+        // For dialogs, look for inner content with role="dialog"
+        const dialogContent = root.querySelector('[role="dialog"]');
+        if (dialogContent) {
+          dialogContent.setAttribute('data-state', 'closed');
+        }
+        
+        // For dropdowns, look for content
+        const dropdownContent = root.querySelector('[data-radix-dropdown-menu-content], [data-radix-context-menu-content]');
+        if (dropdownContent) {
+          dropdownContent.setAttribute('data-state', 'closed');
+        }
+        
+        // After animation time, remove if still in DOM
+        setTimeout(() => {
+          if (document.body.contains(root) && root.parentNode) {
+            root.parentNode.removeChild(root);
+          }
+        }, 300);
+      }
+    } catch (error) {
+      console.error('Error removing portal:', error);
+    }
+  });
+  
+  // Look for any open overlays
+  const overlays = document.querySelectorAll('[data-state="open"]');
+  overlays.forEach(overlay => {
+    try {
+      overlay.setAttribute('data-state', 'closed');
+    } catch (error) {
+      console.error('Error closing overlay:', error);
+    }
+  });
+  
+  // Ensure pointer events are re-enabled
   const mainContent = document.querySelector('main');
   if (mainContent instanceof HTMLElement) {
     mainContent.style.pointerEvents = 'auto';
   }
   
-  // After a small timeout, verify cleanup was successful
+  // After a small timeout, check if cleanup was successful
   setTimeout(() => {
     const stillBlocking = detectBlockingUI();
     if (stillBlocking) {
