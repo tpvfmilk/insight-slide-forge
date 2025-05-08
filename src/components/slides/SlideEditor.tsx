@@ -349,7 +349,7 @@ export const SlideEditor = () => {
       // Also update in the database
       updateSlidesInDatabase(updatedSlides);
       setIsEditing(false);
-      toast.success("Slide updated");
+      // Remove toast notification for routine slide updates
     }
   };
   
@@ -577,7 +577,7 @@ export const SlideEditor = () => {
     saveChanges();
     setCurrentSlideIndex(currentSlideIndex + 1);
     
-    toast.success("New slide added");
+    // Removed toast notification for slide creation
   };
   
   // Delete current slide with undo functionality
@@ -606,7 +606,7 @@ export const SlideEditor = () => {
     const newIndex = currentSlideIndex > 0 ? currentSlideIndex - 1 : 0;
     setCurrentSlideIndex(newIndex);
     
-    toast.success("Slide deleted");
+    // Removed toast notification for slide deletion
   };
   
   // Undo delete slide
