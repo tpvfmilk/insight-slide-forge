@@ -173,80 +173,11 @@ export type Database = {
         }
         Relationships: []
       }
-      storage_tiers: {
-        Row: {
-          created_at: string
-          id: string
-          is_default: boolean | null
-          name: string
-          price: number
-          storage_limit: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          is_default?: boolean | null
-          name: string
-          price: number
-          storage_limit: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          is_default?: boolean | null
-          name?: string
-          price?: number
-          storage_limit?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      user_storage: {
-        Row: {
-          created_at: string
-          id: string
-          storage_used: number
-          tier_id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          storage_used?: number
-          tier_id: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          storage_used?: number
-          tier_id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_storage_tier_id_fkey"
-            columns: ["tier_id"]
-            isOneToOne: false
-            referencedRelation: "storage_tiers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      calculate_project_storage_size: {
-        Args: { project_id: string }
-        Returns: number
-      }
       get_current_user_id: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -259,16 +190,6 @@ export type Database = {
           estimated_cost: number
         }[]
       }
-      get_user_storage_info: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          storage_used: number
-          storage_limit: number
-          tier_name: string
-          percentage_used: number
-          tier_price: number
-        }[]
-      }
       get_user_token_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -278,26 +199,9 @@ export type Database = {
           last_used: string
         }[]
       }
-      get_user_total_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          total_tokens: number
-          api_requests: number
-          estimated_cost: number
-          last_used: string
-          storage_used: number
-          storage_limit: number
-          storage_percentage: number
-          tier_name: string
-        }[]
-      }
       reset_user_token_stats: {
         Args: Record<PropertyKey, never>
         Returns: undefined
-      }
-      update_storage_usage: {
-        Args: { file_size_change: number }
-        Returns: boolean
       }
     }
     Enums: {

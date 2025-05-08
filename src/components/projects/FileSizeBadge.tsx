@@ -1,6 +1,6 @@
 
 import { HardDrive } from "lucide-react";
-import { formatStorageSize } from "@/services/usageService";
+import { formatFileSize } from "@/utils/formatUtils";
 
 interface FileSizeBadgeProps {
   fileSize: number | undefined;
@@ -11,7 +11,7 @@ export function FileSizeBadge({ fileSize }: FileSizeBadgeProps) {
   let color = "text-muted-foreground";
   
   if (fileSize !== undefined) {
-    displayText = formatStorageSize(fileSize);
+    displayText = formatFileSize(fileSize);
     color = "text-primary";
   }
   

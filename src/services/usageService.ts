@@ -6,10 +6,6 @@ export interface UsageStatistics {
   apiRequests: number;
   estimatedCost: number;
   lastUsed: string | null;
-  storageUsed?: number;
-  storageLimit?: number;
-  storagePercentage?: number;
-  tierName?: string;
 }
 
 export interface DailyUsage {
@@ -23,7 +19,7 @@ export interface DailyUsage {
  */
 export const fetchTotalUsageStats = async (): Promise<UsageStatistics> => {
   const { data, error } = await supabase
-    .rpc('get_user_total_stats');
+    .rpc('get_user_token_stats');
 
   if (error) {
     console.error('Error fetching usage statistics:', error);
@@ -37,10 +33,6 @@ export const fetchTotalUsageStats = async (): Promise<UsageStatistics> => {
       apiRequests: 0,
       estimatedCost: 0,
       lastUsed: null,
-      storageUsed: 0,
-      storageLimit: 314572800, // 300MB default
-      storagePercentage: 0,
-      tierName: 'Free'
     };
   }
 
@@ -53,10 +45,6 @@ export const fetchTotalUsageStats = async (): Promise<UsageStatistics> => {
     apiRequests: statsData.api_requests || 0,
     estimatedCost: statsData.estimated_cost || 0,
     lastUsed: statsData.last_used || null,
-    storageUsed: statsData.storage_used || 0,
-    storageLimit: statsData.storage_limit || 314572800, // 300MB default
-    storagePercentage: statsData.storage_percentage || 0,
-    tierName: statsData.tier_name || 'Free'
   };
 };
 
@@ -114,18 +102,4 @@ export const resetUsageStats = async (): Promise<void> => {
     console.error('Error resetting usage statistics:', error);
     throw error;
   }
-};
-
-/**
- * Format bytes to human-readable format
- */
-export const formatStorageSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };

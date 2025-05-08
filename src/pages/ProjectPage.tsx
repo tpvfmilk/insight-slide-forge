@@ -5,10 +5,7 @@ import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
-import { 
-  ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon, Edit2, Image, Film,
-  Undo 
-} from "lucide-react";
+import { ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon, Edit2, Image, Film } from "lucide-react";
 import { generateSlidesForProject, hasValidSlides } from "@/services/slideGenerationService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
@@ -24,12 +21,6 @@ import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, Extracte
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
-
-interface UndoAction {
-  type: string;
-  slide?: any;
-  index: number;
-}
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -60,7 +51,6 @@ const ProjectPage = () => {
     file_size?: number;
   } | null>(null);
   const [extractedFrames, setExtractedFrames] = useState<ExtractedFrame[]>([]);
-  const [undoHistory, setUndoHistory] = useState<UndoAction[]>([]);
   
   const loadProject = async () => {
     if (!projectId) return;
@@ -262,7 +252,7 @@ const ProjectPage = () => {
       
       if (result.success) {
         // If we retrieved previously extracted frames, use them directly
-        if (result.frames && Array.isArray(result.frames) && result.frames.length > 0) {
+        if (result.frames && result.frames.length > 0) {
           await updateSlidesWithExtractedFrames(projectId, result.frames);
           await loadProject(); // Reload the project with updated slides
           setNeedsFrameExtraction(false);
@@ -447,92 +437,6 @@ const ProjectPage = () => {
   
   const needsTranscription = project?.source_type === 'video' && !project?.transcript;
   
-  // New function to safely check and iterate over slides
-  const getSafeSlides = () => {
-    if (!project || !project.slides) return [];
-    return Array.isArray(project.slides) ? project.slides : [];
-  };
-  
-  // New function to handle slide deletion with undo tracking
-  const handleDeleteSlide = (index: number) => {
-    const slides = getSafeSlides();
-    if (index < 0 || index >= slides.length) return;
-    
-    // Save slide for undo
-    const deletedSlide = slides[index];
-    
-    // Add to undo history
-    setUndoHistory(prev => [...prev, {
-      type: 'deleteSlide',
-      slide: deletedSlide,
-      index
-    }]);
-    
-    // Update project
-    const updatedSlides = [...slides];
-    updatedSlides.splice(index, 1);
-    
-    setProject(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        slides: updatedSlides
-      };
-    });
-    
-    // Save to database
-    if (projectId) {
-      updateProject(projectId, { slides: updatedSlides })
-        .catch(error => {
-          console.error("Error updating slides:", error);
-          toast.error("Failed to save slide changes");
-        });
-    }
-    
-    // Only show toast for first deletion to avoid notification fatigue
-    if (undoHistory.length === 0) {
-      toast.info("Slide deleted. Use the undo button to restore it.");
-    }
-  };
-  
-  // Function to handle undo action
-  const handleUndo = async () => {
-    if (undoHistory.length === 0 || !projectId) return;
-    
-    const lastAction = undoHistory[undoHistory.length - 1];
-    
-    if (lastAction.type === 'deleteSlide' && lastAction.slide) {
-      try {
-        // Get current slides safely
-        const slides = getSafeSlides();
-        
-        const updatedSlides = [...slides];
-        
-        // Insert the slide back at its original position or at the end if index is out of bounds
-        const insertIndex = Math.min(lastAction.index, updatedSlides.length);
-        updatedSlides.splice(insertIndex, 0, lastAction.slide);
-        
-        // Update local state
-        setProject(prev => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            slides: updatedSlides
-          };
-        });
-        
-        // Save to database
-        await updateProject(projectId, { slides: updatedSlides });
-        
-        // Remove this action from history
-        setUndoHistory(prev => prev.slice(0, -1));
-      } catch (error) {
-        console.error("Error undoing action:", error);
-        toast.error("Failed to undo action");
-      }
-    }
-  };
-  
   return (
     <InsightLayout>
       <div className="h-full flex flex-col">
@@ -575,19 +479,6 @@ const ProjectPage = () => {
           </div>
           
           <div className="flex items-center space-x-2">
-            {/* Undo Button */}
-            {undoHistory.length > 0 && (
-              <Button
-                variant="outline" 
-                size="sm"
-                onClick={handleUndo}
-                className="flex items-center"
-              >
-                <Undo className="h-4 w-4 mr-2" />
-                Undo
-              </Button>
-            )}
-            
             {/* Edit Title Dialog */}
             <Dialog open={isEditTitleDialogOpen} onOpenChange={setIsEditTitleDialogOpen}>
               <DialogContent className="sm:max-w-md">
@@ -864,10 +755,7 @@ const ProjectPage = () => {
               </div>
             </div>
           ) : (
-            <SlideEditor 
-              onDeleteSlide={handleDeleteSlide}
-              canUndo={undoHistory.length > 0}
-            />
+            <SlideEditor />
           )}
         </div>
         

@@ -67,26 +67,3 @@ export const initializeStorage = async (): Promise<boolean> => {
     return false;
   }
 };
-
-/**
- * Gets the estimated storage size for a project
- * @param projectId The ID of the project
- * @returns The size in bytes
- */
-export const getProjectStorageSize = async (projectId: string): Promise<number> => {
-  try {
-    const { data, error } = await supabase.rpc('calculate_project_storage_size', {
-      project_id: projectId
-    });
-    
-    if (error) {
-      console.error("Error calculating project storage size:", error);
-      return 0;
-    }
-    
-    return Number(data) || 0;
-  } catch (error) {
-    console.error("Error getting project storage size:", error);
-    return 0;
-  }
-};
