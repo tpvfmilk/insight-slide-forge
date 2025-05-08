@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
@@ -179,6 +180,32 @@ const DropdownMenuShortcut = ({
 }
 DropdownMenuShortcut.displayName = "DropdownMenuShortcut"
 
+// Export the new custom component
+const DropdownMenuVideoFrameButton = ({
+  onClick,
+  children,
+  disabled,
+  ...props
+}: React.HTMLAttributes<HTMLButtonElement> & {
+  onClick?: () => void;
+  disabled?: boolean;
+}) => {
+  return (
+    <button
+      className={cn(
+        "relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        disabled && "opacity-50 cursor-not-allowed"
+      )}
+      onClick={onClick}
+      disabled={disabled}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+DropdownMenuVideoFrameButton.displayName = "DropdownMenuVideoFrameButton";
+
 export {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -195,4 +222,5 @@ export {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuRadioGroup,
+  DropdownMenuVideoFrameButton,
 }
