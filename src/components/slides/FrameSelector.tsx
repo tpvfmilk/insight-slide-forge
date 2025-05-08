@@ -1,9 +1,11 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Check, Search, X, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useUIReset } from "@/context/UIResetContext";
+import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 
 interface ExtractedFrame {
   imageUrl: string;
@@ -28,11 +30,30 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
 }) => {
   const [search, setSearch] = useState("");
   const [localSelected, setLocalSelected] = useState<ExtractedFrame[]>([]);
+  const { registerUIElement, unregisterUIElement } = useUIReset();
+  const elementId = useRef(`frame-selector-${Math.random().toString(36).substring(2, 9)}`);
   
   // Initialize with the provided selected frames
   useEffect(() => {
     setLocalSelected(selectedFrames);
   }, [selectedFrames, open]);
+
+  // Register with UIResetContext when dialog opens
+  useEffect(() => {
+    if (open) {
+      registerUIElement({
+        id: elementId.current,
+        type: 'dialog',
+        close: () => {
+          handleClose();
+        },
+      });
+      
+      return () => {
+        unregisterUIElement(elementId.current);
+      };
+    }
+  }, [open, registerUIElement, unregisterUIElement]);
 
   // Filter frames based on search query
   const filteredFrames = availableFrames.filter(frame => 
@@ -55,6 +76,13 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
 
   const handleConfirm = () => {
     onSelect(localSelected);
+    handleClose();
+  };
+  
+  const handleClose = () => {
+    // Clean up any potential UI blockers specifically for frame selector
+    cleanupFrameSelectorDialog();
+    // Call the provided onClose function
     onClose();
   };
 
@@ -62,8 +90,22 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
     return localSelected.some(f => f.id === frame.id);
   };
 
+  // Cleanup when unmounting, regardless of open state
+  useEffect(() => {
+    return () => {
+      cleanupFrameSelectorDialog();
+    };
+  }, []);
+
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+    <Dialog 
+      open={open} 
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          handleClose();
+        }
+      }}
+    >
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Select Frames</DialogTitle>
@@ -122,7 +164,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
             {localSelected.length} frame(s) selected
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={handleClose}>
               <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
