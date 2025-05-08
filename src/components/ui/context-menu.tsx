@@ -207,9 +207,9 @@ const ContextMenuVideoFrameButton = React.forwardRef<
       // Use a requestAnimationFrame to ensure UI updates first
       window.requestAnimationFrame(() => {
         // Immediately close the context menu by finding and closing its parent
-        let menuElement = e.currentTarget;
+        let menuElement: HTMLElement | null = e.currentTarget;
         while (menuElement && !menuElement.hasAttribute('role')) {
-          menuElement = menuElement.parentElement as HTMLElement;
+          menuElement = menuElement.parentElement as HTMLElement | null;
         }
         
         // Once we've found the menu element, force it closed
@@ -221,7 +221,7 @@ const ContextMenuVideoFrameButton = React.forwardRef<
             // Try to find and remove the portal container
             const portals = document.querySelectorAll('[data-radix-portal]');
             portals.forEach(portal => {
-              if (portal.contains(menuElement)) {
+              if (portal.contains(menuElement) && portal.parentElement) {
                 setTimeout(() => {
                   if (document.body.contains(portal) && portal.parentElement) {
                     console.log("Removing portal containing menu");

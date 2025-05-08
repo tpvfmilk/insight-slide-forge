@@ -226,11 +226,11 @@ export const SlidePreview = () => {
     // Force close any open menus to prevent UI blocking
     forceRemoveUIBlockers();
     
-    // Set the modal state to open with a slight delay to ensure menu closes first
+    // Set the modal state to open with a slightly longer delay to ensure menu closes first
     setTimeout(() => {
       console.log("Setting isFramePickerModalOpen to true");
       setIsFramePickerModalOpen(true);
-    }, 100); // Increased delay for better sequencing
+    }, 150); // Increased delay for better sequencing
   }, [project, projectId]);
 
   // New function to handle frame extraction with improved error handling
@@ -471,7 +471,11 @@ export const SlidePreview = () => {
                 <span>Toggle Fullscreen</span>
               </ContextMenuItem>
               <ContextMenuSeparator />
-              <ContextMenuItem onClick={handleEmergencyReset} className="text-red-500">
+              <ContextMenuItem onClick={() => {
+                console.log("Manual UI reset triggered");
+                forceRemoveUIBlockers();
+                toast.success("UI reset complete");
+              }} className="text-red-500">
                 <X className="h-4 w-4 mr-2" />
                 <span>Reset UI (Emergency)</span>
               </ContextMenuItem>
@@ -547,17 +551,26 @@ export const SlidePreview = () => {
           onClose={() => {
             console.log("Closing frame picker modal");
             setIsFramePickerModalOpen(false);
-            forceRemoveUIBlockers(); // Ensure UI is reset when closing
+            // Add a small delay before cleaning up UI blockers
+            setTimeout(() => {
+              console.log("Running cleanup after modal close");
+              forceRemoveUIBlockers(); // Ensure UI is reset when closing
+            }, 100);
           }} 
           videoPath={project.source_file_path || ""} 
           projectId={projectId || ""} 
-          onComplete={handleFrameSelectionComplete} 
+          onComplete={(frames) => {
+            console.log("Frame selection complete, frames:", frames.length);
+            handleFrameSelectionComplete(frames);
+            // Add a small delay before cleaning up UI blockers
+            setTimeout(forceRemoveUIBlockers, 100);
+          }} 
           videoMetadata={videoMetadata || undefined} 
           existingFrames={extractedFrames} 
         />
       )}
       
-      {/* Emergency Reset Button to help when UI gets stuck */}
+      {/* Always ensure EmergencyResetButton is present */}
       <EmergencyResetButton />
     </div>
   );
