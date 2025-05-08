@@ -28,7 +28,7 @@ export const fetchTotalUsageStats = async (): Promise<UsageStatistics> => {
   }
 
   // If no data is returned (no usage yet), return default values
-  if (!data || data.length === 0) {
+  if (!data) {
     return {
       totalTokens: 0,
       apiRequests: 0,

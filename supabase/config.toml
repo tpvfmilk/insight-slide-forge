@@ -15,4 +15,3 @@ verify_jwt = true
 
 [functions.init-storage]
 verify_jwt = true
-

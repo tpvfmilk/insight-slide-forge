@@ -182,6 +182,27 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_daily_token_usage: {
+        Args: { days_to_fetch?: number }
+        Returns: {
+          usage_date: string
+          total_tokens: number
+          estimated_cost: number
+        }[]
+      }
+      get_user_token_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_tokens: number
+          api_requests: number
+          estimated_cost: number
+          last_used: string
+        }[]
+      }
+      reset_user_token_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
