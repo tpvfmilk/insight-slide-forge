@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
@@ -18,6 +17,7 @@ export type Project = Database["public"]["Tables"]["projects"]["Row"] & {
     file_size?: number;
   };
   extracted_frames?: ExtractedFrame[] | null;
+  folder_id?: string | null;
 };
 
 /**
@@ -43,7 +43,9 @@ export const fetchRecentProjects = async (limit: number = 3): Promise<Project[]>
       // Cast video_metadata JSON to the correct type if present
       video_metadata: project.video_metadata as Project['video_metadata'],
       // Cast extracted_frames JSON to the correct type if present
-      extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | null
+      extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | null,
+      // Add folder_id
+      folder_id: project.folder_id
     };
     return typedProject;
   });

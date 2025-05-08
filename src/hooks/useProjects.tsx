@@ -6,9 +6,13 @@ import { toast } from "sonner";
 
 interface UseProjectsOptions {
   limit?: number;
+  folderId?: string | null;
 }
 
-export const useProjects = ({ limit = 3 }: UseProjectsOptions = {}) => {
+export const useProjects = ({ 
+  limit = 3, 
+  folderId 
+}: UseProjectsOptions = {}) => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,7 +28,13 @@ export const useProjects = ({ limit = 3 }: UseProjectsOptions = {}) => {
     try {
       setLoading(true);
       const data = await fetchRecentProjects(limit);
-      setProjects(data);
+      
+      // Filter by folder if specified
+      const filteredData = folderId !== undefined 
+        ? data.filter(project => project.folder_id === folderId)
+        : data;
+        
+      setProjects(filteredData);
       setError(null);
     } catch (err) {
       console.error("Error loading projects:", err);
@@ -37,7 +47,7 @@ export const useProjects = ({ limit = 3 }: UseProjectsOptions = {}) => {
 
   useEffect(() => {
     loadProjects();
-  }, [user, limit]);
+  }, [user, limit, folderId]);
 
   return {
     projects,

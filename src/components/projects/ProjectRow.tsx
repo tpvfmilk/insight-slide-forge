@@ -1,7 +1,7 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FileText, Edit, Download, Trash } from "lucide-react";
+import { FileText, Edit, Download, Trash, FolderPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Project } from "@/services/projectService";
 import { FileSizeBadge } from "./FileSizeBadge";
@@ -12,7 +12,12 @@ import {
   DropdownMenuTrigger, 
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem
 } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
@@ -25,6 +30,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Folder, fetchFolders, moveProjectsToFolder } from "@/services/folderService";
+import { toast } from "sonner";
 
 interface ProjectRowProps {
   project: Project;
@@ -39,6 +46,48 @@ export function ProjectRow({
   handleEditTitle,
   handleExport
 }: ProjectRowProps) {
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+  const [movingToFolder, setMovingToFolder] = useState(false);
+
+  useEffect(() => {
+    // Only load folders when the dropdown is opened
+    const loadFolders = async () => {
+      try {
+        setLoadingFolders(true);
+        const data = await fetchFolders();
+        setFolders(data);
+      } catch (error) {
+        console.error("Error loading folders:", error);
+      } finally {
+        setLoadingFolders(false);
+      }
+    };
+
+    loadFolders();
+  }, []);
+
+  const handleMoveToFolder = async (folderId: string | null) => {
+    try {
+      setMovingToFolder(true);
+      await moveProjectsToFolder([project.id], folderId);
+      
+      // Update the project in the UI
+      project.folder_id = folderId;
+      
+      const folderName = folderId 
+        ? folders.find(f => f.id === folderId)?.name 
+        : "Unfiled Projects";
+      
+      toast.success(`Moved "${project.title}" to ${folderName}`);
+    } catch (error) {
+      console.error("Error moving project to folder:", error);
+      toast.error("Failed to move project");
+    } finally {
+      setMovingToFolder(false);
+    }
+  };
+
   return (
     <tr key={project.id} className="border-t hover:bg-muted/30">
       <td className="p-4">
@@ -77,7 +126,7 @@ export function ProjectRow({
           : 0}
       </td>
       <td className="p-4">
-        <FileSizeBadge fileSize={project.video_metadata?.file_size} />
+        <FileSizeBadge fileSize={project.video_metadata?.file_size} projectId={project.id} />
       </td>
       <td className="p-4 text-right">
         <div className="flex justify-end items-center gap-2">
@@ -107,6 +156,53 @@ export function ProjectRow({
               <DropdownMenuItem onClick={() => handleExport(project.id, "images")}>
                 Export as Images
               </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* Folder Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-8 w-8">
+                <FolderPen className="h-4 w-4" />
+                <span className="sr-only">Move to Folder</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <div className="flex items-center">
+                    <FolderPen className="h-4 w-4 mr-2" />
+                    <span>Move to Folder</span>
+                  </div>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuRadioGroup 
+                    value={project.folder_id || ""}
+                    onValueChange={(value) => handleMoveToFolder(value || null)}
+                    disabled={movingToFolder}
+                  >
+                    <DropdownMenuRadioItem value="">
+                      Unfiled Projects
+                    </DropdownMenuRadioItem>
+                    
+                    {loadingFolders ? (
+                      <DropdownMenuItem disabled>
+                        Loading folders...
+                      </DropdownMenuItem>
+                    ) : folders.length > 0 ? (
+                      folders.map((folder) => (
+                        <DropdownMenuRadioItem key={folder.id} value={folder.id}>
+                          {folder.name}
+                        </DropdownMenuRadioItem>
+                      ))
+                    ) : (
+                      <DropdownMenuItem disabled>
+                        No folders available
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuContent>
           </DropdownMenu>
           

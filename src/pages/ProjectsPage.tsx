@@ -1,18 +1,28 @@
 
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { fetchRecentProjects, Project, deleteProject, updateProject } from "@/services/projectService";
 import { toast } from "sonner";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
 import { ProjectsHeader } from "@/components/projects/ProjectsHeader";
-import { ProjectsTable } from "@/components/projects/ProjectsTable";
 import { ProjectTitleEditor } from "@/components/projects/ProjectTitleEditor";
+import { Button } from "@/components/ui/button";
+import { FolderList } from "@/components/folders/FolderList";
+import { FolderDialog } from "@/components/folders/FolderDialog";
+import { FolderPen } from "lucide-react";
+import { Folder, createFolder, deleteFolder, fetchFolders } from "@/services/folderService";
 
 const ProjectsPage = () => {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingFolders, setLoadingFolders] = useState(true);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   
   const loadProjects = async () => {
     try {
@@ -28,8 +38,22 @@ const ProjectsPage = () => {
     }
   };
   
+  const loadFolders = async () => {
+    try {
+      setLoadingFolders(true);
+      const data = await fetchFolders();
+      setFolders(data);
+    } catch (error) {
+      console.error("Failed to load folders:", error);
+      toast.error("Failed to load folders");
+    } finally {
+      setLoadingFolders(false);
+    }
+  };
+  
   useEffect(() => {
     loadProjects();
+    loadFolders();
   }, []);
   
   const handleDeleteProject = async (projectId: string) => {
@@ -39,6 +63,9 @@ const ProjectsPage = () => {
       
       // Update the projects list
       setProjects(projects.filter(project => project.id !== projectId));
+      
+      // Invalidate the storage info query to update the storage usage bar
+      queryClient.invalidateQueries({ queryKey: ['storage-info'] });
     } catch (error) {
       console.error("Failed to delete project:", error);
       toast.error("Failed to delete project");
@@ -66,33 +93,82 @@ const ProjectsPage = () => {
     }
   };
   
-  const filteredProjects = projects.filter(project => 
-    project.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleCreateFolder = () => {
+    setIsCreateFolderOpen(true);
+  };
+  
+  const handleFolderSaved = () => {
+    setIsCreateFolderOpen(false);
+    setEditingFolder(null);
+    loadFolders();
+  };
+  
+  const handleEditFolder = (folder: Folder) => {
+    setEditingFolder(folder);
+  };
+  
+  const handleDeleteFolder = async (folderId: string) => {
+    try {
+      await deleteFolder(folderId);
+      
+      // Update folders list
+      setFolders(folders.filter(folder => folder.id !== folderId));
+      
+      // Update projects list to reflect the folder change
+      setProjects(projects.map(project => 
+        project.folder_id === folderId ? { ...project, folder_id: null } : project
+      ));
+      
+      toast.success("Folder deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete folder:", error);
+      toast.error("Failed to delete folder");
+    }
+  };
   
   const handleExport = (projectId: string, format: string) => {
     // This would be implemented in exportService.ts
     toast.success(`Exporting as ${format}...`);
   };
   
+  const filteredProjects = projects.filter(project => 
+    project.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
   return (
     <InsightLayout>
       <div className="p-6 space-y-6">
-        <ProjectsHeader 
-          searchQuery={searchQuery} 
-          setSearchQuery={setSearchQuery} 
-        />
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+          <ProjectsHeader 
+            searchQuery={searchQuery} 
+            setSearchQuery={setSearchQuery} 
+          />
+          
+          <Button onClick={handleCreateFolder} className="w-full md:w-auto">
+            <FolderPen className="h-4 w-4 mr-2" />
+            Create Folder
+          </Button>
+        </div>
         
-        <ProjectsTable
-          loading={loading}
-          filteredProjects={filteredProjects}
-          handleDeleteProject={handleDeleteProject}
-          handleEditTitle={handleEditTitle}
-          handleExport={handleExport}
-        />
+        {loading || loadingFolders ? (
+          <div className="border rounded-lg p-8 text-center">
+            <div className="text-muted-foreground">Loading projects and folders...</div>
+          </div>
+        ) : (
+          <FolderList
+            folders={folders}
+            projects={filteredProjects}
+            onDeleteFolder={handleDeleteFolder}
+            onEditFolder={handleEditFolder}
+            handleDeleteProject={handleDeleteProject}
+            handleEditTitle={handleEditTitle}
+            handleExport={handleExport}
+            loading={loading}
+          />
+        )}
       </div>
 
-      {/* Edit Title Dialog */}
+      {/* Edit Project Title Dialog */}
       <SafeDialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
         <SafeDialogContent className="sm:max-w-md">
           {editingProject && (
@@ -103,6 +179,25 @@ const ProjectsPage = () => {
             />
           )}
         </SafeDialogContent>
+      </SafeDialog>
+      
+      {/* Create Folder Dialog */}
+      <SafeDialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
+        <FolderDialog
+          onSuccess={handleFolderSaved}
+          onCancel={() => setIsCreateFolderOpen(false)}
+        />
+      </SafeDialog>
+      
+      {/* Edit Folder Dialog */}
+      <SafeDialog open={!!editingFolder} onOpenChange={(open) => !open && setEditingFolder(null)}>
+        {editingFolder && (
+          <FolderDialog
+            folder={editingFolder}
+            onSuccess={handleFolderSaved}
+            onCancel={() => setEditingFolder(null)}
+          />
+        )}
       </SafeDialog>
     </InsightLayout>
   );
