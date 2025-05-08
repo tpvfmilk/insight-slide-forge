@@ -70,7 +70,7 @@ serve(async (req) => {
 
 // Get total token usage statistics for a user
 async function getTotalStats(userId: string) {
-  const { data, error } = await supabase.rpc('get_user_token_stats');
+  const { data, error } = await supabase.rpc('get_user_total_stats');
 
   if (error) {
     console.error("Error fetching total usage stats:", error);

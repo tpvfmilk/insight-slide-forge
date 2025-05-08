@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Calendar, Clock, RefreshCcw } from "lucide-react";
+import { Calendar, Clock, RefreshCcw, HardDrive } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -13,12 +13,13 @@ import {
   Legend, 
   ResponsiveContainer 
 } from 'recharts';
-import { fetchTotalUsageStats, fetchDailyUsage, resetUsageStats, UsageStatistics, DailyUsage } from "@/services/usageService";
+import { fetchTotalUsageStats, fetchDailyUsage, resetUsageStats, UsageStatistics, DailyUsage, formatStorageSize } from "@/services/usageService";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Progress } from "@/components/ui/progress";
 
 export const UsageStats = () => {
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('week');
@@ -85,6 +86,9 @@ export const UsageStats = () => {
     );
   }
 
+  // Calculate storage percentage
+  const storagePercentage = totalStats?.storagePercentage || 0;
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -144,6 +148,22 @@ export const UsageStats = () => {
             value={isLoadingTotal ? "Loading..." : formatDate(totalStats?.lastUsed || null)} 
             icon={<Clock className="h-4 w-4 text-muted-foreground" />}
           />
+        </div>
+        
+        {/* Storage usage section */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center text-sm mb-1">
+            <div className="flex items-center text-muted-foreground">
+              <HardDrive className="h-4 w-4 mr-1" />
+              <span>Storage ({totalStats?.tierName || "Free"})</span>
+            </div>
+            <span className="text-xs">
+              {isLoadingTotal ? "Loading..." : 
+                `${formatStorageSize(totalStats?.storageUsed || 0)} / ${formatStorageSize(totalStats?.storageLimit || 0)}`
+              }
+            </span>
+          </div>
+          <Progress value={storagePercentage} className="h-2" />
         </div>
         
         <Tabs defaultValue="week" value={timeRange} onValueChange={(value) => setTimeRange(value as 'day' | 'week' | 'month')}>
