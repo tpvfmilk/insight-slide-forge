@@ -21,9 +21,12 @@ import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, Extracte
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
-
 const ProjectPage = () => {
-  const { id: projectId } = useParams<{ id: string }>();
+  const {
+    id: projectId
+  } = useParams<{
+    id: string;
+  }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -51,30 +54,25 @@ const ProjectPage = () => {
     file_size?: number;
   } | null>(null);
   const [extractedFrames, setExtractedFrames] = useState<ExtractedFrame[]>([]);
-  
   const loadProject = async () => {
     if (!projectId) return;
-    
     try {
       setIsLoading(true);
-      
+
       // Ensure storage buckets are initialized when viewing a project
       await initializeStorage();
-      
       const projectData = await fetchProjectById(projectId);
-      
       if (!projectData) {
         toast.error("Project not found");
         navigate("/projects");
         return;
       }
-      
       setProject(projectData);
       setContextPrompt(projectData.context_prompt || "");
       setTranscript(projectData.transcript || "");
       setSlidesPerMinute(projectData.slides_per_minute || 6);
       setTitle(projectData.title || "Untitled Project");
-      
+
       // Extract video metadata if it exists
       if (projectData.video_metadata) {
         setVideoMetadata(projectData.video_metadata as {
@@ -84,21 +82,17 @@ const ProjectPage = () => {
           file_size?: number;
         });
       }
-      
+
       // Get previously extracted frames
       if (projectData.extracted_frames && Array.isArray(projectData.extracted_frames)) {
         setExtractedFrames(projectData.extracted_frames as ExtractedFrame[]);
       }
-      
+
       // Check if the project has slides with timestamps but no images
       // Make sure we're passing an array to slidesNeedFrameExtraction
       const slidesArray = Array.isArray(projectData.slides) ? projectData.slides : [];
-      setNeedsFrameExtraction(
-        projectData.source_type === 'video' && 
-        hasValidSlides(projectData) && 
-        slidesNeedFrameExtraction(slidesArray)
-      );
-      
+      setNeedsFrameExtraction(projectData.source_type === 'video' && hasValidSlides(projectData) && slidesNeedFrameExtraction(slidesArray));
+
       // Collect all timestamps from slides for potential frame extraction
       const timestamps: string[] = [];
       if (Array.isArray(projectData.slides)) {
@@ -120,7 +114,7 @@ const ProjectPage = () => {
         });
       }
       setAllTimestamps([...new Set(timestamps)]); // Remove duplicates
-      
+
       // Get video filename if it's a video project
       if (projectData.source_type === 'video' && projectData.source_file_path) {
         try {
@@ -132,10 +126,10 @@ const ProjectPage = () => {
           console.error("Error parsing video filename:", error);
         }
       }
-      
+
       // For new projects, check if we need to transcribe or generate slides
       const isNewlyCreated = Date.now() - new Date(projectData.created_at).getTime() < 60000; // Within a minute
-      
+
       if (isNewlyCreated) {
         // If video upload with no transcript, try to transcribe
         if (projectData.source_type === 'video' && !projectData.transcript) {
@@ -153,19 +147,14 @@ const ProjectPage = () => {
       setIsLoading(false);
     }
   };
-  
   useEffect(() => {
     loadProject();
   }, [projectId]);
-  
   const handleGenerateSlides = async () => {
     if (!projectId || isGenerating) return;
-    
     setIsGenerating(true);
-    
     try {
       const result = await generateSlidesForProject(projectId);
-      
       if (result.success && result.slides) {
         // Update the project in state with the new slides
         setProject(prev => {
@@ -174,12 +163,11 @@ const ProjectPage = () => {
             ...prev,
             slides: result.slides
           };
-          
+
           // Check if we need frame extraction after slide generation
           if (prev.source_type === 'video') {
             setNeedsFrameExtraction(slidesNeedFrameExtraction(result.slides));
           }
-          
           return updatedProject;
         });
       }
@@ -187,15 +175,11 @@ const ProjectPage = () => {
       setIsGenerating(false);
     }
   };
-
   const handleTranscribeVideo = async () => {
     if (!projectId || isTranscribing) return;
-    
     setIsTranscribing(true);
-    
     try {
       const result = await transcribeVideo(projectId);
-      
       if (result.success && result.transcript) {
         // Update the project in state with the new transcript
         setProject(prev => {
@@ -205,9 +189,8 @@ const ProjectPage = () => {
             transcript: result.transcript
           };
         });
-        
         setTranscript(result.transcript);
-        
+
         // Once transcription is complete, generate slides if none exist
         if (!hasValidSlides(project)) {
           handleGenerateSlides();
@@ -217,39 +200,29 @@ const ProjectPage = () => {
       setIsTranscribing(false);
     }
   };
-
   const handleExtractFrames = async () => {
     if (!projectId || !project?.source_file_path || isExtractingFrames || allTimestamps.length === 0) {
       return;
     }
-    
     setIsExtractingFrames(true);
-    
     try {
       // First check if we already have all the frames extracted
       if (extractedFrames.length > 0) {
-        const allTimestampsExtracted = allTimestamps.every(timestamp => 
-          extractedFrames.some(frame => frame.timestamp === timestamp)
-        );
-        
+        const allTimestampsExtracted = allTimestamps.every(timestamp => extractedFrames.some(frame => frame.timestamp === timestamp));
         if (allTimestampsExtracted) {
           toast.success("All frames already extracted");
           setNeedsFrameExtraction(false);
-          
+
           // Update the slides with these frames
           await updateSlidesWithExtractedFrames(projectId, extractedFrames);
           await loadProject(); // Reload the project to get updated slides
           return;
         }
       }
-      
+
       // Get remaining timestamps to extract
-      const remainingTimestamps = allTimestamps.filter(timestamp => 
-        !extractedFrames.some(frame => frame.timestamp === timestamp)
-      );
-      
+      const remainingTimestamps = allTimestamps.filter(timestamp => !extractedFrames.some(frame => frame.timestamp === timestamp));
       const result = await clientExtractFramesFromVideo(projectId, project.source_file_path, remainingTimestamps);
-      
       if (result.success) {
         // If we retrieved previously extracted frames, use them directly
         if (result.frames && result.frames.length > 0) {
@@ -267,20 +240,19 @@ const ProjectPage = () => {
       setIsExtractingFrames(false);
     }
   };
-  
-  const handleFrameExtractionComplete = async (frames: Array<{ timestamp: string, imageUrl: string }>) => {
+  const handleFrameExtractionComplete = async (frames: Array<{
+    timestamp: string;
+    imageUrl: string;
+  }>) => {
     if (!projectId) return;
-    
     setIsFrameExtractionModalOpen(false);
-    
     if (frames.length === 0) {
       toast.info("No frames were extracted");
       return;
     }
-    
+
     // Update the project's slides with the extracted frames
     const success = await updateSlidesWithExtractedFrames(projectId, frames);
-    
     if (success) {
       // Reload the project to get the updated slides with images
       await loadProject();
@@ -288,20 +260,16 @@ const ProjectPage = () => {
       toast.success("Frame extraction completed successfully");
     }
   };
-  
   const handleManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]) => {
     if (!projectId) return;
-    
     setIsFramePickerModalOpen(false);
-    
     if (selectedFrames.length === 0) {
       toast.info("No frames were selected");
       return;
     }
-    
+
     // Update the project's slides with the selected frames
     const success = await updateSlidesWithExtractedFrames(projectId, selectedFrames);
-    
     if (success) {
       // Reload the project to get the updated slides with images
       await loadProject();
@@ -309,29 +277,23 @@ const ProjectPage = () => {
       toast.success(`${selectedFrames.length} frames have been applied to your slides`);
     }
   };
-  
   const handleOpenManualFramePicker = () => {
     if (!project?.source_file_path) {
       toast.error("No video source available");
       return;
     }
-    
     setIsFramePickerModalOpen(true);
   };
-  
   const handleSaveContext = async () => {
     if (!projectId || !project) return;
-    
     setIsSaving(true);
-    
     try {
       await updateProject(projectId, {
         context_prompt: contextPrompt
       });
-      
       toast.success("Context prompt saved");
       setIsDialogOpen(false);
-      
+
       // Update the project in state with the new context
       setProject(prev => {
         if (!prev) return prev;
@@ -347,20 +309,16 @@ const ProjectPage = () => {
       setIsSaving(false);
     }
   };
-  
   const handleSaveTranscript = async () => {
     if (!projectId || !project) return;
-    
     setIsSaving(true);
-    
     try {
       await updateProject(projectId, {
         transcript: transcript
       });
-      
       toast.success("Transcript saved");
       setIsTranscriptDialogOpen(false);
-      
+
       // Update the project in state with the new transcript
       setProject(prev => {
         if (!prev) return prev;
@@ -376,20 +334,16 @@ const ProjectPage = () => {
       setIsSaving(false);
     }
   };
-  
   const handleSaveDensity = async () => {
     if (!projectId || !project) return;
-    
     setIsSaving(true);
-    
     try {
       await updateProject(projectId, {
         slides_per_minute: slidesPerMinute
       });
-      
       toast.success("Slides per minute setting saved");
       setIsDensityDialogOpen(false);
-      
+
       // Update the project in state with the new setting
       setProject(prev => {
         if (!prev) return prev;
@@ -405,20 +359,16 @@ const ProjectPage = () => {
       setIsSaving(false);
     }
   };
-  
   const handleSaveTitle = async () => {
     if (!projectId || !project) return;
-    
     setIsSaving(true);
-    
     try {
       await updateProject(projectId, {
         title: title
       });
-      
       toast.success("Project title saved");
       setIsEditTitleDialogOpen(false);
-      
+
       // Update the project in state with the new title
       setProject(prev => {
         if (!prev) return prev;
@@ -434,11 +384,8 @@ const ProjectPage = () => {
       setIsSaving(false);
     }
   };
-  
   const needsTranscription = project?.source_type === 'video' && !project?.transcript;
-  
-  return (
-    <InsightLayout>
+  return <InsightLayout>
       <div className="h-full flex flex-col">
         <div className="border-b p-4 flex items-center justify-between">
           <div className="flex items-center">
@@ -454,26 +401,15 @@ const ProjectPage = () => {
                 <h1 className="text-xl font-semibold truncate">
                   {isLoading ? "Loading..." : project?.title || "Untitled Project"}
                 </h1>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => setIsEditTitleDialogOpen(true)}
-                  className="h-6 w-6"
-                >
+                <Button variant="ghost" size="icon" onClick={() => setIsEditTitleDialogOpen(true)} className="h-6 w-6">
                   <Edit2 className="h-4 w-4" />
                 </Button>
               </div>
               <div className="flex items-center gap-2">
-                <p className="text-sm text-muted-foreground">
-                  {project?.source_type === 'video' ? 'From video upload' : 
-                  project?.source_type === 'url' ? 'From URL' : 
-                  project?.source_type === 'transcript' ? 'From transcript' : 'Unknown source'}
-                </p>
-                {videoFileName && (
-                  <Badge variant="outline" className="text-xs font-normal">
+                
+                {videoFileName && <Badge variant="outline" className="text-xs font-normal">
                     {videoFileName}
-                  </Badge>
-                )}
+                  </Badge>}
               </div>
             </div>
           </div>
@@ -486,31 +422,17 @@ const ProjectPage = () => {
                   <DialogTitle>Edit Project Title</DialogTitle>
                 </DialogHeader>
                 <div className="py-4">
-                  <Input 
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Project title"
-                    className="w-full"
-                  />
+                  <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Project title" className="w-full" />
                   
                   <div className="flex justify-end mt-4 space-x-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setIsEditTitleDialogOpen(false)}
-                      disabled={isSaving}
-                    >
+                    <Button variant="outline" onClick={() => setIsEditTitleDialogOpen(false)} disabled={isSaving}>
                       Cancel
                     </Button>
-                    <Button 
-                      onClick={handleSaveTitle}
-                      disabled={isSaving || !title.trim()}
-                    >
-                      {isSaving ? (
-                        <>
+                    <Button onClick={handleSaveTitle} disabled={isSaving || !title.trim()}>
+                      {isSaving ? <>
                           <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                           Saving...
-                        </>
-                      ) : "Save Title"}
+                        </> : "Save Title"}
                     </Button>
                   </div>
                 </div>
@@ -530,31 +452,17 @@ const ProjectPage = () => {
                   <DialogTitle>Video Transcript</DialogTitle>
                 </DialogHeader>
                 <div className="py-4">
-                  <Textarea 
-                    value={transcript}
-                    onChange={(e) => setTranscript(e.target.value)}
-                    placeholder="Enter or edit the transcript here..."
-                    className="min-h-[400px]"
-                  />
+                  <Textarea value={transcript} onChange={e => setTranscript(e.target.value)} placeholder="Enter or edit the transcript here..." className="min-h-[400px]" />
                   
                   <div className="flex justify-end mt-4 space-x-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setIsTranscriptDialogOpen(false)}
-                      disabled={isSaving}
-                    >
+                    <Button variant="outline" onClick={() => setIsTranscriptDialogOpen(false)} disabled={isSaving}>
                       Cancel
                     </Button>
-                    <Button 
-                      onClick={handleSaveTranscript}
-                      disabled={isSaving}
-                    >
-                      {isSaving ? (
-                        <>
+                    <Button onClick={handleSaveTranscript} disabled={isSaving}>
+                      {isSaving ? <>
                           <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                           Saving...
-                        </>
-                      ) : "Save Transcript"}
+                        </> : "Save Transcript"}
                     </Button>
                   </div>
                 </div>
@@ -585,14 +493,7 @@ const ProjectPage = () => {
                     
                     <div className="flex items-center space-x-2">
                       <span className="text-sm text-muted-foreground">1</span>
-                      <Slider
-                        value={[slidesPerMinute]}
-                        min={1}
-                        max={20}
-                        step={1}
-                        onValueChange={(values) => setSlidesPerMinute(values[0])}
-                        className="flex-1"
-                      />
+                      <Slider value={[slidesPerMinute]} min={1} max={20} step={1} onValueChange={values => setSlidesPerMinute(values[0])} className="flex-1" />
                       <span className="text-sm text-muted-foreground">20</span>
                       <span className="w-8 text-right text-sm font-medium">{slidesPerMinute}</span>
                     </div>
@@ -603,23 +504,14 @@ const ProjectPage = () => {
                   </div>
                   
                   <div className="flex justify-end mt-4 space-x-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setIsDensityDialogOpen(false)}
-                      disabled={isSaving}
-                    >
+                    <Button variant="outline" onClick={() => setIsDensityDialogOpen(false)} disabled={isSaving}>
                       Cancel
                     </Button>
-                    <Button 
-                      onClick={handleSaveDensity}
-                      disabled={isSaving}
-                    >
-                      {isSaving ? (
-                        <>
+                    <Button onClick={handleSaveDensity} disabled={isSaving}>
+                      {isSaving ? <>
                           <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                           Saving...
-                        </>
-                      ) : "Save Setting"}
+                        </> : "Save Setting"}
                     </Button>
                   </div>
                 </div>
@@ -639,29 +531,17 @@ const ProjectPage = () => {
                   <DialogTitle>Slide Generation Context</DialogTitle>
                 </DialogHeader>
                 <div className="py-4">
-                  <ContextPromptInput 
-                    value={contextPrompt}
-                    onChange={setContextPrompt}
-                  />
+                  <ContextPromptInput value={contextPrompt} onChange={setContextPrompt} />
                   
                   <div className="flex justify-end mt-4 space-x-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setIsDialogOpen(false)}
-                      disabled={isSaving}
-                    >
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
                       Cancel
                     </Button>
-                    <Button 
-                      onClick={handleSaveContext}
-                      disabled={isSaving}
-                    >
-                      {isSaving ? (
-                        <>
+                    <Button onClick={handleSaveContext} disabled={isSaving}>
+                      {isSaving ? <>
                           <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                           Saving...
-                        </>
-                      ) : "Save Context"}
+                        </> : "Save Context"}
                     </Button>
                   </div>
                 </div>
@@ -669,127 +549,61 @@ const ProjectPage = () => {
             </Dialog>
             
             {/* Frame Selection Button */}
-            {project?.source_type === 'video' && project?.source_file_path && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleOpenManualFramePicker}
-              >
+            {project?.source_type === 'video' && project?.source_file_path && <Button variant="outline" size="sm" onClick={handleOpenManualFramePicker}>
                 <Film className="h-4 w-4 mr-2" />
                 Select Video Frames
-              </Button>
-            )}
+              </Button>}
             
             {/* Extract Frames Button */}
-            {needsFrameExtraction && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleExtractFrames} 
-                disabled={isExtractingFrames}
-              >
-                {isExtractingFrames ? (
-                  <>
+            {needsFrameExtraction && <Button variant="outline" size="sm" onClick={handleExtractFrames} disabled={isExtractingFrames}>
+                {isExtractingFrames ? <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                     Preparing...
-                  </>
-                ) : (
-                  <>
+                  </> : <>
                     <Image className="h-4 w-4 mr-2" />
                     {extractedFrames.length > 0 ? "Extract Missing Frames" : "Extract Video Frames"}
-                  </>
-                )}
-              </Button>
-            )}
+                  </>}
+              </Button>}
             
             {/* Transcribe Button */}
-            {needsTranscription && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleTranscribeVideo} 
-                disabled={isTranscribing}
-              >
-                {isTranscribing ? (
-                  <>
+            {needsTranscription && <Button variant="outline" size="sm" onClick={handleTranscribeVideo} disabled={isTranscribing}>
+                {isTranscribing ? <>
                     <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                     Transcribing...
-                  </>
-                ) : (
-                  <>
+                  </> : <>
                     <FileText className="h-4 w-4 mr-1" />
                     Transcribe Video
-                  </>
-                )}
-              </Button>
-            )}
+                  </>}
+              </Button>}
             
             {/* Generate Slides Button */}
-            <Button 
-              variant={needsTranscription ? "outline" : "default"} 
-              size="sm" 
-              onClick={handleGenerateSlides} 
-              disabled={isGenerating || (project?.source_type === 'video' && !project?.transcript)}
-            >
-              {isGenerating ? (
-                <>
+            <Button variant={needsTranscription ? "outline" : "default"} size="sm" onClick={handleGenerateSlides} disabled={isGenerating || project?.source_type === 'video' && !project?.transcript}>
+              {isGenerating ? <>
                   <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
                   Generating...
-                </>
-              ) : (
-                <>
+                </> : <>
                   <RefreshCw className="h-4 w-4 mr-1" />
                   Generate Slides
-                </>
-              )}
+                </>}
             </Button>
           </div>
         </div>
         
         <div className="flex-1 overflow-hidden">
-          {isLoading ? (
-            <div className="h-full flex items-center justify-center">
+          {isLoading ? <div className="h-full flex items-center justify-center">
               <div className="text-center">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
                 <p className="text-sm text-muted-foreground">Loading project...</p>
               </div>
-            </div>
-          ) : (
-            <SlideEditor />
-          )}
+            </div> : <SlideEditor />}
         </div>
         
         {/* Frame Extraction Modal */}
-        {project && project.source_file_path && (
-          <FrameExtractionModal
-            open={isFrameExtractionModalOpen}
-            onClose={() => setIsFrameExtractionModalOpen(false)}
-            videoPath={project.source_file_path}
-            projectId={projectId || ""}
-            timestamps={allTimestamps.filter(timestamp => 
-              !extractedFrames.some(frame => frame.timestamp === timestamp)
-            )}
-            onComplete={handleFrameExtractionComplete}
-            videoMetadata={videoMetadata || undefined}
-            previouslyExtractedFrames={extractedFrames}
-          />
-        )}
+        {project && project.source_file_path && <FrameExtractionModal open={isFrameExtractionModalOpen} onClose={() => setIsFrameExtractionModalOpen(false)} videoPath={project.source_file_path} projectId={projectId || ""} timestamps={allTimestamps.filter(timestamp => !extractedFrames.some(frame => frame.timestamp === timestamp))} onComplete={handleFrameExtractionComplete} videoMetadata={videoMetadata || undefined} previouslyExtractedFrames={extractedFrames} />}
         
         {/* Frame Picker Modal */}
-        {project && project.source_file_path && (
-          <FramePickerModal
-            open={isFramePickerModalOpen}
-            onClose={() => setIsFramePickerModalOpen(false)}
-            videoPath={project.source_file_path}
-            projectId={projectId || ""}
-            onComplete={handleManualFrameSelectionComplete}
-            videoMetadata={videoMetadata || undefined}
-            existingFrames={extractedFrames}
-          />
-        )}
+        {project && project.source_file_path && <FramePickerModal open={isFramePickerModalOpen} onClose={() => setIsFramePickerModalOpen(false)} videoPath={project.source_file_path} projectId={projectId || ""} onComplete={handleManualFrameSelectionComplete} videoMetadata={videoMetadata || undefined} existingFrames={extractedFrames} />}
       </div>
-    </InsightLayout>
-  );
+    </InsightLayout>;
 };
-
 export default ProjectPage;
