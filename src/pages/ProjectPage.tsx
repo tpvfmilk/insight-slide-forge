@@ -262,7 +262,7 @@ const ProjectPage = () => {
       
       if (result.success) {
         // If we retrieved previously extracted frames, use them directly
-        if (result.frames && result.frames.length > 0) {
+        if (result.frames && Array.isArray(result.frames) && result.frames.length > 0) {
           await updateSlidesWithExtractedFrames(projectId, result.frames);
           await loadProject(); // Reload the project with updated slides
           setNeedsFrameExtraction(false);
