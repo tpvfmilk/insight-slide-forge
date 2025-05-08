@@ -2,20 +2,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, X, Fullscreen, Sun, Moon, Timer, Film, Image, MoreVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Fullscreen, Sun, Moon, Timer } from "lucide-react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuVideoFrameButton,
-} from "@/components/ui/dropdown-menu";
-import { FramePickerModal } from "@/components/video/FramePickerModal";
 
 export interface Slide {
   id: string;
@@ -89,14 +80,6 @@ export const SlidePreview = () => {
   const [isDarkTheme, setIsDarkTheme] = useState(() => {
     return document.documentElement.classList.contains('dark');
   });
-  const [isFramePickerModalOpen, setIsFramePickerModalOpen] = useState<boolean>(false);
-  const [videoMetadata, setVideoMetadata] = useState<{
-    duration?: number;
-    original_file_name?: string;
-    file_type?: string;
-    file_size?: number;
-  } | null>(null);
-  const [extractedFrames, setExtractedFrames] = useState<Array<{ timestamp: string; imageUrl: string }>>([]); 
 
   const currentSlide = slides[currentSlideIndex];
   const SECONDS_PER_SLIDE = 30; // Default estimate: 30 seconds per slide
@@ -211,24 +194,6 @@ export const SlidePreview = () => {
       }, 300); // Match this with the animation duration
     }
   };
-
-  const handleOpenFramePicker = () => {
-    if (!project?.source_file_path) {
-      toast.error("No video source available");
-      return;
-    }
-    setIsFramePickerModalOpen(true);
-  };
-
-  const handleFrameSelectionComplete = (selectedFrames: Array<{ timestamp: string; imageUrl: string }>) => {
-    setIsFramePickerModalOpen(false);
-    if (selectedFrames.length === 0) {
-      toast.info("No frames were selected");
-      return;
-    }
-    // Here you would normally update the slides with the selected frames
-    toast.success(`${selectedFrames.length} frames have been selected`);
-  };
   
   useEffect(() => {
     const loadProject = async () => {
@@ -253,21 +218,6 @@ export const SlidePreview = () => {
         } else {
           toast.error("Invalid slide format");
           exitPresentation();
-        }
-
-        // Extract video metadata if it exists
-        if (projectData?.video_metadata) {
-          setVideoMetadata(projectData.video_metadata as {
-            duration?: number;
-            original_file_name?: string;
-            file_type?: string;
-            file_size?: number;
-          });
-        }
-
-        // Get previously extracted frames
-        if (projectData?.extracted_frames && Array.isArray(projectData.extracted_frames)) {
-          setExtractedFrames(projectData.extracted_frames as Array<{ timestamp: string; imageUrl: string }>);
         }
       } catch (error) {
         console.error("Error loading slides for presentation:", error);
@@ -339,31 +289,25 @@ export const SlidePreview = () => {
         </div>
         
         <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
-                <MoreVertical className="h-5 w-5" />
-                <span className="sr-only">Frame tools</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {project?.source_type === 'video' && project?.source_file_path && (
-                <DropdownMenuVideoFrameButton onClick={handleOpenFramePicker}>
-                  <Film className="h-4 w-4 mr-2" />
-                  <span>Select Video Frames</span>
-                </DropdownMenuVideoFrameButton>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={toggleTheme}>
-                {isDarkTheme ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
-                <span>{isDarkTheme ? "Light Mode" : "Dark Mode"}</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={toggleFullscreen}>
-                <Fullscreen className="h-4 w-4 mr-2" />
-                <span>Toggle Fullscreen</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={toggleTheme} 
+            className="text-white hover:bg-white/10"
+          >
+            {isDarkTheme ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            <span className="sr-only">Toggle theme</span>
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={toggleFullscreen} 
+            className="text-white hover:bg-white/10"
+          >
+            <Fullscreen className="h-5 w-5" />
+            <span className="sr-only">Toggle fullscreen</span>
+          </Button>
           
           <Button variant="ghost" size="icon" onClick={exitPresentation} className="text-white hover:bg-white/10">
             <X className="h-5 w-5" />
@@ -426,19 +370,6 @@ export const SlidePreview = () => {
         <kbd className="px-1 py-0.5 bg-white/20 rounded ml-1">F</kbd> for fullscreen • 
         <kbd className="px-1 py-0.5 bg-white/20 rounded ml-1">T</kbd> for theme
       </div>
-
-      {/* Frame Picker Modal */}
-      {project && project.source_file_path && (
-        <FramePickerModal 
-          open={isFramePickerModalOpen} 
-          onClose={() => setIsFramePickerModalOpen(false)} 
-          videoPath={project.source_file_path} 
-          projectId={projectId || ""} 
-          onComplete={handleFrameSelectionComplete} 
-          videoMetadata={videoMetadata || undefined} 
-          existingFrames={extractedFrames} 
-        />
-      )}
     </div>
   );
 };
