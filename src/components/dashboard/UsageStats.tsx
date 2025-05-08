@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Calendar, Clock, RefreshCcw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -48,7 +48,8 @@ export const UsageStats = () => {
       setIsDialogOpen(false);
     },
     onError: (error) => {
-      toast.error("Failed to reset statistics: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+      toast.error(`Failed to reset statistics: ${errorMessage}`);
     }
   });
 
@@ -63,9 +64,14 @@ export const UsageStats = () => {
 
   // Show error if there's any
   if (totalError || dailyError) {
-    const errorMessage = (totalError || dailyError)?.toString() || "Error fetching usage data";
+    const errorMessage = totalError instanceof Error 
+      ? totalError.message 
+      : dailyError instanceof Error 
+        ? dailyError.message 
+        : "Error loading usage data";
+        
     return (
-      <Card className="col-span-2">
+      <Card>
         <CardHeader>
           <CardTitle>Token Usage Statistics</CardTitle>
           <CardDescription>Error loading data</CardDescription>
@@ -80,7 +86,7 @@ export const UsageStats = () => {
   }
 
   return (
-    <Card className="col-span-2">
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Token Usage Statistics</CardTitle>
@@ -120,7 +126,7 @@ export const UsageStats = () => {
         </AlertDialog>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <StatCard 
             label="Total Tokens" 
             value={isLoadingTotal ? "Loading..." : `${((totalStats?.totalTokens || 0) / 1000).toFixed(1)}K`} 
