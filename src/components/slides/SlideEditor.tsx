@@ -484,6 +484,31 @@ export const SlideEditor = () => {
     updateSlidesInDatabase(updatedSlides);
     toast.success("Frame removed");
   };
+  const addNewSlide = () => {
+    // Create a new slide with default content
+    const newSlide = {
+      id: `slide-${Date.now()}`,
+      title: "New Slide",
+      content: "Add your content here"
+    };
+    
+    // Insert it after the current slide
+    const newSlides = [...slides];
+    newSlides.splice(currentSlideIndex + 1, 0, newSlide);
+    
+    // Update the state
+    setSlides(newSlides);
+    
+    // Save to database
+    updateSlidesInDatabase(newSlides);
+    
+    // Navigate to the new slide
+    saveChanges();
+    setCurrentSlideIndex(currentSlideIndex + 1);
+    
+    toast.success("New slide added");
+  };
+  
   if (isLoading) {
     return <div className="h-full w-full flex items-center justify-center">
         <div className="text-center">
@@ -557,7 +582,7 @@ export const SlideEditor = () => {
         <div className="border-r min-h-[300px] flex flex-col">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Visual</h3>
-            {/* Converted dropdown to individual buttons */}
+            {/* Separate buttons for frame tools */}
             <div className="flex gap-2">
               {videoPath && timestamps.length > 0 && <Button variant="outline" size="sm" onClick={handleExtractFrames} disabled={isExtractingFrames}>
                   {isExtractingFrames ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <FrameIcon className="h-4 w-4 mr-1" />}
@@ -573,7 +598,7 @@ export const SlideEditor = () => {
           
           <div className="flex-1 flex items-center justify-center p-4">
             {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? <div className="relative w-full h-full">
-                <div className={`grid ${currentSlide.imageUrls.length === 1 ? 'grid-cols-1' : currentSlide.imageUrls.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'} gap-4`}>
+                <div className="grid grid-cols-2 gap-4">
                   {/* First, render all existing images with delete buttons */}
                   {currentSlide.imageUrls.map((url, index) => <div key={`slide-image-${index}`} className="relative group aspect-video">
                       <img src={url} alt={`Slide visual ${index + 1}`} className="w-full h-full object-cover rounded-md" />
@@ -662,20 +687,31 @@ export const SlideEditor = () => {
       
       <Separator />
       
-      {/* Bottom navigation */}
+      {/* Bottom navigation with added new slide button */}
       <div className="flex justify-between items-center p-4">
         <Button variant="outline" onClick={goToPrevSlide} disabled={currentSlideIndex === 0}>
           <ChevronLeft className="h-4 w-4 mr-1" />
           Previous
         </Button>
         
-        <div className="flex gap-1">
+        <div className="flex gap-1 items-center">
           {slides.map((_, index) => <Button key={index} variant={index === currentSlideIndex ? "default" : "ghost"} size="icon" className="w-8 h-8 rounded-full" onClick={() => {
-          saveChanges();
-          setCurrentSlideIndex(index);
-        }}>
+            saveChanges();
+            setCurrentSlideIndex(index);
+          }}>
               {index + 1}
             </Button>)}
+            
+          {/* Add new slide button */}
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="w-8 h-8 rounded-full ml-1" 
+            onClick={addNewSlide}
+            title="Add new slide"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
         
         <Button variant="outline" onClick={goToNextSlide} disabled={currentSlideIndex === slides.length - 1}>
