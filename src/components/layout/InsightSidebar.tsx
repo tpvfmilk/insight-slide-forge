@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { cn } from "@/lib/utils";
+import { StorageUsageBar } from "@/components/dashboard/StorageUsageBar";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -84,6 +85,10 @@ export function InsightSidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         <Separator className="my-4" />
+      </div>
+
+      <div className="border-t">
+        <StorageUsageBar />
       </div>
 
       <div className="p-4 border-t flex justify-between items-center">

@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, Plus, X, Undo } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -14,6 +14,9 @@ import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, Extracte
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FrameSelector } from "@/components/slides/FrameSelector";
 import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
+import { getProjectTotalSize } from "@/services/storageService";
+import { FileSizeBadge } from "@/components/projects/FileSizeBadge";
+
 interface Slide {
   id: string;
   title: string;
@@ -56,7 +59,23 @@ export const SlideEditor = () => {
   const [allExtractedFrames, setAllExtractedFrames] = useState<LocalExtractedFrame[]>([]);
   const [videoPath, setVideoPath] = useState<string>("");
   const [timestamps, setTimestamps] = useState<string[]>([]);
+  const [lastDeletedSlide, setLastDeletedSlide] = useState<Slide | null>(null);
+  const [showUndoButton, setShowUndoButton] = useState<boolean>(false);
+  const [projectSize, setProjectSize] = useState<number>(0);
+  
   const currentSlide = slides[currentSlideIndex];
+  
+  // Add function to fetch project size
+  const fetchProjectSize = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const size = await getProjectTotalSize(projectId);
+      setProjectSize(size);
+    } catch (error) {
+      console.error("Error fetching project size:", error);
+    }
+  }, [projectId]);
+  
   const loadProject = async () => {
     if (!projectId) return;
     try {
@@ -122,6 +141,9 @@ export const SlideEditor = () => {
           content: "Click the 'Generate Slides' button to process your content and create presentation slides."
         }]);
       }
+      
+      // Fetch project size
+      fetchProjectSize();
     } catch (error) {
       console.error("Error loading project slides:", error);
       toast.error("Failed to load project");
@@ -129,15 +151,29 @@ export const SlideEditor = () => {
       setIsLoading(false);
     }
   };
+  
   useEffect(() => {
     loadProject();
   }, [projectId]);
+  
   useEffect(() => {
     if (currentSlide) {
       setEditedTitle(currentSlide.title);
       setEditedContent(currentSlide.content);
     }
   }, [currentSlide, currentSlideIndex]);
+  
+  // Auto-hide undo button after 10 seconds
+  useEffect(() => {
+    if (showUndoButton) {
+      const timer = setTimeout(() => {
+        setShowUndoButton(false);
+      }, 10000); // 10 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showUndoButton]);
+  
   const generateSlides = async () => {
     if (!projectId) return;
     try {
@@ -178,6 +214,9 @@ export const SlideEditor = () => {
       toast.success("Slides generated successfully!", {
         id: "generate-slides"
       });
+      
+      // Update project size after generation
+      fetchProjectSize();
     } catch (error) {
       console.error("Error generating slides:", error);
       toast.error(`Failed to generate slides: ${error.message}`, {
@@ -187,6 +226,7 @@ export const SlideEditor = () => {
       setIsGenerating(false);
     }
   };
+  
   const handleExtractFrames = async () => {
     if (!projectId || !videoPath || isExtractingFrames || timestamps.length === 0) {
       if (!videoPath) {
@@ -228,6 +268,7 @@ export const SlideEditor = () => {
       setIsExtractingFrames(false);
     }
   };
+  
   const handleFrameExtractionComplete = async (frames: Array<{
     timestamp: string;
     imageUrl: string;
@@ -245,8 +286,12 @@ export const SlideEditor = () => {
       // Reload the project to get the updated slides with images
       await loadProject();
       toast.success("Frame extraction completed successfully");
+      
+      // Update project size
+      fetchProjectSize();
     }
   };
+  
   const handleSelectFrames = () => {
     if (allExtractedFrames.length === 0) {
       toast.warning("No frames available. Extract frames or use the manual frame picker first.");
@@ -254,6 +299,7 @@ export const SlideEditor = () => {
     }
     setIsFrameSelectorOpen(true);
   };
+  
   const handleFrameSelection = (selectedFrames: LocalExtractedFrame[]) => {
     if (!selectedFrames.length) return;
 
@@ -267,20 +313,29 @@ export const SlideEditor = () => {
 
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
-    toast.success(`${selectedFrames.length} frame${selectedFrames.length !== 1 ? 's' : ''} applied to slide`);
+    // Reduced toast notification
+    if (selectedFrames.length > 1) {
+      toast.success(`${selectedFrames.length} frames applied to slide`);
+    }
+    
+    // Update project size
+    fetchProjectSize();
   };
+  
   const goToNextSlide = () => {
     if (currentSlideIndex < slides.length - 1) {
       saveChanges();
       setCurrentSlideIndex(prev => prev + 1);
     }
   };
+  
   const goToPrevSlide = () => {
     if (currentSlideIndex > 0) {
       saveChanges();
       setCurrentSlideIndex(prev => prev - 1);
     }
   };
+  
   const saveChanges = () => {
     if (isEditing) {
       const updatedSlides = [...slides];
@@ -297,6 +352,7 @@ export const SlideEditor = () => {
       toast.success("Slide updated");
     }
   };
+  
   const updateSlidesInDatabase = async (updatedSlides: Slide[]) => {
     if (!projectId) return;
     try {
@@ -312,14 +368,17 @@ export const SlideEditor = () => {
       // We don't show a toast here since it's a background operation
     }
   };
+  
   const startEditing = () => {
     setIsEditing(true);
   };
+  
   const copyToClipboard = () => {
     const slideText = `${currentSlide.title}\n\n${currentSlide.content}`;
     navigator.clipboard.writeText(slideText);
     toast.success("Slide content copied to clipboard");
   };
+  
   const exportPDF = async () => {
     if (!slides || slides.length === 0) {
       toast.error("No slides to export");
@@ -350,6 +409,7 @@ export const SlideEditor = () => {
       }));
     }
   };
+  
   const exportAnki = async () => {
     if (!slides || slides.length === 0) {
       toast.error("No slides to export");
@@ -380,6 +440,7 @@ export const SlideEditor = () => {
       }));
     }
   };
+  
   const exportCSV = async () => {
     if (!slides || slides.length === 0) {
       toast.error("No slides to export");
@@ -410,6 +471,7 @@ export const SlideEditor = () => {
       }));
     }
   };
+  
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {
       return;
@@ -454,6 +516,9 @@ export const SlideEditor = () => {
       toast.success("Image uploaded successfully!", {
         id: "upload-image"
       });
+      
+      // Update project size
+      fetchProjectSize();
     } catch (error) {
       console.error("Error uploading image:", error);
       toast.error(`Failed to upload image: ${error.message}`, {
@@ -463,6 +528,7 @@ export const SlideEditor = () => {
       setIsUploadingImage(false);
     }
   };
+  
   const handleDeleteFrame = (frameIndex: number) => {
     if (!currentSlide.imageUrls || currentSlide.imageUrls.length === 0) {
       return;
@@ -482,8 +548,13 @@ export const SlideEditor = () => {
 
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
-    toast.success("Frame removed");
+    // Removed toast notification for routine operation
+    
+    // Update project size
+    fetchProjectSize();
   };
+  
+  // Add new slide function
   const addNewSlide = () => {
     // Create a new slide with default content
     const newSlide = {
@@ -509,12 +580,17 @@ export const SlideEditor = () => {
     toast.success("New slide added");
   };
   
+  // Delete current slide with undo functionality
   const deleteCurrentSlide = () => {
     // Don't allow deleting the last slide
     if (slides.length <= 1) {
       toast.error("Cannot delete the last slide");
       return;
     }
+    
+    // Save the slide before deleting it
+    setLastDeletedSlide(slides[currentSlideIndex]);
+    setShowUndoButton(true);
     
     // Create updated slides array without the current slide
     const newSlides = [...slides];
@@ -533,6 +609,29 @@ export const SlideEditor = () => {
     toast.success("Slide deleted");
   };
   
+  // Undo delete slide
+  const undoDeleteSlide = () => {
+    if (!lastDeletedSlide) return;
+    
+    // Insert the deleted slide back at its original position or at the end
+    const insertIndex = Math.min(currentSlideIndex + 1, slides.length);
+    const newSlides = [...slides];
+    newSlides.splice(insertIndex, 0, lastDeletedSlide);
+    
+    // Update the state
+    setSlides(newSlides);
+    updateSlidesInDatabase(newSlides);
+    
+    // Navigate to the restored slide
+    setCurrentSlideIndex(insertIndex);
+    
+    // Reset undo state
+    setLastDeletedSlide(null);
+    setShowUndoButton(false);
+    
+    toast.success("Slide restored");
+  };
+  
   if (isLoading) {
     return <div className="h-full w-full flex items-center justify-center">
         <div className="text-center">
@@ -541,12 +640,15 @@ export const SlideEditor = () => {
         </div>
       </div>;
   }
+  
   return <div className="flex flex-col h-full">
       <div className="flex justify-between items-center p-4 border-b">
         <div className="text-sm text-muted-foreground flex items-center">
           <Clock className="h-4 w-4 mr-1" />
           <span>Slide {currentSlideIndex + 1} of {slides.length}</span>
           {currentSlide?.timestamp && <span className="ml-2">• Timestamp: {currentSlide.timestamp}</span>}
+          <span className="ml-2">•</span>
+          <FileSizeBadge projectId={projectId} />
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" asChild disabled={slides.length <= 1 || slides[0].id === "slide-placeholder"}>
@@ -739,17 +841,32 @@ export const SlideEditor = () => {
             <Plus className="h-4 w-4" />
           </Button>
           
-          {/* Delete current slide button */}
-          <Button 
-            variant="destructive" 
-            size="icon" 
-            className="w-8 h-8 rounded-full ml-1" 
-            onClick={deleteCurrentSlide}
-            title="Delete current slide"
-            disabled={slides.length <= 1}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          {/* Delete current slide button with undo button */}
+          <div className="relative">
+            <Button 
+              variant="destructive" 
+              size="icon" 
+              className="w-8 h-8 rounded-full ml-1" 
+              onClick={deleteCurrentSlide}
+              title="Delete current slide"
+              disabled={slides.length <= 1}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            
+            {/* Undo button that appears after deletion */}
+            {showUndoButton && (
+              <Button 
+                variant="secondary"
+                size="sm"
+                className="absolute -top-10 -right-2 whitespace-nowrap shadow-md"
+                onClick={undoDeleteSlide}
+              >
+                <Undo className="h-4 w-4 mr-1" />
+                Undo Delete
+              </Button>
+            )}
+          </div>
         </div>
         
         <Button variant="outline" onClick={goToNextSlide} disabled={currentSlideIndex === slides.length - 1}>

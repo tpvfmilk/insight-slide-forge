@@ -67,3 +67,47 @@ export const initializeStorage = async (): Promise<boolean> => {
     return false;
   }
 };
+
+/**
+ * Gets the user's storage information including usage and limits
+ * @returns Promise resolving to storage information
+ */
+export const getUserStorageInfo = async () => {
+  try {
+    const { data, error } = await supabase.rpc('get_user_storage_info');
+    
+    if (error) {
+      console.error("Error fetching user storage info:", error);
+      throw error;
+    }
+    
+    // Function returns a single row, but it comes as an array
+    return Array.isArray(data) ? data[0] : data;
+  } catch (error) {
+    console.error("Failed to get user storage information:", error);
+    return null;
+  }
+};
+
+/**
+ * Calculates the total storage size used by a project
+ * @param projectId The project ID
+ * @returns Promise resolving to the total size in bytes
+ */
+export const getProjectTotalSize = async (projectId: string): Promise<number> => {
+  try {
+    const { data, error } = await supabase.rpc('calculate_project_storage_size', {
+      project_id: projectId
+    });
+    
+    if (error) {
+      console.error("Error calculating project size:", error);
+      return 0;
+    }
+    
+    return Number(data) || 0;
+  } catch (error) {
+    console.error("Failed to get project total size:", error);
+    return 0;
+  }
+};

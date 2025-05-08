@@ -14,6 +14,14 @@ export interface DailyUsage {
   cost: number;
 }
 
+export interface StorageInfo {
+  storageUsed: number;
+  storageLimit: number;
+  tierName: string;
+  percentageUsed: number;
+  tierPrice: number;
+}
+
 /**
  * Fetches overall token usage statistics for the current user
  */
@@ -102,4 +110,32 @@ export const resetUsageStats = async (): Promise<void> => {
     console.error('Error resetting usage statistics:', error);
     throw error;
   }
+};
+
+/**
+ * Fetches user's storage information
+ */
+export const fetchStorageInfo = async (): Promise<StorageInfo | null> => {
+  const { data, error } = await supabase
+    .rpc('get_user_storage_info');
+
+  if (error) {
+    console.error('Error fetching storage information:', error);
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  // The data comes as an array with a single row, so we need to extract the first element
+  const storageData = Array.isArray(data) ? data[0] : data;
+
+  return {
+    storageUsed: storageData.storage_used || 0,
+    storageLimit: storageData.storage_limit || 0,
+    tierName: storageData.tier_name || 'Free',
+    percentageUsed: storageData.percentage_used || 0,
+    tierPrice: storageData.tier_price || 0,
+  };
 };
