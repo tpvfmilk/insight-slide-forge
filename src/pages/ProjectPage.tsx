@@ -12,6 +12,7 @@ import { TranscriptView } from "@/components/project/TranscriptView";
 import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
+import { FrameSelector } from "@/components/slides/FrameSelector";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -36,7 +37,7 @@ const ProjectPage = () => {
     extractedFrames,
     needsTranscription,
     isTranscriptOnlyProject,
-    loadProject, // This will be passed to ActionButtons
+    loadProject,
     handleGenerateSlides,
     handleTranscribeVideo,
     handleExtractFrames,
@@ -98,7 +99,7 @@ const ProjectPage = () => {
               handleOpenManualFramePicker={handleOpenManualFramePicker}
               extractedFrames={extractedFrames}
               isTranscriptOnlyProject={isTranscriptOnlyProject}
-              refreshProject={loadProject} // Pass this to allow refreshing after purging
+              refreshProject={loadProject}
             />
           </div>
         </div>
@@ -149,6 +150,26 @@ const ProjectPage = () => {
             onComplete={handleManualFrameSelectionComplete}
             videoMetadata={videoMetadata || undefined}
             existingFrames={extractedFrames}
+          />
+        )}
+
+        {/* Frame Selector for selecting frames */}
+        {project && (
+          <FrameSelector
+            open={modals.isFramePickerModalOpen} 
+            onClose={() => modals.closeFramePickerModal()}
+            availableFrames={extractedFrames.map(frame => ({
+              ...frame,
+              id: frame.timestamp // Using timestamp as ID if not available
+            }))}
+            selectedFrames={extractedFrames.map(frame => ({
+              ...frame,
+              id: frame.timestamp
+            }))}
+            onSelect={handleManualFrameSelectionComplete}
+            projectId={projectId}
+            onRefresh={loadProject}
+            slides={project.slides}
           />
         )}
       </div>
