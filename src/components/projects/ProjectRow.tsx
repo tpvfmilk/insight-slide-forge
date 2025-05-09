@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link } from "react-router-dom";
 import { FileText, MoreHorizontal } from "lucide-react";
@@ -99,6 +98,9 @@ export function ProjectRow({
     durationDisplay = "Transcript Only";
   }
 
+  // Check if we should show the file name (only for video-based projects)
+  const isTranscriptOnly = project.source_type === 'transcript-only' || project.source_type === 'transcript';
+
   return (
     <TableRow key={project.id}>
       <TableCell>
@@ -108,9 +110,11 @@ export function ProjectRow({
           </div>
           <div>
             <div className="font-medium">{project.title}</div>
-            <div className="text-xs text-muted-foreground">
-              {originalFileName}
-            </div>
+            {!isTranscriptOnly && (
+              <div className="text-xs text-muted-foreground">
+                {originalFileName}
+              </div>
+            )}
           </div>
         </Link>
       </TableCell>
@@ -168,7 +172,7 @@ export function ProjectRow({
                   ) : (
                     <DropdownMenuItem disabled>
                       No folders available
-                    </DropdownMenuItem>
+                    </DropdownMenuRadioItem>
                   )}
                 </DropdownMenuRadioGroup>
               </DropdownMenuSubContent>
