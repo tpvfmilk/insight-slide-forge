@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Project, fetchProjectById } from "@/services/projectService";
@@ -73,6 +72,7 @@ const ProjectPage = () => {
       
       setProject(projectData);
       setContextPrompt(projectData.context_prompt || "");
+      // Make sure the transcript state is properly set from the project data
       setTranscript(projectData.transcript || "");
       setSlidesPerMinute(projectData.slides_per_minute || 6);
       setTitle(projectData.title || "Untitled Project");
@@ -802,7 +802,23 @@ const ProjectPage = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="border rounded-md p-4 bg-muted/20 max-h-[60vh] overflow-y-auto">
-                      <pre className="whitespace-pre-wrap font-mono text-sm">{project?.transcript}</pre>
+                      {project?.transcript ? (
+                        <pre className="whitespace-pre-wrap font-mono text-sm">{project?.transcript}</pre>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p>No transcript available. There might have been an issue with the transcription process.</p>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="mt-4"
+                            onClick={() => setIsTranscriptDialogOpen(true)}
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Add Transcript Manually
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                   <CardFooter className="flex justify-between">
@@ -815,7 +831,7 @@ const ProjectPage = () => {
                     </Button>
                     <Button 
                       onClick={handleGenerateSlides}
-                      disabled={isGenerating}
+                      disabled={isGenerating || !project?.transcript}
                     >
                       {isGenerating ? (
                         <>

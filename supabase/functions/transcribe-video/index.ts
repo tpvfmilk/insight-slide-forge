@@ -86,7 +86,7 @@ serve(async (req) => {
         .from('projects')
         .select('*')
         .eq('id', projectId)
-        .single();
+        .maybeSingle();
 
       if (projectError || !projectData) {
         console.error("Project not found:", projectError);
@@ -238,31 +238,53 @@ serve(async (req) => {
       );
     }
 
-    // Track the token usage for transcriptions
-    // For Whisper API, we estimate based on audio duration (since the API doesn't return token counts)
-    const audioMinutes = project?.video_metadata?.duration 
-      ? Math.ceil(project.video_metadata.duration / 60)
-      : 5; // Default estimate, in a real app you'd calculate this from the audio length
-    const estimatedTokens = audioMinutes * 1000;
-    const estimatedCost = audioMinutes * 0.006; // $0.006 per minute for whisper-1
+    // Get project user_id for tracking usage (Fix for the "Cannot read properties of undefined (reading 'user_id')" error)
+    let userId;
+    if (project) {
+      userId = project.user_id;
+    } else {
+      // If we don't have a project object, try to fetch the project's user_id directly
+      const { data: projectData, error: projectError } = await supabase
+        .from('projects')
+        .select('user_id')
+        .eq('id', projectId)
+        .single();
 
-    // Insert usage data into openai_usage table
-    console.log("Recording usage data");
-    const { error: usageError } = await supabase
-      .from('openai_usage')
-      .insert({
-        user_id: project.user_id,
-        project_id: projectId,
-        model_id: 'whisper-1',
-        input_tokens: estimatedTokens,
-        output_tokens: 0, // Whisper doesn't have output tokens in the same way
-        total_tokens: estimatedTokens,
-        estimated_cost: estimatedCost
-      });
+      if (projectError || !projectData) {
+        console.error("Could not get user_id for project:", projectError);
+        userId = null;
+      } else {
+        userId = projectData.user_id;
+      }
+    }
 
-    if (usageError) {
-      console.error("Error recording token usage:", usageError);
-      // Continue with the function even if usage tracking fails
+    // Track the token usage for transcriptions if we have a user_id
+    if (userId) {
+      // For Whisper API, we estimate based on audio duration (since the API doesn't return token counts)
+      const audioMinutes = project?.video_metadata?.duration 
+        ? Math.ceil(project.video_metadata.duration / 60)
+        : 5; // Default estimate, in a real app you'd calculate this from the audio length
+      const estimatedTokens = audioMinutes * 1000;
+      const estimatedCost = audioMinutes * 0.006; // $0.006 per minute for whisper-1
+
+      // Insert usage data into openai_usage table
+      console.log("Recording usage data");
+      const { error: usageError } = await supabase
+        .from('openai_usage')
+        .insert({
+          user_id: userId,
+          project_id: projectId,
+          model_id: 'whisper-1',
+          input_tokens: estimatedTokens,
+          output_tokens: 0, // Whisper doesn't have output tokens in the same way
+          total_tokens: estimatedTokens,
+          estimated_cost: estimatedCost
+        });
+
+      if (usageError) {
+        console.error("Error recording token usage:", usageError);
+        // Continue with the function even if usage tracking fails
+      }
     }
 
     // Update the project with the transcript
@@ -284,7 +306,7 @@ serve(async (req) => {
     }
 
     // If this is a transcript-only project and we should delete the source file
-    if (isTranscriptOnly && project.source_file_path) {
+    if (isTranscriptOnly && project && project.source_file_path) {
       try {
         console.log(`Deleting source file ${project.source_file_path} for transcript-only project`);
         await supabase.storage.from('video_uploads').remove([project.source_file_path]);
