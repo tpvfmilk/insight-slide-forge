@@ -50,6 +50,9 @@ export const FrameExtractionModal = ({
   const [invalidTimestamps, setInvalidTimestamps] = useState<string[]>([]);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [isLoadingVideo, setIsLoadingVideo] = useState<boolean>(true);
+  const [loadAttempts, setLoadAttempts] = useState<number>(0);
 
   // Function to validate timestamps against video duration
   const validateTimestamps = useCallback((timestamps: string[], videoDuration?: number) => {
@@ -94,13 +97,104 @@ export const FrameExtractionModal = ({
       setProgress(0);
       setCurrentFrameIndex(0);
       setExtractedFrames([]);
+      setVideoError(null);
+      setVideoUrl(null);
+      setIsLoadingVideo(true);
+      setLoadAttempts(0);
+      
+      // Attempt to load the video when modal opens
+      loadVideo();
     }
   }, [open]);
+
+  // Function to get a signed URL for the video
+  const loadVideo = async () => {
+    if (!videoPath || !open) return;
+    
+    setIsLoadingVideo(true);
+    setVideoError(null);
+    
+    try {
+      // Try first with the direct path
+      setVideoUrl(videoPath);
+      
+      // If this is a retry, we'll try to get a fresh signed URL
+      if (loadAttempts > 0) {
+        console.log("Retry attempt to load video with a fresh signed URL");
+        
+        // Try to get a fresh signed URL from 'video_uploads' bucket
+        try {
+          const { data: supabase } = await import('@/integrations/supabase/client');
+          
+          // Check if path uses a full prefix or just a filename
+          let bucket = 'video_uploads';
+          let filePath = videoPath;
+          
+          // If path includes '/', extract the actual file path without bucket name
+          if (videoPath.includes('/')) {
+            const pathParts = videoPath.split('/');
+            if (pathParts.length > 1) {
+              filePath = pathParts.pop() || '';
+              bucket = pathParts.join('/');
+            }
+          }
+          
+          console.log(`Trying to get signed URL for ${bucket}/${filePath}`);
+          
+          const { data: urlData, error: urlError } = await supabase
+            .storage
+            .from(bucket)
+            .createSignedUrl(filePath, 3600); // 1 hour expiry
+          
+          if (urlError || !urlData?.signedUrl) {
+            console.error("Error getting signed URL:", urlError);
+            throw new Error("Couldn't create access link for video");
+          }
+          
+          console.log("Successfully got new signed URL");
+          setVideoUrl(urlData.signedUrl);
+        } catch (signedUrlError) {
+          console.error("Failed to get signed URL:", signedUrlError);
+          
+          // Try to check if we can get the source URL from the project
+          try {
+            const { data: supabase } = await import('@/integrations/supabase/client');
+            
+            const { data: projectData } = await supabase
+              .from('projects')
+              .select('source_url')
+              .eq('id', projectId)
+              .single();
+            
+            if (projectData?.source_url) {
+              console.log("Falling back to project source URL:", projectData.source_url);
+              setVideoUrl(projectData.source_url);
+            } else {
+              throw new Error("No alternative video source found");
+            }
+          } catch (projectError) {
+            console.error("Error getting project source:", projectError);
+            throw new Error("All video loading attempts failed");
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error loading video:", error);
+      setVideoError("Failed to access video. The video might not be available or the format is not supported.");
+    } finally {
+      setIsLoadingVideo(false);
+    }
+  };
 
   // Extract frames from video
   const handleExtractFrames = async () => {
     if (validTimestamps.length === 0) {
       toast.error("There are no valid timestamps to extract frames from.");
+      return;
+    }
+    
+    if (!videoUrl) {
+      toast.error("Video not available. Please try reloading the page.");
       return;
     }
     
@@ -113,7 +207,7 @@ export const FrameExtractionModal = ({
 
       // Extract frames using the client-side utility
       const frames = await clientExtractFrames(
-        videoPath, 
+        videoUrl, 
         validTimestamps, 
         (current, total) => {
           const progressPercent = Math.round((current / total) * 100);
@@ -190,10 +284,32 @@ export const FrameExtractionModal = ({
       setValidTimestamps(valid);
       setInvalidTimestamps(invalid);
     }
+    
+    setVideoError(null);
+    setIsLoadingVideo(false);
   };
 
   const handleVideoError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
+    console.error("Video loading error:", event);
     setVideoError("Failed to load video. The video might not be accessible or the format is not supported.");
+    setIsLoadingVideo(false);
+    
+    // If we've tried less than 3 times, attempt to reload with a fresh URL
+    if (loadAttempts < 3) {
+      const nextAttempt = loadAttempts + 1;
+      setLoadAttempts(nextAttempt);
+      console.log(`Video load attempt ${nextAttempt} failed, trying again...`);
+      
+      // Wait a moment before trying again
+      setTimeout(() => {
+        loadVideo();
+      }, 1000);
+    }
+  };
+
+  const retryVideoLoad = () => {
+    setLoadAttempts(loadAttempts + 1);
+    loadVideo();
   };
 
   return (
@@ -212,16 +328,39 @@ export const FrameExtractionModal = ({
           {currentStep === 'preparation' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-4 max-h-[400px]">
-                <div className="w-full sm:w-1/2 overflow-hidden h-64 sm:h-auto">
-                  <video 
-                    src={videoPath}
-                    controls
-                    className="w-full h-full object-contain bg-black"
-                    onLoadedMetadata={handleVideoLoad}
-                    onError={handleVideoError}
-                  >
-                    Your browser does not support the video tag.
-                  </video>
+                <div className="w-full sm:w-1/2 overflow-hidden h-64 sm:h-auto relative">
+                  {isLoadingVideo ? (
+                    <div className="w-full h-full flex items-center justify-center bg-black">
+                      <RefreshCw className="h-8 w-8 animate-spin text-white/70" />
+                      <span className="ml-2 text-white/70">Loading video...</span>
+                    </div>
+                  ) : videoError ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-black">
+                      <AlertCircle className="h-10 w-10 text-destructive mb-2" />
+                      <p className="text-white/90 text-center px-4">{videoError}</p>
+                      <Button 
+                        variant="outline" 
+                        className="mt-4 bg-white/10 hover:bg-white/20 border-white/30 text-white"
+                        onClick={retryVideoLoad}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Retry Loading Video
+                      </Button>
+                    </div>
+                  ) : (
+                    <video 
+                      key={`video-${loadAttempts}`} // Force remount on retry
+                      src={videoUrl || undefined}
+                      controls
+                      className="w-full h-full object-contain bg-black"
+                      onLoadedMetadata={handleVideoLoad}
+                      onLoadedData={handleVideoLoad}
+                      onError={handleVideoError}
+                      crossOrigin="anonymous"
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  )}
                 </div>
                 <div className="w-full sm:w-1/2 overflow-y-auto">
                   <h3 className="text-lg font-medium mb-2">Timestamps to Extract</h3>
@@ -299,7 +438,7 @@ export const FrameExtractionModal = ({
               <div className="flex justify-end">
                 <Button 
                   onClick={handleExtractFrames} 
-                  disabled={validTimestamps.length === 0 || isExtracting}
+                  disabled={validTimestamps.length === 0 || isExtracting || !!videoError || isLoadingVideo}
                   className="w-full sm:w-auto"
                 >
                   {isExtracting ? (
