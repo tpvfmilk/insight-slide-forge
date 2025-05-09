@@ -29,86 +29,22 @@ serve(async (req) => {
     
     console.log(`Starting storage sync for user ${userId}`);
     
-    // Calculate total storage used by the user across all buckets
-    // Fix: Use the correct table name 'storage.buckets' without 'public.' prefix
-    const { data: buckets, error: bucketsError } = await supabase
-      .from('storage.buckets')
-      .select('id')
-      .returns<{ id: string }[]>();
+    // Use a direct approach to fetch objects from the storage schema
+    const { data: objects, error: objectsError } = await supabase
+      .from('objects')
+      .select('metadata')
+      .eq('owner', userId)
+      .schema('storage');
       
-    if (bucketsError) {
-      console.error("Error fetching buckets:", bucketsError);
-      
-      // If the error is related to table not found, try alternate approach
-      if (bucketsError.code === '42P01') {
-        console.log("Trying alternate approach to get storage objects");
-        
-        // Try a direct approach without querying buckets first
-        const { data: objects, error: objectsError } = await supabase
-          .from('storage.objects')
-          .select('metadata')
-          .eq('owner', userId);
-          
-        if (objectsError) {
-          console.error("Error with alternate approach:", objectsError);
-          throw objectsError;
-        }
-        
-        let totalSize = 0;
-        for (const object of objects || []) {
-          if (object.metadata && object.metadata.size) {
-            totalSize += parseInt(object.metadata.size, 10);
-          }
-        }
-        
-        console.log(`Total storage used by user ${userId}: ${totalSize} bytes`);
-        
-        // Update the user_storage record
-        const { data: updatedStorage, error: updateError } = await supabase
-          .rpc('update_user_storage_with_value', { 
-            user_id_param: userId,
-            new_storage_value: totalSize 
-          });
-        
-        if (updateError) {
-          console.error("Error updating user storage:", updateError);
-          throw updateError;
-        }
-        
-        return new Response(
-          JSON.stringify({ 
-            success: true, 
-            userId,
-            previouslyTrackedSize: updatedStorage?.previous_size || 0,
-            actualSize: totalSize
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      } else {
-        throw bucketsError;
-      }
+    if (objectsError) {
+      console.error("Error fetching objects:", objectsError);
+      throw objectsError;
     }
     
     let totalSize = 0;
-    
-    // For each bucket, get the total size of files owned by the user
-    for (const bucket of buckets || []) {
-      const { data: objects, error: objectsError } = await supabase
-        .from('storage.objects')
-        .select('metadata')
-        .eq('owner', userId)
-        .eq('bucket_id', bucket.id);
-        
-      if (objectsError) {
-        console.error(`Error fetching objects for bucket ${bucket.id}:`, objectsError);
-        continue;
-      }
-      
-      // Sum up the file sizes
-      for (const object of objects || []) {
-        if (object.metadata && object.metadata.size) {
-          totalSize += parseInt(object.metadata.size, 10);
-        }
+    for (const object of objects || []) {
+      if (object.metadata && object.metadata.size) {
+        totalSize += parseInt(object.metadata.size, 10);
       }
     }
     
@@ -131,7 +67,7 @@ serve(async (req) => {
         success: true, 
         userId,
         previouslyTrackedSize: updatedStorage?.previous_size || 0,
-        actualSize: totalSize 
+        actualSize: totalSize
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
