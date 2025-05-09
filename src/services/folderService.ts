@@ -35,7 +35,7 @@ export const fetchFolders = async (): Promise<Folder[]> => {
     throw error;
   }
 
-  return data || [];
+  return data as Folder[] || [];
 };
 
 /**
@@ -44,7 +44,7 @@ export const fetchFolders = async (): Promise<Folder[]> => {
 export const createFolder = async (folderData: CreateFolderData): Promise<Folder> => {
   const { data, error } = await supabase
     .from('folders')
-    .insert(folderData)
+    .insert([folderData])
     .select()
     .single();
 
@@ -53,7 +53,7 @@ export const createFolder = async (folderData: CreateFolderData): Promise<Folder
     throw error;
   }
 
-  return data;
+  return data as Folder;
 };
 
 /**
@@ -102,9 +102,11 @@ export const deleteFolder = async (id: string): Promise<void> => {
  * Move projects to a folder
  */
 export const moveProjectsToFolder = async (projectIds: string[], folderId: string | null): Promise<void> => {
+  const updateData = { folder_id: folderId };
+  
   const { error } = await supabase
     .from('projects')
-    .update({ folder_id: folderId })
+    .update(updateData)
     .in('id', projectIds);
 
   if (error) {
@@ -128,5 +130,5 @@ export const getFolderById = async (id: string): Promise<Folder | null> => {
     throw error;
   }
 
-  return data;
+  return data as Folder | null;
 };
