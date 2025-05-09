@@ -23,6 +23,7 @@ export const clientExtractFramesFromVideo = async (
   frames?: ExtractedFrame[]; 
   error?: string;
   skipExtraction?: boolean;
+  videoDuration?: number; // Add videoDuration to the return type
 }> => {
   if (!timestamps || timestamps.length === 0) {
     return { success: false, error: 'No timestamps provided for extraction' };
