@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Folder, fetchFolders, moveProjectsToFolder } from "@/services/folderService";
 import { toast } from "sonner";
+import { TableRow, TableCell } from "@/components/ui/table";
 
 interface ProjectRowProps {
   project: Project;
@@ -96,8 +97,8 @@ export function ProjectRow({
     : "Unknown";
 
   return (
-    <tr key={project.id} className="border-t hover:bg-muted/30">
-      <td className="p-4">
+    <TableRow key={project.id}>
+      <TableCell>
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary/10 rounded">
             <FileText className="h-5 w-5 text-primary" />
@@ -110,14 +111,14 @@ export function ProjectRow({
             </div>
           </div>
         </div>
-      </td>
-      <td className="p-4 hidden lg:table-cell text-muted-foreground text-sm">
+      </TableCell>
+      <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
         {duration}
-      </td>
-      <td className="p-4">
+      </TableCell>
+      <TableCell>
         <FileSizeBadge fileSize={project.video_metadata?.file_size} projectId={project.id} />
-      </td>
-      <td className="p-4 text-right">
+      </TableCell>
+      <TableCell className="text-right">
         <div className="flex justify-end items-center gap-2">
           <Button asChild variant="outline" size="sm" className="h-8">
             <Link to={`/projects/${project.id}`}>
@@ -222,7 +223,7 @@ export function ProjectRow({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

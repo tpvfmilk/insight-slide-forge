@@ -5,6 +5,7 @@ import { ProjectTableHead } from "./ProjectTableHead";
 import { ProjectRow } from "./ProjectRow";
 import { ProjectTableSkeleton } from "./ProjectTableSkeleton";
 import { EmptyProjectsMessage } from "./EmptyProjectsMessage";
+import { Table, TableBody } from "@/components/ui/table";
 
 interface ProjectsTableProps {
   loading: boolean;
@@ -24,9 +25,9 @@ export function ProjectsTable({
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <Table>
           <ProjectTableHead />
-          <tbody>
+          <TableBody>
             {loading ? (
               <ProjectTableSkeleton />
             ) : filteredProjects.length > 0 ? (
@@ -42,8 +43,8 @@ export function ProjectsTable({
             ) : (
               <EmptyProjectsMessage />
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
