@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Mic, AlertTriangle } from "lucide-react";
 import { SliderControl } from "@/components/upload/SliderControl";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress"; // Added missing import for Progress component
 
 // Maximum recommended file duration in seconds
 const MAX_RECOMMENDED_DURATION = 30 * 60; // 30 minutes

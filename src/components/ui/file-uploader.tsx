@@ -10,6 +10,7 @@ interface FileUploaderProps {
   multiple?: boolean;
   maxSize?: number; // in MB
   className?: string;
+  disabled?: boolean; // Added disabled prop
 }
 
 export const FileUploader: React.FC<FileUploaderProps> = ({
@@ -18,6 +19,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
   multiple = false,
   maxSize = 100, // Default 100MB
   className = "",
+  disabled = false, // Default value
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState<boolean>(false);
@@ -37,6 +39,8 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
+    
+    if (disabled) return; // Don't process drops when disabled
     
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       validateAndProcessFiles(e.dataTransfer.files);
@@ -73,7 +77,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
   return (
     <div 
       className={`relative ${className}`}
-      onDragEnter={handleDrag}
+      onDragEnter={disabled ? undefined : handleDrag}
     >
       <Input
         ref={inputRef}
@@ -82,15 +86,16 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
         multiple={multiple}
         onChange={handleChange}
         className="hidden"
+        disabled={disabled}
       />
       <div 
-        className={`border-2 border-dashed rounded-lg p-6 transition-colors flex flex-col items-center justify-center cursor-pointer ${
+        className={`border-2 border-dashed rounded-lg p-6 transition-colors flex flex-col items-center justify-center ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${
           dragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-muted-foreground/50"
         }`}
-        onClick={handleButtonClick}
-        onDragOver={handleDrag}
-        onDragLeave={handleDrag}
-        onDrop={handleDrop}
+        onClick={disabled ? undefined : handleButtonClick}
+        onDragOver={disabled ? undefined : handleDrag}
+        onDragLeave={disabled ? undefined : handleDrag}
+        onDrop={disabled ? undefined : handleDrop}
       >
         <Upload className="h-10 w-10 text-muted-foreground mb-2" />
         <p className="font-medium text-center">
@@ -103,9 +108,10 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
           type="button" 
           variant="outline" 
           className="mt-4"
+          disabled={disabled}
           onClick={(e) => {
             e.stopPropagation();
-            handleButtonClick();
+            if (!disabled) handleButtonClick();
           }}
         >
           <Upload className="h-4 w-4 mr-2" />

@@ -7,11 +7,12 @@ import { Info } from "lucide-react";
 interface SliderControlProps {
   value: number;
   onChange: (value: number) => void;
+  disabled?: boolean; // Added disabled prop
 }
 
-export const SliderControl: React.FC<SliderControlProps> = ({ value, onChange }) => {
+export const SliderControl: React.FC<SliderControlProps> = ({ value, onChange, disabled = false }) => {
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${disabled ? 'opacity-70' : ''}`}>
       <div className="flex items-center">
         <label className="text-sm font-medium mr-2">Slides Per Minute</label>
         <HoverCard>
@@ -42,6 +43,7 @@ export const SliderControl: React.FC<SliderControlProps> = ({ value, onChange })
           step={1}
           onValueChange={(values) => onChange(values[0])}
           className="flex-1"
+          disabled={disabled}
         />
         <span className="text-sm text-muted-foreground">20</span>
         <span className="w-8 text-right text-sm font-medium">{value}</span>
