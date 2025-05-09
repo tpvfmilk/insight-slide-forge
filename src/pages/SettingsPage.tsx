@@ -1,4 +1,3 @@
-
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -150,25 +149,31 @@ const SettingsPage = () => {
                       <Wallet className="h-5 w-5" />
                       Free Plan
                     </CardTitle>
-                    <CardDescription>Basic access to all features</CardDescription>
+                    <CardDescription>Unlimited access to all features - no limits!</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid gap-2">
                       <div className="flex items-center justify-between text-sm">
                         <span>Storage</span>
-                        <span className="font-medium">{storageInfo?.storageLimit ? `${Math.round(storageInfo.storageLimit / 1024 / 1024)} MB` : '500 MB'}</span>
+                        <span className="font-medium">
+                          {storageInfo?.storageUsed ? `${Math.round(storageInfo.storageUsed / 1024 / 1024)} MB used` : 'Loading...'}
+                          <span className="text-muted-foreground ml-1">(unlimited)*</span>
+                        </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span>Projects</span>
-                        <span className="font-medium">5 active projects</span>
+                        <span className="font-medium">Unlimited active projects</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span>API Usage</span>
-                        <span className="font-medium">{usageStats?.totalTokens ?? 0} tokens used</span>
+                        <span className="font-medium">
+                          {usageStats?.totalTokens ?? 0} tokens used
+                          <span className="text-muted-foreground ml-1">(unlimited)*</span>
+                        </span>
                       </div>
                       
-                      <div className="mt-4">
-                        <Button className="w-full">Upgrade Plan</Button>
+                      <div className="mt-4 text-sm text-muted-foreground">
+                        <p>* You can exceed the standard caps during our beta period</p>
                       </div>
                     </div>
                   </CardContent>
