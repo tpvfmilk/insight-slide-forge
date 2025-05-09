@@ -60,24 +60,14 @@ export async function extractFramesFromVideoUrl(
         const actualVideoDuration = video.duration;
         console.log(`Actual video duration: ${actualVideoDuration}s`);
         
-        // Use the smaller of the provided videoDuration parameter and the actual video.duration
-        // This ensures we always use the most accurate (and most restrictive) duration
-        const maxDuration = videoDuration !== undefined 
-          ? Math.min(videoDuration, actualVideoDuration)
-          : actualVideoDuration;
-          
-        console.log(`Using max duration of ${maxDuration}s for timestamp validation`);
-        
-        // Normalize timestamps that exceed video duration
-        const normalizedTimestamps = normalizeTimestamps(timestamps, maxDuration);
-
-        // Filter timestamps that exceed video duration, with a safety margin
-        const safetyMarginSeconds = 2; // 2 second safety margin
-        const validTimestamps = normalizedTimestamps.filter(ts => {
+        // Filter timestamps that exceed video duration
+        // Use the provided videoDuration parameter if available, otherwise use the actual duration from the video
+        const maxDuration = videoDuration || actualVideoDuration;
+        const validTimestamps = timestamps.filter(ts => {
           const seconds = timestampToSeconds(ts);
-          const isValid = seconds <= (maxDuration - safetyMarginSeconds);
+          const isValid = seconds <= maxDuration;
           if (!isValid) {
-            console.log(`Timestamp ${ts} (${seconds}s) exceeds safe video duration (${maxDuration - safetyMarginSeconds}s) and will be skipped`);
+            console.log(`Timestamp ${ts} (${seconds}s) exceeds video duration (${maxDuration}s) and will be skipped`);
           }
           return isValid;
         });
@@ -86,30 +76,7 @@ export async function extractFramesFromVideoUrl(
         
         if (validTimestamps.length === 0) {
           console.warn("No valid timestamps found within video duration");
-          
-          // If the video has some duration, create a few frames at strategic points
-          if (maxDuration > 0) {
-            const fallbackTimestamps = [];
-            
-            // More granular fallback timestamp generation based on video length
-            const timepointCount = maxDuration < 10 ? 2 : (maxDuration < 30 ? 3 : 5);
-            
-            for (let i = 1; i <= timepointCount; i++) {
-              const point = i / (timepointCount + 1); // Distribute evenly
-              const timestamp = formatDuration(point * (maxDuration - safetyMarginSeconds));
-              fallbackTimestamps.push(timestamp);
-            }
-            
-            if (fallbackTimestamps.length > 0) {
-              console.log(`Generated ${fallbackTimestamps.length} fallback timestamps: ${fallbackTimestamps.join(', ')}`);
-              
-              // Process the fallback timestamps
-              processNextTimestamp(fallbackTimestamps, 0);
-              return;
-            }
-          }
-          
-          resolve([]); // Return empty array if no valid timestamps and couldn't create fallbacks
+          resolve([]); // Return empty array if no valid timestamps
           return;
         }
         
@@ -368,72 +335,6 @@ export async function extractFramesFromVideoUrl(
       } else {
         callback();
       }
-    }
-    
-    // Helper function to format seconds as a timestamp string
-    function formatDuration(seconds: number): string {
-      const hours = Math.floor(seconds / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      const secs = Math.floor(seconds % 60);
-      
-      if (hours > 0) {
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-      } else {
-        return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-      }
-    }
-    
-    /**
-     * Normalize timestamps to fit within video duration
-     * This function takes timestamps that might be outside the video duration
-     * and proportionally maps them within the valid range
-     */
-    function normalizeTimestamps(timestamps: string[], maxDuration: number): string[] {
-      // First, check if we have any timestamps beyond video duration
-      const hasInvalidTimestamps = timestamps.some(ts => {
-        const seconds = timestampToSeconds(ts);
-        return seconds > maxDuration;
-      });
-      
-      // If all timestamps are valid, return them unchanged
-      if (!hasInvalidTimestamps) {
-        return timestamps;
-      }
-      
-      console.log("Found timestamps exceeding video duration. Normalizing...");
-      
-      // Convert timestamps to seconds
-      const timestampSeconds = timestamps.map(ts => ({
-        original: ts,
-        seconds: timestampToSeconds(ts)
-      }));
-      
-      // Find max timestamp in seconds
-      const maxTimestampSeconds = Math.max(...timestampSeconds.map(t => t.seconds));
-      
-      // If max timestamp is within duration, return original timestamps
-      if (maxTimestampSeconds <= maxDuration) {
-        return timestamps;
-      }
-      
-      // Calculate scaling factor to map timestamps to video duration
-      const scalingFactor = (maxDuration - 5) / maxTimestampSeconds; // Leave 5 second margin
-      
-      // Normalize timestamps
-      return timestampSeconds.map(ts => {
-        // Keep timestamps that are already within range
-        if (ts.seconds <= maxDuration - 5) {
-          return ts.original;
-        }
-        
-        // Scale down timestamps that exceed duration
-        const normalizedSeconds = Math.floor(ts.seconds * scalingFactor);
-        const normalized = formatDuration(normalizedSeconds);
-        
-        console.log(`Normalized timestamp ${ts.original} (${ts.seconds}s) to ${normalized} (${normalizedSeconds}s)`);
-        
-        return normalized;
-      });
     }
     
     // Start loading the video

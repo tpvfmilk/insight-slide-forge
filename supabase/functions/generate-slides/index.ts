@@ -87,9 +87,6 @@ serve(async (req) => {
       ? Math.round((wordCount / 150) * project.slides_per_minute) // 150 words per minute is a rough estimate
       : 0; // 0 means AI decides
 
-    // Try to get actual video duration from project.video_metadata if available
-    const actualVideoDuration = project.video_metadata?.duration || videoDuration;
-
     // Process with AI and track token usage
     const { slideDeck, usageData } = await generateSlidesWithAI(
       contentForProcessing, 
@@ -98,7 +95,7 @@ serve(async (req) => {
       targetSlideCount,
       project.user_id,
       projectId,
-      actualVideoDuration // Pass video duration to generateSlidesWithAI function
+      videoDuration // Pass video duration to generateSlidesWithAI function
     );
     
     // Insert usage data into openai_usage table
@@ -198,22 +195,16 @@ async function generateSlidesWithAI(
     - The goal is to extract frames from these timestamps to provide visual context for each slide
     `;
     
-    // Add video duration constraint if available with much stronger emphasis
+    // Add video duration constraint if available
     if (videoDuration) {
       const formattedDuration = formatDuration(videoDuration);
       timestampInstructions += `
-    STRICT VIDEO DURATION CONSTRAINT - CRITICALLY IMPORTANT:
-    - This is a SHORT video, EXACTLY ${Math.round(videoDuration)} seconds long (${formattedDuration})
-    - ALL timestamps MUST be in the format "MM:SS" (minutes:seconds)
-    - ALL timestamps MUST be less than or equal to ${formattedDuration}
-    - NEVER generate timestamps beyond ${formattedDuration}
-    - DO NOT use "HH:MM:SS" format for short videos - use "MM:SS" only
-    - Generate timestamps between 00:00 and ${formatDuration(Math.max(0, videoDuration - 2))}
-    - Keep at least 2 seconds margin from the end of the video
-    - DOUBLE-CHECK all timestamps to verify they are within the video duration
-    - If you're not sure about a timestamp, use an earlier one that's definitely valid
-    - EXAMPLES of valid timestamps for this video: "00:05", "00:30", "${formatDuration(Math.floor(videoDuration / 2))}"
-    - EXAMPLES of INVALID timestamps: "05:00", "10:00", "${formatDuration(videoDuration + 60)}"
+    CRITICAL VIDEO DURATION CONSTRAINT:
+    - This video is exactly ${videoDuration} seconds long (${formattedDuration})
+    - All timestamps MUST be within the range 00:00:00 to ${formattedDuration}
+    - DO NOT generate any timestamps beyond ${formattedDuration}
+    - If you're unsure about a timestamp's position, choose an earlier one within the video's duration
+    - Double check all timestamps to ensure they are valid and within the video length
     `;
     }
 
@@ -223,7 +214,7 @@ async function generateSlidesWithAI(
     - id (string): a unique identifier like "slide-1"
     - title (string): a concise, informative title
     - content (string): bullet points separated by '\\n• ' (newline and bullet)
-    - transcriptTimestamps (array of strings): include 1-4 timestamps from the transcript that this slide covers, in "MM:SS" format
+    - transcriptTimestamps (array of strings): include 1-4 timestamps from the transcript that this slide covers, in "00:05:32" format
     
     For the main title slide, use the title: "${title}"
     
@@ -233,11 +224,6 @@ async function generateSlidesWithAI(
     - DO NOT create a conclusion or summary slide
     - DO NOT include any slides titled "Conclusion", "Summary", or similar
     - The last slide should be on the last topic from the content, not a summary
-    ${videoDuration ? `- This video is ONLY ${Math.round(videoDuration)} seconds long (${formatDuration(videoDuration)})` : ''}
-    ${videoDuration ? `- ALL timestamps MUST be within the range 00:00 to ${formatDuration(videoDuration)}` : ''}
-    ${videoDuration ? `- NEVER generate timestamps beyond ${formatDuration(videoDuration)}` : ''}
-    ${videoDuration ? `- Use "MM:SS" format only, not "HH:MM:SS"` : ''}
-    ${videoDuration && videoDuration < 60 ? `- ALL timestamps must be under one minute (00:00 to 00:${Math.floor(videoDuration)})` : ''}
     
     Here's the content to transform into slides:
     ${content}
@@ -259,7 +245,7 @@ async function generateSlidesWithAI(
         messages: [
           {
             role: "system",
-            content: "You are a professional presentation creator specialized in creating well-organized slide decks with visual context. You are EXTREMELY CAREFUL to follow all constraints about timestamps and video duration."
+            content: "You are a professional presentation creator specialized in creating well-organized slide decks with visual context."
           },
           {
             role: "user",
@@ -317,51 +303,22 @@ async function generateSlidesWithAI(
           ? slide.transcriptTimestamps 
           : (slide.timestamp ? [slide.timestamp] : []);
           
-        // Normalize and validate timestamps against video duration if available
-        let normalizedTimestamps: string[] = transcriptTimestamps;
+        // Validate timestamps against video duration if available
+        let validatedTimestamps = transcriptTimestamps;
         if (videoDuration) {
-          // First normalize all timestamps to ensure they're in the correct format
-          normalizedTimestamps = transcriptTimestamps.map(timestamp => {
-            // Make sure the timestamp is in the correct format
-            // For MM:SS format, make sure the seconds are within 0-59 range
-            let formattedTimestamp = timestamp;
-            
-            // Convert to seconds first to normalize format
-            const seconds = timestampToSeconds(timestamp);
-            
-            // Apply a strict maximum - cap at video duration minus 2 seconds for safety
-            const safeSeconds = Math.min(seconds, Math.max(0, videoDuration - 2));
-            
-            // Convert back to formatted string
-            formattedTimestamp = formatDuration(safeSeconds);
-            
-            console.log(`Normalized timestamp ${timestamp} (${seconds}s) to ${formattedTimestamp} (${safeSeconds}s)`);
-            
-            return formattedTimestamp;
-          });
-          
-          // Filter out any duplicate timestamps after normalization
-          normalizedTimestamps = [...new Set(normalizedTimestamps)];
-          
-          console.log(`Slide ${index + 1} timestamps after normalization:`, normalizedTimestamps);
-        }
-        
-        // If no valid timestamps remain, try to create some valid ones
-        if (normalizedTimestamps.length === 0 && videoDuration) {
-          console.log(`No valid timestamps for slide ${index + 1}, creating fallback timestamps`);
-          
-          // Create fallback timestamps based on slide position in the deck
-          const slidePosition = (index + 1) / slides.length;
-          const timestampPosition = Math.floor(slidePosition * (videoDuration - 2));
-          normalizedTimestamps = [
-            formatDuration(Math.min(timestampPosition, Math.max(0, videoDuration - 2)))
-          ];
-          
-          console.log(`Created fallback timestamps: ${normalizedTimestamps.join(', ')}`);
+          validatedTimestamps = transcriptTimestamps
+            .filter(timestamp => {
+              const seconds = timestampToSeconds(timestamp);
+              const isValid = seconds <= videoDuration;
+              if (!isValid) {
+                console.log(`Filtering out invalid timestamp: ${timestamp} (${seconds}s) exceeds video duration of ${videoDuration}s`);
+              }
+              return isValid;
+            });
         }
         
         // Limit to max 4 timestamps to keep things manageable
-        const limitedTimestamps = normalizedTimestamps.slice(0, 4);
+        const limitedTimestamps = validatedTimestamps.slice(0, 4);
         
         return {
           ...slide,
