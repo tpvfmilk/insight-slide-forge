@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Settings2, RefreshCw } from "lucide-react";
@@ -12,11 +12,30 @@ interface ContextDialogProps {
   project: Project | null;
   contextPrompt: string;
   setContextPrompt: (value: string) => void;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export const ContextDialog = ({ project, contextPrompt, setContextPrompt }: ContextDialogProps) => {
+export const ContextDialog = ({ 
+  project, 
+  contextPrompt, 
+  setContextPrompt,
+  isOpen,
+  onOpenChange
+}: ContextDialogProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [editedContextPrompt, setEditedContextPrompt] = useState<string>("");
+
+  const open = isOpen !== undefined ? isOpen : isDialogOpen;
+  const setOpen = onOpenChange || setIsDialogOpen;
+  
+  // Initialize edited context prompt when dialog opens
+  useEffect(() => {
+    if (open) {
+      setEditedContextPrompt(contextPrompt || "");
+    }
+  }, [open, contextPrompt]);
 
   const handleSaveContext = async () => {
     if (!project?.id) return;
@@ -25,11 +44,14 @@ export const ContextDialog = ({ project, contextPrompt, setContextPrompt }: Cont
     
     try {
       await updateProject(project.id, {
-        context_prompt: contextPrompt
+        context_prompt: editedContextPrompt
       });
       
+      // Update the parent state
+      setContextPrompt(editedContextPrompt);
+      
       toast.success("Context prompt saved");
-      setIsDialogOpen(false);
+      setOpen(false);
     } catch (error) {
       console.error("Error saving context:", error);
       toast.error("Failed to save context prompt");
@@ -39,7 +61,7 @@ export const ContextDialog = ({ project, contextPrompt, setContextPrompt }: Cont
   };
 
   return (
-    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Settings2 className="h-4 w-4 mr-1" />
@@ -52,14 +74,14 @@ export const ContextDialog = ({ project, contextPrompt, setContextPrompt }: Cont
         </DialogHeader>
         <div className="py-4">
           <ContextPromptInput 
-            value={contextPrompt}
-            onChange={setContextPrompt}
+            value={editedContextPrompt}
+            onChange={setEditedContextPrompt}
           />
           
           <div className="flex justify-end mt-4 space-x-2">
             <Button 
               variant="outline" 
-              onClick={() => setIsDialogOpen(false)}
+              onClick={() => setOpen(false)}
               disabled={isSaving}
             >
               Cancel

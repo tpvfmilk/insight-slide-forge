@@ -341,26 +341,66 @@ serve(async (req) => {
 });
 
 /**
- * Format the transcript with speaker detection and line breaks
+ * Format the transcript with speaker detection, timestamps, and line breaks
  */
 function formatTranscriptWithSpeakers(transcriptionData) {
-  let formattedText = '';
-  let currentSpeaker = null;
-  
   if (!transcriptionData.segments || !Array.isArray(transcriptionData.segments)) {
     return transcriptionData.text;
   }
   
+  let formattedText = '';
+  let currentSpeaker = null;
+  let speakerSegments = [];
+  
+  // First pass: collect segments by speaker and join related content
   for (const segment of transcriptionData.segments) {
+    // Format timestamp
+    const minutes = Math.floor(segment.start / 60);
+    const seconds = Math.floor(segment.start % 60);
+    const timestamp = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
     // Check if speaker has changed
     if (segment.speaker !== currentSpeaker) {
-      formattedText += '\n\n';
-      formattedText += `Speaker ${segment.speaker}: `;
+      if (speakerSegments.length > 0) {
+        // Process previous speaker's segments
+        formattedText += processSpeakerSegments(currentSpeaker, speakerSegments);
+        speakerSegments = [];
+      }
+      
+      // Start new speaker
       currentSpeaker = segment.speaker;
     }
     
-    formattedText += segment.text;
+    // Add segment to current speaker
+    speakerSegments.push({
+      text: segment.text,
+      timestamp: timestamp
+    });
+  }
+  
+  // Process the last speaker's segments
+  if (speakerSegments.length > 0) {
+    formattedText += processSpeakerSegments(currentSpeaker, speakerSegments);
   }
   
   return formattedText.trim();
+}
+
+/**
+ * Process segments from a single speaker
+ */
+function processSpeakerSegments(speaker, segments) {
+  let text = `\n\nSpeaker ${speaker}: [${segments[0].timestamp}] `;
+  
+  // Join the segments with appropriate spacing
+  segments.forEach((segment, index) => {
+    // Only add timestamp for first segment or if there's a significant gap
+    if (index > 0) {
+      text += ' ' + segment.text;
+    } else {
+      text += segment.text;
+    }
+  });
+  
+  return text;
 }
