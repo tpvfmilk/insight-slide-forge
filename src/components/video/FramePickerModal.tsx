@@ -1,13 +1,12 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
 import { 
   Play, Pause, SkipBack, SkipForward, Camera, AlertCircle,
-  RefreshCw, CheckCircle2, X, Trash2, Zap
+  RefreshCw, CheckCircle2, X, Trash2
 } from "lucide-react";
 import { formatDuration, timestampToSeconds } from "@/utils/formatUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,7 +15,6 @@ import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { useUIReset } from "@/context/UIResetContext";
 import { TimestampSlider } from "./TimestampSlider";
-import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 
 interface FramePickerModalProps {
   open: boolean;
@@ -50,8 +48,6 @@ export const FramePickerModal = ({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
   const [isCaptureLoading, setIsCaptureLoading] = useState<boolean>(false);
-  const [isAutoCapturing, setIsAutoCapturing] = useState<boolean>(false);
-  const [autoCaptureFraction, setAutoCaptureFraction] = useState<number>(0);
   const { registerUIElement, unregisterUIElement } = useUIReset();
   const elementId = useRef(`frame-picker-${Math.random().toString(36).substring(2, 9)}`);
   
@@ -183,9 +179,10 @@ export const FramePickerModal = ({
   
   const captureFrame = async () => {
     const video = videoRef.current;
+    const canvas = canvasRef.current;
     
-    if (!video || !videoUrl) {
-      toast.error("Cannot capture frame: video not properly loaded");
+    if (!video || !canvas || !projectId) {
+      toast.error("Cannot capture frame: missing video or canvas");
       return;
     }
     
@@ -198,171 +195,101 @@ export const FramePickerModal = ({
         setIsPlaying(false);
       }
       
-      // Create the timestamp for the current time
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Draw the current frame on the canvas
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error("Could not get canvas context");
+      }
+      
+      // Clear canvas before drawing
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw the current frame on the canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Check if we got a black frame
+      const imageData = ctx.getImageData(0, 0, 20, 20);
+      let hasContent = false;
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        const r = imageData.data[i];
+        const g = imageData.data[i+1]; 
+        const b = imageData.data[i+2];
+        if (r > 15 || g > 15 || b > 15) {
+          hasContent = true;
+          break;
+        }
+      }
+      
+      if (!hasContent) {
+        console.warn("Captured frame appears to be black, trying to fix...");
+        
+        // Add a visual indicator on black frames
+        ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "white";
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("Frame may be black - try a different timestamp", canvas.width / 2, canvas.height / 2);
+      }
+      
+      // Create the timestamp just once and reuse it
       const currentTimestamp = formatDuration(video.currentTime);
       
-      // Extract just this single frame at the current time using the same method as auto-capture
-      const progressCallback = () => {}; // Not needed for a single frame
+      // Add timestamp overlay for reference
+      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.fillRect(10, 10, 300, 30);
+      ctx.fillStyle = "white";
+      ctx.font = "16px Arial";
+      ctx.fillText(`Timestamp: ${currentTimestamp}`, 15, 30);
       
-      // Use the extractFramesFromVideoUrl function for consistent behavior
-      const extractedFrames = await extractFramesFromVideoUrl(
-        videoUrl,
-        [currentTimestamp],
-        progressCallback,
-        videoDuration
-      );
+      // Convert to blob
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(blob => {
+          if (blob) resolve(blob);
+          else reject(new Error("Failed to create blob from canvas"));
+        }, 'image/jpeg', 0.95);
+      });
       
-      if (extractedFrames.length > 0) {
-        // Process the extracted frame
-        const frameData = extractedFrames[0];
-        
-        // Create a file from the blob
-        const file = new File(
-          [frameData.frame], 
-          `frame-${frameData.timestamp.replace(/:/g, "-")}.jpg`, 
-          { type: 'image/jpeg' }
-        );
-        
-        // Upload to storage
-        const uploadResult = await uploadSlideImage(file);
-        
-        if (!uploadResult || !uploadResult.url) {
-          throw new Error("Failed to upload frame image");
-        }
-        
-        // Add to captured frames
-        const newFrame: ExtractedFrame = {
-          timestamp: frameData.timestamp,
-          imageUrl: uploadResult.url
-        };
-        
-        setCapturedFrames(prev => {
-          // Check if we already have a frame with this timestamp
-          const exists = prev.some(frame => frame.timestamp === frameData.timestamp);
-          if (exists) {
-            // Replace the existing frame
-            return prev.map(frame => 
-              frame.timestamp === frameData.timestamp ? newFrame : frame
-            );
-          } else {
-            // Add new frame
-            return [...prev, newFrame];
-          }
-        });
-        
-        toast.success(`Frame at ${frameData.timestamp} captured!`);
-      } else {
-        throw new Error("Failed to extract frame");
+      // Create a file from the blob - using the currentTimestamp we already defined
+      const file = new File([blob], `frame-${currentTimestamp.replace(/:/g, "-")}.jpg`, { type: 'image/jpeg' });
+      
+      // Upload to storage
+      const uploadResult = await uploadSlideImage(file);
+      
+      if (!uploadResult || !uploadResult.url) {
+        throw new Error("Failed to upload frame image");
       }
+      
+      // Add to captured frames
+      const newFrame: ExtractedFrame = {
+        timestamp: currentTimestamp,
+        imageUrl: uploadResult.url
+      };
+      
+      setCapturedFrames(prev => {
+        // Check if we already have a frame with this timestamp
+        const exists = prev.some(frame => frame.timestamp === currentTimestamp);
+        if (exists) {
+          // Replace the existing frame
+          return prev.map(frame => 
+            frame.timestamp === currentTimestamp ? newFrame : frame
+          );
+        } else {
+          // Add new frame
+          return [...prev, newFrame];
+        }
+      });
+      
+      toast.success(`Frame at ${currentTimestamp} captured!`);
     } catch (err) {
       console.error("Error capturing frame:", err);
       toast.error(`Failed to capture frame: ${err instanceof Error ? err.message : "Unknown error"}`);
     } finally {
       setIsCaptureLoading(false);
-    }
-  };
-  
-  const autoExtractFrames = async () => {
-    const video = videoRef.current;
-    
-    if (!video || !videoDuration) {
-      toast.error("Cannot auto-capture: Video not loaded properly");
-      return;
-    }
-    
-    setIsAutoCapturing(true);
-    setAutoCaptureFraction(0);
-    
-    try {
-      // Ensure video is paused
-      if (!video.paused) {
-        video.pause();
-        setIsPlaying(false);
-      }
-      
-      // Generate timestamps at regular intervals
-      const numberOfFrames = Math.min(10, Math.max(5, Math.ceil(videoDuration / 10)));
-      const timestamps: string[] = [];
-      
-      for (let i = 1; i <= numberOfFrames; i++) {
-        const timePoint = (i / (numberOfFrames + 1)) * videoDuration;
-        timestamps.push(formatDuration(timePoint));
-      }
-      
-      // Add the timestamps from any existing slides if they're different from the generated ones
-      if (capturedFrames.length > 0) {
-        capturedFrames.forEach(frame => {
-          if (!timestamps.includes(frame.timestamp)) {
-            timestamps.push(frame.timestamp);
-          }
-        });
-      }
-      
-      // Use the extractFramesFromVideoUrl function from utils
-      const progressCallback = (completed: number, total: number) => {
-        // Ensure the fraction never exceeds 1.0
-        const fraction = Math.min(1.0, completed / total);
-        setAutoCaptureFraction(fraction);
-      };
-      
-      const extractedFrames = await extractFramesFromVideoUrl(
-        videoUrl || "",
-        timestamps,
-        progressCallback,
-        videoDuration
-      );
-      
-      // Process and upload each extracted frame
-      const uploadedFrames: ExtractedFrame[] = [];
-      
-      for (const frame of extractedFrames) {
-        try {
-          // Create a file from the blob
-          const file = new File(
-            [frame.frame], 
-            `frame-${frame.timestamp.replace(/:/g, "-")}.jpg`, 
-            { type: 'image/jpeg' }
-          );
-          
-          // Upload to storage
-          const uploadResult = await uploadSlideImage(file);
-          
-          if (!uploadResult || !uploadResult.url) {
-            console.error(`Failed to upload frame at ${frame.timestamp}`);
-            continue;
-          }
-          
-          uploadedFrames.push({
-            timestamp: frame.timestamp,
-            imageUrl: uploadResult.url
-          });
-          
-        } catch (error) {
-          console.error(`Error processing frame at ${frame.timestamp}:`, error);
-        }
-      }
-      
-      // Merge with existing frames, replacing any duplicates
-      const newFrames = [...capturedFrames];
-      
-      uploadedFrames.forEach(newFrame => {
-        const existingIndex = newFrames.findIndex(f => f.timestamp === newFrame.timestamp);
-        if (existingIndex !== -1) {
-          newFrames[existingIndex] = newFrame;
-        } else {
-          newFrames.push(newFrame);
-        }
-      });
-      
-      setCapturedFrames(newFrames);
-      
-      toast.success(`Successfully auto-captured ${uploadedFrames.length} frames!`);
-    } catch (err) {
-      console.error("Error in auto-extracting frames:", err);
-      toast.error(`Auto-capture failed: ${err instanceof Error ? err.message : "Unknown error"}`);
-    } finally {
-      setIsAutoCapturing(false);
-      setAutoCaptureFraction(0);
     }
   };
   
@@ -387,7 +314,7 @@ export const FramePickerModal = ({
     onClose();
   };
 
-  // Fetch video function
+  // Fix: Implement fetchVideo function properly
   const fetchVideo = async () => {
     setIsLoading(true);
     setError(null);
@@ -468,6 +395,7 @@ export const FramePickerModal = ({
     }
   };
 
+  // Fix the timestamp handling in the UI
   return (
     <SafeDialog open={open} onOpenChange={() => handleClose()}>
       <SafeDialogContent className="max-w-4xl w-full h-[85vh] flex flex-col">
@@ -508,26 +436,11 @@ export const FramePickerModal = ({
                 onLoadedData={handleVideoLoaded}
                 playsInline
                 muted
-                crossOrigin="anonymous"
               />
               <canvas ref={canvasRef} className="hidden" />
             </div>
             
-            {/* Auto-capture progress bar - only shown during auto-capture */}
-            {isAutoCapturing && (
-              <div className="px-4">
-                <Progress 
-                  value={Math.min(100, autoCaptureFraction * 100)} 
-                  className="h-2"
-                  indicatorClassName={autoCaptureFraction >= 1 ? "bg-green-500" : undefined}
-                />
-                <p className="text-xs text-center mt-1 text-muted-foreground">
-                  Auto-capturing: {Math.round(Math.min(100, autoCaptureFraction * 100))}% complete
-                </p>
-              </div>
-            )}
-            
-            {/* Enhanced timestamp slider with timeline - the only slider we need */}
+            {/* Enhanced timestamp slider with validation */}
             {videoDuration > 0 && (
               <TimestampSlider
                 timestamps={capturedFrames.map(frame => frame.timestamp)}
@@ -545,7 +458,7 @@ export const FramePickerModal = ({
             )}
             
             {/* Video controls */}
-            <div className="flex items-center justify-center space-x-4 px-4 flex-wrap gap-2">
+            <div className="flex items-center justify-center space-x-4 px-4">
               <Button
                 variant="outline"
                 size="icon"
@@ -580,23 +493,10 @@ export const FramePickerModal = ({
               <Button
                 onClick={captureFrame}
                 disabled={isCaptureLoading}
-                className="ml-2"
+                className="ml-4"
               >
                 <Camera className="mr-2 h-4 w-4" />
                 {isCaptureLoading ? "Capturing..." : "Capture Frame"}
-              </Button>
-              
-              <Button 
-                onClick={autoExtractFrames}
-                disabled={isAutoCapturing}
-                variant="secondary"
-              >
-                <Zap className="mr-2 h-4 w-4" />
-                {isAutoCapturing ? (
-                  `Auto-Capture Frames`
-                ) : (
-                  "Auto-Capture Frames"
-                )}
               </Button>
             </div>
             
@@ -612,8 +512,7 @@ export const FramePickerModal = ({
                 <div className="text-center py-8 text-muted-foreground">
                   <p>No frames captured yet.</p>
                   <p className="text-sm">
-                    Use the video controls to find the frames you want to capture, 
-                    or click "Auto-Capture Frames" to extract frames automatically.
+                    Use the video controls to find the frames you want to capture.
                   </p>
                 </div>
               ) : (

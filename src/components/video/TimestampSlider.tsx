@@ -24,7 +24,6 @@ export const TimestampSlider = ({
   className
 }: TimestampSliderProps) => {
   const [hoveredTime, setHoveredTime] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
 
   // Validate timestamps against video duration
   const validatedTimestamps = timestamps
@@ -51,26 +50,8 @@ export const TimestampSlider = ({
     return { timestamp, position, isValid };
   });
 
-  // Calculate position of the timeline indicator
-  const currentTimePosition = (currentTime / videoDuration) * 100;
-
   return (
-    <div className={cn("relative pt-8 pb-8", className)}>
-      {/* Video timeline strip */}
-      <div className="absolute w-full h-2 bg-secondary/50 rounded-full overflow-hidden">
-        {/* Timeline fill */}
-        <div 
-          className="absolute top-0 left-0 h-full bg-primary/30"
-          style={{ width: `${currentTimePosition}%` }}
-        />
-        
-        {/* Current time indicator */}
-        <div 
-          className="absolute top-0 h-full w-1 bg-primary z-10"
-          style={{ left: `${currentTimePosition}%` }}
-        />
-      </div>
-      
+    <div className={cn("relative pt-6 pb-8", className)}>
       {/* Timestamp markers */}
       <div className="absolute w-full top-0 h-6">
         <TooltipProvider>
@@ -108,8 +89,6 @@ export const TimestampSlider = ({
         max={videoDuration}
         step={0.001}
         onValueChange={handleValueChange}
-        onPointerDown={() => setIsDragging(true)}
-        onPointerUp={() => setIsDragging(false)}
         className="mt-2"
       />
 
