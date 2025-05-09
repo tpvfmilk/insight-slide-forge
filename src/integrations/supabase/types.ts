@@ -42,6 +42,33 @@ export type Database = {
         }
         Relationships: []
       }
+      folders: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       openai_usage: {
         Row: {
           created_at: string
@@ -117,6 +144,7 @@ export type Database = {
           description: string | null
           expires_at: string
           extracted_frames: Json | null
+          folder_id: string | null
           id: string
           model_id: string | null
           slides: Json | null
@@ -137,6 +165,7 @@ export type Database = {
           description?: string | null
           expires_at?: string
           extracted_frames?: Json | null
+          folder_id?: string | null
           id?: string
           model_id?: string | null
           slides?: Json | null
@@ -157,6 +186,7 @@ export type Database = {
           description?: string | null
           expires_at?: string
           extracted_frames?: Json | null
+          folder_id?: string | null
           id?: string
           model_id?: string | null
           slides?: Json | null
@@ -171,7 +201,15 @@ export type Database = {
           user_id?: string
           video_metadata?: Json | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       storage_tiers: {
         Row: {

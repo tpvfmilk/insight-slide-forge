@@ -35,7 +35,7 @@ export const fetchFolders = async (): Promise<Folder[]> => {
     throw error;
   }
 
-  return data as Folder[] || [];
+  return (data || []) as Folder[];
 };
 
 /**
