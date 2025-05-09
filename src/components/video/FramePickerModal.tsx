@@ -75,86 +75,6 @@ export const FramePickerModal = ({
   useEffect(() => {
     if (!open) return;
     
-    const fetchVideo = async () => {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        // First try with 'video_uploads' bucket
-        try {
-          const { data, error } = await supabase.storage
-            .from("video_uploads")
-            .createSignedUrl(videoPath, 3600); // 1 hour expiry
-          
-          if (error) throw error;
-          
-          if (!data || !data.signedUrl) {
-            throw new Error("Failed to get video URL from video_uploads");
-          }
-          
-          setVideoUrl(data.signedUrl);
-          console.log("Successfully loaded video from video_uploads bucket");
-          setIsLoading(false);
-          return;
-        } catch (videoUploadsError) {
-          console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...");
-          
-          // Try with 'videos' bucket as alternative
-          try {
-            // Extract just the filename from the path
-            const filename = videoPath.split('/').pop();
-            if (!filename) {
-              throw new Error("Invalid video path format");
-            }
-            
-            const { data, error } = await supabase.storage
-              .from('videos')
-              .createSignedUrl(filename, 3600);
-            
-            if (error || !data?.signedUrl) {
-              throw new Error(`Error from videos bucket: ${error?.message}`);
-            }
-            
-            setVideoUrl(data.signedUrl);
-            console.log("Successfully loaded video from videos bucket");
-            setIsLoading(false);
-            return;
-          } catch (videosBucketError) {
-            console.error("Error creating signed URL for video:", { 
-              videoUploadsError, 
-              videosBucketError 
-            });
-            
-            // Try to check if the video exists in the database but with a different path
-            const { data: projectData, error: projectPathError } = await supabase
-              .from('projects')
-              .select('source_url')
-              .eq('id', projectId)
-              .maybeSingle();
-              
-            if (projectPathError) {
-              console.error("Error fetching project source URL:", projectPathError);
-            }
-            
-            // If we have a source URL in the project, try that instead
-            if (projectData?.source_url) {
-              console.log("Found source URL in project, trying that instead:", projectData.source_url);
-              setVideoUrl(projectData.source_url);
-              setIsLoading(false);
-              return;
-            }
-            
-            throw new Error("Failed to get video URL. Please check if the video file exists in storage.");
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching video:", err);
-        setError(err instanceof Error ? err.message : "Failed to load video");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
     fetchVideo();
     
     // Initialize with existing frames if provided
@@ -394,10 +314,8 @@ export const FramePickerModal = ({
     onClose();
   };
 
-  // Added to fix the loadVideo error
-  const retryLoadVideo = async () => {
-    if (!open) return;
-    
+  // Fix: Implement fetchVideo function properly
+  const fetchVideo = async () => {
     setIsLoading(true);
     setError(null);
     
@@ -420,7 +338,7 @@ export const FramePickerModal = ({
         return;
       } catch (videoUploadsError) {
         console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...");
-          
+        
         // Try with 'videos' bucket as alternative
         try {
           // Extract just the filename from the path
@@ -476,180 +394,175 @@ export const FramePickerModal = ({
       setIsLoading(false);
     }
   };
-  
+
+  // Fix the timestamp handling in the UI
   return (
-    <SafeDialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <SafeDialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+    <SafeDialog open={open} onOpenChange={() => handleClose()}>
+      <SafeDialogContent className="max-w-4xl w-full h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Select Video Frames</DialogTitle>
+          <DialogTitle>Manual Frame Selection</DialogTitle>
         </DialogHeader>
-
-        <div className="flex-1 min-h-0 flex flex-col">
-          {/* Video Player Area */}
-          <div className="relative bg-black aspect-video">
-            {isLoading ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <RefreshCw className="h-8 w-8 animate-spin text-white/70" />
-                <span className="ml-2 text-white/70">Loading video...</span>
-              </div>
-            ) : error ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <AlertCircle className="h-10 w-10 text-destructive mb-2" />
-                <p className="text-white/90 text-center px-4">{error}</p>
-                <Button 
-                  variant="outline" 
-                  className="mt-4 bg-white/10 hover:bg-white/20 border-white/30 text-white"
-                  onClick={retryLoadVideo}
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Retry Loading Video
-                </Button>
-              </div>
-            ) : (
-              <video 
-                ref={videoRef}
-                className="w-full h-full object-contain"
-                controls={false}
-                onLoadedData={handleVideoLoaded}
-                onTimeUpdate={() => videoRef.current && setCurrentTime(videoRef.current.currentTime)}
-                crossOrigin="anonymous"
-                src={videoUrl || undefined}
-              >
-                Your browser does not support the video tag.
-              </video>
-            )}
+        
+        {isLoading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
+              <p>Loading video...</p>
+            </div>
           </div>
-
-          {/* Video Controls */}
-          <div className="py-3 px-4 border-b">
-            {/* Play controls */}
-            <div className="flex items-center justify-center space-x-4 mb-4">
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={seekBack}
-                disabled={isLoading || !!error}
-              >
-                <SkipBack className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant="default" 
-                size="icon"
-                onClick={togglePlayPause}
-                disabled={isLoading || !!error}
-              >
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={seekForward}
-                disabled={isLoading || !!error}
-              >
-                <SkipForward className="h-4 w-4" />
+        ) : error ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
+              <div>
+                <p className="text-lg font-semibold">Failed to load video</p>
+                <p className="text-sm text-muted-foreground">{error}</p>
+              </div>
+              <Button onClick={fetchVideo} variant="outline" className="mt-4">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
               </Button>
             </div>
-
-            {/* Add timestamp slider component here */}
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col space-y-4 overflow-hidden">
+            {/* Video player */}
+            <div className="relative bg-black flex items-center justify-center">
+              <video
+                ref={videoRef}
+                src={videoUrl || ""}
+                className="max-h-[50vh] max-w-full"
+                preload="metadata"
+                onLoadedData={handleVideoLoaded}
+                playsInline
+                muted
+              />
+              <canvas ref={canvasRef} className="hidden" />
+            </div>
+            
+            {/* Enhanced timestamp slider with validation */}
             {videoDuration > 0 && (
-              <TimestampSlider 
-                timestamps={[
-                  ...capturedFrames.map(frame => frame.timestamp),
-                  ...existingFrames.map(frame => frame.timestamp)
-                ]}
+              <TimestampSlider
+                timestamps={capturedFrames.map(frame => frame.timestamp)}
                 videoDuration={videoDuration}
                 currentTime={currentTime}
                 onTimeChange={handleTimeChange}
                 onTimestampClick={(timestamp) => {
-                  // Find the frame with this timestamp
-                  const frame = [...capturedFrames, ...existingFrames].find(
-                    f => f.timestamp === timestamp
-                  );
-                  if (frame && videoRef.current) {
-                    const seconds = timestampToSeconds(timestamp);
-                    videoRef.current.currentTime = seconds;
-                    setCurrentTime(seconds);
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = timestampToSeconds(timestamp);
+                    setCurrentTime(timestampToSeconds(timestamp));
                   }
                 }}
-                className="mb-2"
+                className="px-4"
               />
             )}
-
-            {/* Current time display and capture button */}
-            <div className="flex justify-between items-center">
-              <div className="text-sm">
-                {formatDuration(currentTime)} / {formatDuration(videoDuration)}
-              </div>
-              
-              <Button 
-                variant="secondary"
-                onClick={captureFrame}
-                disabled={isLoading || !!error || isCaptureLoading}
+            
+            {/* Video controls */}
+            <div className="flex items-center justify-center space-x-4 px-4">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={seekBack}
+                title="Back 5 seconds"
               >
-                {isCaptureLoading ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                <SkipBack className="h-4 w-4" />
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={togglePlayPause}
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? (
+                  <Pause className="h-4 w-4" />
                 ) : (
-                  <Camera className="h-4 w-4 mr-2" />
+                  <Play className="h-4 w-4" />
                 )}
-                Capture Frame
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={seekForward}
+                title="Forward 5 seconds"
+              >
+                <SkipForward className="h-4 w-4" />
+              </Button>
+              
+              <Button
+                onClick={captureFrame}
+                disabled={isCaptureLoading}
+                className="ml-4"
+              >
+                <Camera className="mr-2 h-4 w-4" />
+                {isCaptureLoading ? "Capturing..." : "Capture Frame"}
+              </Button>
+            </div>
+            
+            <Separator />
+            
+            {/* Captured frames */}
+            <div className="flex-1 overflow-y-auto p-2">
+              <h3 className="text-md font-medium mb-2">
+                Captured Frames ({capturedFrames.length})
+              </h3>
+              
+              {capturedFrames.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No frames captured yet.</p>
+                  <p className="text-sm">
+                    Use the video controls to find the frames you want to capture.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {capturedFrames.map((frame) => (
+                    <div
+                      key={frame.timestamp}
+                      className="relative border rounded-md overflow-hidden group"
+                    >
+                      <img
+                        src={frame.imageUrl}
+                        alt={`Frame at ${frame.timestamp}`}
+                        className="w-full aspect-video object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteFrame(frame.timestamp)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1">
+                        {frame.timestamp}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Action buttons */}
+            <div className="flex justify-end space-x-2 pt-2">
+              <Button variant="outline" onClick={handleClose}>
+                <X className="mr-2 h-4 w-4" />
+                Cancel
+              </Button>
+              
+              <Button
+                onClick={handleComplete}
+                disabled={capturedFrames.length === 0}
+              >
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Apply {capturedFrames.length} {capturedFrames.length === 1 ? "Frame" : "Frames"}
               </Button>
             </div>
           </div>
-
-          {/* Captured Frames */}
-          <div className="overflow-auto p-4">
-            <h3 className="font-medium mb-2">Captured Frames ({capturedFrames.length})</h3>
-            
-            {capturedFrames.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>No frames captured yet.</p>
-                <p className="text-sm mt-1">Use the video controls above and click "Capture Frame" to extract images.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {capturedFrames.map((frame) => (
-                  <div key={frame.timestamp} className="relative border rounded-md overflow-hidden bg-muted/20">
-                    <img 
-                      src={frame.imageUrl} 
-                      alt={`Frame at ${frame.timestamp}`} 
-                      className="w-full aspect-video object-cover"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 bg-background/80 backdrop-blur-sm p-2 flex justify-between items-center">
-                      <span className="text-xs font-mono">{frame.timestamp}</span>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-6 w-6 text-destructive"
-                        onClick={() => deleteFrame(frame.timestamp)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Hidden canvas element for frame capture */}
-        <canvas ref={canvasRef} className="hidden" />
-
-        <div className="flex justify-between pt-4 border-t">
-          <Button 
-            variant="outline" 
-            onClick={handleClose}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleComplete}
-            disabled={capturedFrames.length === 0}
-          >
-            <CheckCircle2 className="h-4 w-4 mr-2" />
-            Apply {capturedFrames.length} Frame{capturedFrames.length !== 1 ? 's' : ''}
-          </Button>
-        </div>
+        )}
       </SafeDialogContent>
     </SafeDialog>
   );

@@ -322,10 +322,22 @@ async function generateSlidesWithAI(
         if (videoDuration) {
           // First normalize all timestamps to ensure they're in the correct format
           normalizedTimestamps = transcriptTimestamps.map(timestamp => {
+            // Make sure the timestamp is in the correct format
+            // For MM:SS format, make sure the seconds are within 0-59 range
+            let formattedTimestamp = timestamp;
+            
             // Convert to seconds first to normalize format
             const seconds = timestampToSeconds(timestamp);
-            // Convert back to formatted string using our helper
-            return formatDuration(Math.min(seconds, Math.max(0, videoDuration - 2)));
+            
+            // Apply a strict maximum - cap at video duration minus 2 seconds for safety
+            const safeSeconds = Math.min(seconds, Math.max(0, videoDuration - 2));
+            
+            // Convert back to formatted string
+            formattedTimestamp = formatDuration(safeSeconds);
+            
+            console.log(`Normalized timestamp ${timestamp} (${seconds}s) to ${formattedTimestamp} (${safeSeconds}s)`);
+            
+            return formattedTimestamp;
           });
           
           // Filter out any duplicate timestamps after normalization
