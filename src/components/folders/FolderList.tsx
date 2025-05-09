@@ -1,35 +1,12 @@
-
 import { useState } from "react";
-import { 
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger
-} from "@/components/ui/accordion";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Folder } from "@/services/folderService";
 import { Project } from "@/services/projectService";
 import { ProjectRow } from "@/components/projects/ProjectRow";
 import { FolderPen, MoreVertical, Trash } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 interface FolderListProps {
   folders: Folder[];
   projects: Project[];
@@ -40,11 +17,10 @@ interface FolderListProps {
   handleExport: (projectId: string, format: string) => void;
   loading: boolean;
 }
-
-export function FolderList({ 
-  folders, 
-  projects, 
-  onDeleteFolder, 
+export function FolderList({
+  folders,
+  projects,
+  onDeleteFolder,
   onEditFolder,
   handleDeleteProject,
   handleEditTitle,
@@ -52,7 +28,7 @@ export function FolderList({
   loading
 }: FolderListProps) {
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
-  
+
   // Group projects by folder
   const projectsByFolder = projects.reduce((acc: Record<string, Project[]>, project) => {
     const folderId = project.folder_id || "unassigned";
@@ -62,42 +38,28 @@ export function FolderList({
     acc[folderId].push(project);
     return acc;
   }, {});
-  
+
   // Handle expanding/collapsing all folders
   const toggleAllFolders = () => {
-    if (expandedFolders.length === folders.length + 1) { // +1 for "unassigned"
+    if (expandedFolders.length === folders.length + 1) {
+      // +1 for "unassigned"
       setExpandedFolders([]);
     } else {
-      setExpandedFolders([
-        ...folders.map(folder => folder.id),
-        "unassigned"
-      ]);
+      setExpandedFolders([...folders.map(folder => folder.id), "unassigned"]);
     }
   };
-  
-  return (
-    <div className="space-y-4">
+  return <div className="space-y-4">
       <div className="flex justify-end">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={toggleAllFolders}
-        >
+        <Button variant="outline" size="sm" onClick={toggleAllFolders}>
           {expandedFolders.length === folders.length + 1 ? "Collapse All" : "Expand All"}
         </Button>
       </div>
     
-      <Accordion
-        type="multiple"
-        value={expandedFolders}
-        onValueChange={setExpandedFolders}
-        className="w-full"
-      >
+      <Accordion type="multiple" value={expandedFolders} onValueChange={setExpandedFolders} className="w-full">
         {/* Render folders */}
         {folders.map(folder => {
-          const folderProjects = projectsByFolder[folder.id] || [];
-          return (
-            <AccordionItem key={folder.id} value={folder.id} className="border rounded-md mb-4">
+        const folderProjects = projectsByFolder[folder.id] || [];
+        return <AccordionItem key={folder.id} value={folder.id} className="border rounded-md mb-4">
               <div className="flex items-center justify-between pr-4">
                 <AccordionTrigger className="flex-1 hover:no-underline px-4">
                   <div className="flex items-center gap-2 text-left">
@@ -110,7 +72,7 @@ export function FolderList({
                 </AccordionTrigger>
                 
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
                       <MoreVertical className="h-4 w-4" />
                       <span className="sr-only">Menu</span>
@@ -124,10 +86,7 @@ export function FolderList({
                     <DropdownMenuSeparator />
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <DropdownMenuItem 
-                          className="text-destructive"
-                          onSelect={(e) => e.preventDefault()}
-                        >
+                        <DropdownMenuItem className="text-destructive" onSelect={e => e.preventDefault()}>
                           <Trash className="h-4 w-4 mr-2" />
                           Delete Folder
                         </DropdownMenuItem>
@@ -141,10 +100,7 @@ export function FolderList({
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => onDeleteFolder(folder.id)}
-                            className="bg-destructive hover:bg-destructive/90"
-                          >
+                          <AlertDialogAction onClick={() => onDeleteFolder(folder.id)} className="bg-destructive hover:bg-destructive/90">
                             Delete
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -155,8 +111,7 @@ export function FolderList({
               </div>
               
               <AccordionContent className="overflow-hidden">
-                {folderProjects.length > 0 ? (
-                  <div className="border rounded-md">
+                {folderProjects.length > 0 ? <div className="border rounded-md">
                     <table className="w-full">
                       <thead className="bg-muted/50">
                         <tr>
@@ -170,27 +125,15 @@ export function FolderList({
                         </tr>
                       </thead>
                       <tbody>
-                        {folderProjects.map((project) => (
-                          <ProjectRow
-                            key={project.id}
-                            project={project}
-                            handleDeleteProject={handleDeleteProject}
-                            handleEditTitle={handleEditTitle}
-                            handleExport={handleExport}
-                          />
-                        ))}
+                        {folderProjects.map(project => <ProjectRow key={project.id} project={project} handleDeleteProject={handleDeleteProject} handleEditTitle={handleEditTitle} handleExport={handleExport} />)}
                       </tbody>
                     </table>
-                  </div>
-                ) : (
-                  <div className="py-6 text-center text-muted-foreground">
+                  </div> : <div className="py-6 text-center text-muted-foreground">
                     No projects in this folder
-                  </div>
-                )}
+                  </div>}
               </AccordionContent>
-            </AccordionItem>
-          );
-        })}
+            </AccordionItem>;
+      })}
         
         {/* Unfiled Projects */}
         <AccordionItem value="unassigned" className="border rounded-md mb-4">
@@ -198,7 +141,7 @@ export function FolderList({
             <div className="flex items-center gap-2">
               <FolderPen className="h-5 w-5 text-muted-foreground" />
               <div>
-                <div className="font-medium">Unfiled Projects</div>
+                <div className="font-small">Unfiled Projects</div>
                 <div className="text-xs text-muted-foreground">
                   {(projectsByFolder["unassigned"] || []).length} projects
                 </div>
@@ -206,8 +149,7 @@ export function FolderList({
             </div>
           </AccordionTrigger>
           <AccordionContent className="overflow-hidden">
-            {projectsByFolder["unassigned"] && projectsByFolder["unassigned"].length > 0 ? (
-              <div className="border rounded-md">
+            {projectsByFolder["unassigned"] && projectsByFolder["unassigned"].length > 0 ? <div className="border rounded-md">
                 <table className="w-full">
                   <thead className="bg-muted/50">
                     <tr>
@@ -221,26 +163,14 @@ export function FolderList({
                     </tr>
                   </thead>
                   <tbody>
-                    {projectsByFolder["unassigned"].map((project) => (
-                      <ProjectRow
-                        key={project.id}
-                        project={project}
-                        handleDeleteProject={handleDeleteProject}
-                        handleEditTitle={handleEditTitle}
-                        handleExport={handleExport}
-                      />
-                    ))}
+                    {projectsByFolder["unassigned"].map(project => <ProjectRow key={project.id} project={project} handleDeleteProject={handleDeleteProject} handleEditTitle={handleEditTitle} handleExport={handleExport} />)}
                   </tbody>
                 </table>
-              </div>
-            ) : (
-              <div className="py-6 text-center text-muted-foreground">
+              </div> : <div className="py-6 text-center text-muted-foreground">
                 No unfiled projects
-              </div>
-            )}
+              </div>}
           </AccordionContent>
         </AccordionItem>
       </Accordion>
-    </div>
-  );
+    </div>;
 }
