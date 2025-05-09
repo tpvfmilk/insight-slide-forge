@@ -620,15 +620,18 @@ export const SlideEditor = () => {
   };
   
   if (isLoading) {
-    return <div className="h-full w-full flex items-center justify-center">
+    return (
+      <div className="h-full w-full flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
           <p className="text-sm text-muted-foreground">Loading slides...</p>
         </div>
-      </div>;
+      </div>
+    );
   }
   
-  return <div className="flex flex-col h-full">
+  return (
+    <div className="flex flex-col h-full">
       <div className="flex justify-between items-center p-4 border-b">
         <div className="text-sm text-muted-foreground flex items-center">
           <Clock className="h-4 w-4 mr-1" />
@@ -710,25 +713,30 @@ export const SlideEditor = () => {
                 </Button>
               )}
               
-              {allExtractedFrames.length > 0 && <Button variant="outline" size="sm" onClick={handleSelectFrames}>
+              {allExtractedFrames.length > 0 && (
+                <Button variant="outline" size="sm" onClick={handleSelectFrames}>
                   <ImageIcon className="h-4 w-4 mr-1" />
                   Insert
-                </Button>}
+                </Button>
+              )}
             </div>
           </div>
           
           <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-            {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? <div className="w-full h-full">
+            {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? (
+              <div className="w-full h-full">
                 {/* Responsive grid that stacks vertically when space is limited */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
                   {/* First, render all existing images with delete buttons */}
-                  {currentSlide.imageUrls.map((url, index) => <div key={`slide-image-${index}`} className="relative group aspect-video">
+                  {currentSlide.imageUrls.map((url, index) => (
+                    <div key={`slide-image-${index}`} className="relative group aspect-video">
                       <img src={url} alt={`Slide visual ${index + 1}`} className="w-full h-full object-cover rounded-md" />
                       {/* Individual frame delete button - always visible */}
                       <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8" onClick={() => handleDeleteFrame(index)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                    </div>)}
+                    </div>
+                  ))}
                   
                   {/* Add the "Add Image" button as the last item */}
                   <label htmlFor="image-upload-grid" className="relative aspect-video flex items-center justify-center border-2 border-dashed rounded-md cursor-pointer hover:bg-muted/50 transition-colors">
@@ -739,7 +747,9 @@ export const SlideEditor = () => {
                     <input id="image-upload-grid" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploadingImage} />
                   </label>
                 </div>
-              </div> : currentSlide?.imageUrl ? <div className="relative w-full h-full group">
+              </div>
+            ) : currentSlide?.imageUrl ? (
+              <div className="relative w-full h-full group">
                 <img src={currentSlide.imageUrl} alt="Slide visual" className="w-full h-full object-contain" />
                 {/* Delete button for single imageUrl */}
                 <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8" onClick={() => handleDeleteFrame(0)}>
@@ -754,17 +764,20 @@ export const SlideEditor = () => {
                   </Button>
                   <input id="image-upload-single" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploadingImage} />
                 </label>
-              </div> : <div className="flex flex-col items-center justify-center text-muted-foreground h-full">
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-muted-foreground h-full">
                 <ImageIcon className="h-10 w-10 mb-2" />
                 <p>No image available</p>
                 <div className="flex flex-col gap-2 mt-4">
                   {/* Buttons for when no images exist */}
                   <div className="flex gap-2">
-                    
-                    {allExtractedFrames.length > 0 && <Button variant="outline" size="sm" onClick={handleSelectFrames}>
+                    {allExtractedFrames.length > 0 && (
+                      <Button variant="outline" size="sm" onClick={handleSelectFrames}>
                         <ImageIcon className="h-4 w-4 mr-1" />
                         Insert
-                      </Button>}
+                      </Button>
+                    )}
                   </div>
                   
                   <label htmlFor="image-upload-empty" className="w-full">
@@ -775,7 +788,8 @@ export const SlideEditor = () => {
                     <input id="image-upload-empty" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                   </label>
                 </div>
-              </div>}
+              </div>
+            )}
           </div>
         </div>
         
@@ -783,10 +797,15 @@ export const SlideEditor = () => {
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Content</h3>
-            {isEditing ? <Button size="sm" onClick={saveChanges}>Save Changes</Button> : <Button size="sm" variant="ghost" onClick={startEditing}>Edit</Button>}
+            {isEditing ? (
+              <Button size="sm" onClick={saveChanges}>Save Changes</Button>
+            ) : (
+              <Button size="sm" variant="ghost" onClick={startEditing}>Edit</Button>
+            )}
           </div>
           <div className="flex-1 p-4 overflow-auto">
-            {isEditing ? <div className="space-y-4 h-full">
+            {isEditing ? (
+              <div className="space-y-4 h-full">
                 <div className="space-y-2">
                   <label htmlFor="slide-title" className="text-sm font-medium">Title</label>
                   <Textarea id="slide-title" value={editedTitle} onChange={e => setEditedTitle(e.target.value)} className="resize-none" />
@@ -795,10 +814,13 @@ export const SlideEditor = () => {
                   <label htmlFor="slide-content" className="text-sm font-medium">Content</label>
                   <Textarea id="slide-content" value={editedContent} onChange={e => setEditedContent(e.target.value)} className="resize-none flex-1 min-h-[200px]" />
                 </div>
-              </div> : <div className="space-y-4">
+              </div>
+            ) : (
+              <div className="space-y-4">
                 <h2 className="text-xl font-semibold">{currentSlide?.title}</h2>
                 <div className="whitespace-pre-line">{currentSlide?.content}</div>
-              </div>}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -812,4 +834,31 @@ export const SlideEditor = () => {
           Previous
         </Button>
         
-        <div className="
+        <div className="flex gap-2">
+          {showUndoButton && (
+            <Button variant="outline" onClick={undoDeleteSlide} size="sm">
+              <Undo className="h-4 w-4 mr-1" />
+              Undo Delete
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={addNewSlide}>
+            <Plus className="h-4 w-4 mr-1" />
+            New Slide
+          </Button>
+          <Button variant="outline" size="sm" onClick={deleteCurrentSlide} disabled={slides.length <= 1}>
+            <Trash2 className="h-4 w-4 mr-1" />
+            Delete Slide
+          </Button>
+          <Button variant="outline" size="sm" onClick={copyToClipboard}>
+            Copy Text
+          </Button>
+        </div>
+        
+        <Button variant="outline" onClick={goToNextSlide} disabled={currentSlideIndex === slides.length - 1}>
+          Next
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+      </div>
+    </div>
+  );
+};
