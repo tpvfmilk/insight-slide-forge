@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { ProjectRow } from "@/components/projects/ProjectRow";
 import { Folder as FolderIcon, MoreVertical, Trash } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+
 interface FolderListProps {
   folders: Folder[];
   projects: Project[];
@@ -17,6 +19,7 @@ interface FolderListProps {
   handleExport: (projectId: string, format: string) => void;
   loading: boolean;
 }
+
 export function FolderList({
   folders,
   projects,
@@ -115,11 +118,9 @@ export function FolderList({
                     <table className="w-full">
                       <thead className="bg-muted/50">
                         <tr>
-                          <th className="text-left p-4 font-medium">Title</th>
-                          <th className="text-left p-4 font-medium hidden md:table-cell">Created</th>
-                          <th className="text-left p-4 font-medium hidden md:table-cell">File Name</th>
-                          <th className="text-left p-4 font-medium hidden md:table-cell">Duration</th>
-                          <th className="text-left p-4 font-medium hidden lg:table-cell">Slides</th>
+                          <th className="text-left p-4 font-medium">Project</th>
+                          <th className="text-left p-4 font-medium">Created</th>
+                          <th className="text-left p-4 font-medium hidden lg:table-cell">Duration</th>
                           <th className="text-left p-4 font-medium">File Size</th>
                           <th className="text-right p-4 font-medium">Actions</th>
                         </tr>
@@ -151,11 +152,9 @@ export function FolderList({
                 <table className="w-full">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left p-4 font-medium">Title</th>
-                      <th className="text-left p-4 font-medium hidden md:table-cell">Created</th>
-                      <th className="text-left p-4 font-medium hidden md:table-cell">File Name</th>
-                      <th className="text-left p-4 font-medium hidden md:table-cell">Duration</th>
-                      <th className="text-left p-4 font-medium hidden lg:table-cell">Slides</th>
+                      <th className="text-left p-4 font-medium">Project</th>
+                      <th className="text-left p-4 font-medium">Created</th>
+                      <th className="text-left p-4 font-medium hidden lg:table-cell">Duration</th>
                       <th className="text-left p-4 font-medium">File Size</th>
                       <th className="text-right p-4 font-medium">Actions</th>
                     </tr>

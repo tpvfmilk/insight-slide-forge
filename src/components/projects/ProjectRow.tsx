@@ -106,11 +106,13 @@ export function ProjectRow({
           <div>
             <div className="font-medium">{project.title}</div>
             <div className="text-xs text-muted-foreground">
-              {formatDate(project.created_at)}
-              <span className="ml-2">• {originalFileName}</span>
+              {originalFileName}
             </div>
           </div>
         </div>
+      </TableCell>
+      <TableCell className="text-muted-foreground text-sm">
+        {formatDate(project.created_at)}
       </TableCell>
       <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
         {duration}
