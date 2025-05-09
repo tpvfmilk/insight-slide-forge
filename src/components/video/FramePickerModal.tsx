@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
@@ -14,6 +15,8 @@ import { uploadSlideImage } from "@/services/imageService";
 import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { useUIReset } from "@/context/UIResetContext";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface FramePickerModalProps {
   open: boolean;
@@ -257,6 +260,7 @@ export const FramePickerModal = ({
     }
   };
   
+  // Improved captureFrame function with techniques from videoFrameExtractor.ts
   const captureFrame = async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -279,52 +283,112 @@ export const FramePickerModal = ({
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       
-      // Draw the current frame on the canvas
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        throw new Error("Could not get canvas context");
-      }
-      
-      // Clear canvas before drawing
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw the current frame on the canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Check if we got a black frame
-      const imageData = ctx.getImageData(0, 0, 20, 20);
-      let hasContent = false;
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        const r = imageData.data[i];
-        const g = imageData.data[i+1]; 
-        const b = imageData.data[i+2];
-        if (r > 15 || g > 15 || b > 15) {
-          hasContent = true;
-          break;
-        }
-      }
-      
-      if (!hasContent) {
-        console.warn("Captured frame appears to be black, trying to fix...");
-        
-        // Add a visual indicator on black frames
-        ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "white";
-        ctx.font = "20px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText("Frame may be black - try a different timestamp", canvas.width / 2, canvas.height / 2);
-      }
-      
-      // Create the timestamp just once and reuse it
+      // Create timestamp for the current position
       const currentTimestamp = formatDuration(video.currentTime);
       
-      // Add timestamp overlay for reference
-      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-      ctx.fillRect(10, 10, 300, 30);
-      ctx.fillStyle = "white";
-      ctx.font = "16px Arial";
-      ctx.fillText(`Timestamp: ${currentTimestamp}`, 15, 30);
+      // Function to check if frame is black
+      const checkFrameForContent = (ctx: CanvasRenderingContext2D): boolean => {
+        const imageData = ctx.getImageData(0, 0, 20, 20);
+        for (let i = 0; i < imageData.data.length; i += 4) {
+          const r = imageData.data[i];
+          const g = imageData.data[i+1]; 
+          const b = imageData.data[i+2];
+          // More lenient threshold (15 instead of 5) to catch nearly black frames
+          if (r > 15 || g > 15 || b > 15) {
+            return true; // Has content
+          }
+        }
+        return false; // Is black
+      };
+      
+      // Function to draw frame and check content
+      const drawAndCheckFrame = (ctx: CanvasRenderingContext2D): boolean => {
+        // Clear canvas before drawing
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw the current frame on the canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Return whether frame has content
+        return checkFrameForContent(ctx);
+      };
+      
+      // Function to extract frame with retries
+      const extractFrameWithRetries = async (): Promise<boolean> => {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          throw new Error("Could not get canvas context");
+        }
+        
+        // Initial frame capture
+        let hasContent = false;
+        
+        // Wait for the frame to load after seeking
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // First attempt
+        hasContent = drawAndCheckFrame(ctx);
+        
+        // If we got a black frame, try the forward/back seeking approach
+        if (!hasContent) {
+          console.warn(`Frame at ${currentTimestamp} appears to be black, trying forward/back approach...`);
+          
+          // Store current position
+          const originalTime = video.currentTime;
+          
+          // Try forward offset
+          video.currentTime = originalTime + 0.5;
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Go back to original
+          video.currentTime = originalTime;
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Check again
+          hasContent = drawAndCheckFrame(ctx);
+          
+          // If still black, try with different offsets
+          if (!hasContent) {
+            console.warn("Still getting black frame, trying different offsets...");
+            
+            const offsets = [0.1, 0.2, -0.1, -0.2, 1.0, -0.5];
+            
+            for (const offset of offsets) {
+              video.currentTime = originalTime + offset;
+              await new Promise(resolve => setTimeout(resolve, 300));
+              
+              hasContent = drawAndCheckFrame(ctx);
+              
+              if (hasContent) {
+                console.log(`Found content with offset ${offset}`);
+                break;
+              }
+            }
+          }
+        }
+        
+        // Add timestamp overlay for reference (whether we got content or not)
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.fillRect(10, 10, 300, 30);
+        ctx.fillStyle = "white";
+        ctx.font = "16px Arial";
+        ctx.fillText(`Timestamp: ${currentTimestamp}`, 15, 30);
+        
+        // If we still don't have content, add a warning
+        if (!hasContent) {
+          ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "white";
+          ctx.font = "20px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText("Frame may be black - try a different timestamp", canvas.width / 2, canvas.height / 2);
+        }
+        
+        return true; // We proceed even if frame is black
+      };
+      
+      // Execute the extraction
+      await extractFrameWithRetries();
       
       // Convert to blob
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -334,7 +398,7 @@ export const FramePickerModal = ({
         }, 'image/jpeg', 0.95);
       });
       
-      // Create a file from the blob - using the currentTimestamp we already defined
+      // Create a file from the blob
       const file = new File([blob], `frame-${currentTimestamp.replace(/:/g, "-")}.jpg`, { type: 'image/jpeg' });
       
       // Upload to storage
@@ -482,24 +546,33 @@ export const FramePickerModal = ({
                   </Button>
                 </div>
                 
-                <Button 
-                  variant="default" 
-                  onClick={captureFrame}
-                  disabled={isLoading || isCaptureLoading}
-                  className="gap-2"
-                >
-                  {isCaptureLoading ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      Capturing...
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="h-4 w-4" />
-                      Capture Frame
-                    </>
-                  )}
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button 
+                        variant="default" 
+                        onClick={captureFrame}
+                        disabled={isLoading || isCaptureLoading}
+                        className="gap-2"
+                      >
+                        {isCaptureLoading ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                            Capturing...
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="h-4 w-4" />
+                            Capture Frame
+                          </>
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Capture the current video frame</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
             
@@ -507,7 +580,10 @@ export const FramePickerModal = ({
             
             {/* Captured frames section */}
             <div>
-              <h3 className="font-medium mb-2">Captured Frames ({capturedFrames.length})</h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-medium">Captured Frames</h3>
+                <Badge variant="secondary">{capturedFrames.length}</Badge>
+              </div>
               
               {capturedFrames.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
