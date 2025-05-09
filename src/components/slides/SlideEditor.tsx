@@ -27,12 +27,12 @@ interface Slide {
   transcriptTimestamps?: string[];
 }
 
-// For local components we need a compatible interface
-interface LocalExtractedFrame {
-  imageUrl: string;
-  timestamp: string;
+// Updated interface to be compatible with ExtractedFrame
+interface LocalExtractedFrame extends ExtractedFrame {
   id: string;
+  [key: string]: string | number | boolean | null | undefined;
 }
+
 export const SlideEditor = () => {
   const {
     id: projectId
@@ -94,14 +94,16 @@ export const SlideEditor = () => {
 
       // Load all extracted frames
       if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
-        // Transform the API ExtractedFrame format to our local format
+        // Transform the API ExtractedFrame format to our local format with proper type compliance
         const frames = (project.extracted_frames as unknown as ExtractedFrame[]).map(frame => ({
+          ...frame,
           imageUrl: frame.imageUrl,
           timestamp: frame.timestamp,
-          id: `frame-${frame.timestamp.replace(/:/g, "-")}` // Generate a unique ID
-        }));
+          id: frame.id || `frame-${frame.timestamp.replace(/:/g, "-")}` // Generate a unique ID if not present
+        })) as LocalExtractedFrame[];
         setAllExtractedFrames(frames);
       }
+      
       if (project.slides && Array.isArray(project.slides)) {
         // Convert from Json to Slide array with proper type checking
         const slidesData = project.slides as unknown as Slide[];
@@ -269,10 +271,7 @@ export const SlideEditor = () => {
     }
   };
   
-  const handleFrameExtractionComplete = async (frames: Array<{
-    timestamp: string;
-    imageUrl: string;
-  }>) => {
+  const handleFrameExtractionComplete = async (frames: Array<{ timestamp: string, imageUrl: string }>) => {
     if (!projectId) return;
     setIsFrameExtractionModalOpen(false);
     if (frames.length === 0) {
@@ -300,22 +299,29 @@ export const SlideEditor = () => {
     setIsFrameSelectorOpen(true);
   };
   
-  const handleFrameSelection = (selectedFrames: LocalExtractedFrame[]) => {
+  // Updated to handle type conversion properly
+  const handleFrameSelection = (selectedFrames: ExtractedFrame[]) => {
     if (!selectedFrames.length) return;
+
+    // Convert ExtractedFrame to LocalExtractedFrame if needed
+    const processedFrames = selectedFrames.map(frame => ({
+      ...frame,
+      id: frame.id || `frame-${frame.timestamp.replace(/:/g, "-")}` // Ensure ID is present
+    })) as LocalExtractedFrame[];
 
     // Update current slide with selected frames
     const updatedSlides = [...slides];
     updatedSlides[currentSlideIndex] = {
       ...updatedSlides[currentSlideIndex],
-      imageUrls: selectedFrames.map(frame => frame.imageUrl)
+      imageUrls: processedFrames.map(frame => frame.imageUrl)
     };
     setSlides(updatedSlides);
 
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
     // Reduced toast notification
-    if (selectedFrames.length > 1) {
-      toast.success(`${selectedFrames.length} frames applied to slide`);
+    if (processedFrames.length > 1) {
+      toast.success(`${processedFrames.length} frames applied to slide`);
     }
     
     // Update project size
@@ -875,20 +881,30 @@ export const SlideEditor = () => {
         </Button>
       </div>
 
-      {/* Frame Selection Modal with fixed height/overflow */}
-      <FrameSelector open={isFrameSelectorOpen} onClose={() => {
-      setIsFrameSelectorOpen(false);
-      // Ensure proper cleanup
-      cleanupFrameSelectorDialog();
-    }} availableFrames={allExtractedFrames} selectedFrames={currentSlide?.imageUrls?.map(url => {
-      // Find frame with matching URL
-      const frame = allExtractedFrames.find(f => f.imageUrl === url);
-      return frame || {
-        imageUrl: url,
-        timestamp: "unknown",
-        id: `unknown-${url}`
-      };
-    }) || []} onSelect={handleFrameSelection} />
+      {/* Frame Selection Modal with fixed height/overflow - updated with proper type handling */}
+      <FrameSelector 
+        open={isFrameSelectorOpen} 
+        onClose={() => {
+          setIsFrameSelectorOpen(false);
+          // Ensure proper cleanup
+          cleanupFrameSelectorDialog();
+        }} 
+        availableFrames={allExtractedFrames as unknown as ExtractedFrame[]} 
+        selectedFrames={
+          currentSlide?.imageUrls?.map(url => {
+            // Find frame with matching URL
+            const frame = allExtractedFrames.find(f => f.imageUrl === url);
+            return frame || {
+              imageUrl: url,
+              timestamp: "unknown",
+              id: `unknown-${url}`
+            };
+          }) as unknown as ExtractedFrame[] || []
+        } 
+        onSelect={handleFrameSelection}
+        projectId={projectId}
+        onRefresh={loadProject}
+      />
       
       {/* Frame Extraction Modal */}
       {videoPath && <FrameExtractionModal open={isFrameExtractionModalOpen} onClose={() => setIsFrameExtractionModalOpen(false)} videoPath={videoPath} projectId={projectId || ""} timestamps={timestamps} onComplete={handleFrameExtractionComplete} />}
