@@ -141,7 +141,7 @@ export function FolderList({
             <div className="flex items-center gap-2">
               <FolderPen className="h-5 w-5 text-muted-foreground" />
               <div>
-                <div className="font-small">Unfiled Projects</div>
+                <div className="font-medium">Unfiled Projects</div>
                 <div className="text-xs text-muted-foreground">
                   {(projectsByFolder["unassigned"] || []).length} projects
                 </div>
