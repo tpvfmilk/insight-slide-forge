@@ -1,4 +1,3 @@
-
 import { timestampToSeconds } from "./formatUtils";
 
 /**
@@ -69,9 +68,12 @@ export async function extractFramesFromVideoUrl(
           
         console.log(`Using max duration of ${maxDuration}s for timestamp validation`);
         
+        // Normalize timestamps that exceed video duration
+        const normalizedTimestamps = normalizeTimestamps(timestamps, maxDuration);
+
         // Filter timestamps that exceed video duration, with a safety margin
-        const safetyMarginSeconds = 1; // 1 second safety margin
-        const validTimestamps = timestamps.filter(ts => {
+        const safetyMarginSeconds = 2; // 2 second safety margin
+        const validTimestamps = normalizedTimestamps.filter(ts => {
           const seconds = timestampToSeconds(ts);
           const isValid = seconds <= (maxDuration - safetyMarginSeconds);
           if (!isValid) {
@@ -89,13 +91,13 @@ export async function extractFramesFromVideoUrl(
           if (maxDuration > 0) {
             const fallbackTimestamps = [];
             
-            // Take frames at 25%, 50%, and 75% of the video duration
-            const points = [0.25, 0.5, 0.75];
-            for (const point of points) {
-              if (point * maxDuration < maxDuration - safetyMarginSeconds) {
-                const timestamp = formatDuration(point * maxDuration);
-                fallbackTimestamps.push(timestamp);
-              }
+            // More granular fallback timestamp generation based on video length
+            const timepointCount = maxDuration < 10 ? 2 : (maxDuration < 30 ? 3 : 5);
+            
+            for (let i = 1; i <= timepointCount; i++) {
+              const point = i / (timepointCount + 1); // Distribute evenly
+              const timestamp = formatDuration(point * (maxDuration - safetyMarginSeconds));
+              fallbackTimestamps.push(timestamp);
             }
             
             if (fallbackTimestamps.length > 0) {
@@ -379,6 +381,59 @@ export async function extractFramesFromVideoUrl(
       } else {
         return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
       }
+    }
+    
+    /**
+     * Normalize timestamps to fit within video duration
+     * This function takes timestamps that might be outside the video duration
+     * and proportionally maps them within the valid range
+     */
+    function normalizeTimestamps(timestamps: string[], maxDuration: number): string[] {
+      // First, check if we have any timestamps beyond video duration
+      const hasInvalidTimestamps = timestamps.some(ts => {
+        const seconds = timestampToSeconds(ts);
+        return seconds > maxDuration;
+      });
+      
+      // If all timestamps are valid, return them unchanged
+      if (!hasInvalidTimestamps) {
+        return timestamps;
+      }
+      
+      console.log("Found timestamps exceeding video duration. Normalizing...");
+      
+      // Convert timestamps to seconds
+      const timestampSeconds = timestamps.map(ts => ({
+        original: ts,
+        seconds: timestampToSeconds(ts)
+      }));
+      
+      // Find max timestamp in seconds
+      const maxTimestampSeconds = Math.max(...timestampSeconds.map(t => t.seconds));
+      
+      // If max timestamp is within duration, return original timestamps
+      if (maxTimestampSeconds <= maxDuration) {
+        return timestamps;
+      }
+      
+      // Calculate scaling factor to map timestamps to video duration
+      const scalingFactor = (maxDuration - 5) / maxTimestampSeconds; // Leave 5 second margin
+      
+      // Normalize timestamps
+      return timestampSeconds.map(ts => {
+        // Keep timestamps that are already within range
+        if (ts.seconds <= maxDuration - 5) {
+          return ts.original;
+        }
+        
+        // Scale down timestamps that exceed duration
+        const normalizedSeconds = Math.floor(ts.seconds * scalingFactor);
+        const normalized = formatDuration(normalizedSeconds);
+        
+        console.log(`Normalized timestamp ${ts.original} (${ts.seconds}s) to ${normalized} (${normalizedSeconds}s)`);
+        
+        return normalized;
+      });
     }
     
     // Start loading the video

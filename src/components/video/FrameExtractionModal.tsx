@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -7,8 +6,9 @@ import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Play, RefreshCw }
 import { extractFramesFromVideoUrl as clientExtractFrames } from '@/utils/videoFrameExtractor';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { timestampToSeconds } from '@/utils/formatUtils';
+import { timestampToSeconds, formatDuration } from '@/utils/formatUtils';
 import { supabase } from '@/integrations/supabase/client';
+import { TimestampSlider } from './TimestampSlider';
 
 interface FrameExtractionModalProps {
   open: boolean;
@@ -54,6 +54,7 @@ export const FrameExtractionModal = ({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isLoadingVideo, setIsLoadingVideo] = useState<boolean>(true);
   const [loadAttempts, setLoadAttempts] = useState<number>(0);
+  const [currentTime, setCurrentTime] = useState<number>(0);
 
   // Function to validate timestamps against video duration
   const validateTimestamps = useCallback((timestamps: string[], videoDuration?: number) => {
@@ -187,6 +188,21 @@ export const FrameExtractionModal = ({
     }
   };
 
+  // Update currentTime when the video plays
+  useEffect(() => {
+    const video = document.getElementById("extraction-video") as HTMLVideoElement;
+    if (!video) return;
+    
+    const updateTime = () => {
+      setCurrentTime(video.currentTime);
+    };
+    
+    video.addEventListener('timeupdate', updateTime);
+    return () => {
+      video.removeEventListener('timeupdate', updateTime);
+    };
+  }, []);
+
   // Extract frames from video
   const handleExtractFrames = async () => {
     if (validTimestamps.length === 0) {
@@ -313,6 +329,19 @@ export const FrameExtractionModal = ({
     loadVideo();
   };
 
+  const handleTimeChange = (time: number) => {
+    const video = document.getElementById("extraction-video") as HTMLVideoElement;
+    if (video) {
+      video.currentTime = time;
+      setCurrentTime(time);
+    }
+  };
+
+  const handleTimestampClick = (timestamp: string) => {
+    const seconds = timestampToSeconds(timestamp);
+    handleTimeChange(seconds);
+  };
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -350,6 +379,7 @@ export const FrameExtractionModal = ({
                     </div>
                   ) : (
                     <video 
+                      id="extraction-video"
                       key={`video-${loadAttempts}`} // Force remount on retry
                       src={videoUrl || undefined}
                       controls
@@ -361,6 +391,18 @@ export const FrameExtractionModal = ({
                     >
                       Your browser does not support the video tag.
                     </video>
+                  )}
+                  
+                  {videoInfo && !isLoadingVideo && !videoError && (
+                    <div className="mt-2">
+                      <TimestampSlider 
+                        timestamps={timestamps}
+                        videoDuration={videoInfo.duration}
+                        currentTime={currentTime}
+                        onTimeChange={handleTimeChange}
+                        onTimestampClick={handleTimestampClick}
+                      />
+                    </div>
                   )}
                 </div>
                 <div className="w-full sm:w-1/2 overflow-y-auto">
@@ -402,7 +444,8 @@ export const FrameExtractionModal = ({
                     {validTimestamps.map((timestamp, index) => (
                       <div 
                         key={`timestamp-${index}`}
-                        className="border rounded p-2 text-center text-sm bg-secondary/50"
+                        className="border rounded p-2 text-center text-sm bg-secondary/50 cursor-pointer hover:bg-secondary"
+                        onClick={() => handleTimestampClick(timestamp)}
                       >
                         {timestamp}
                       </div>
@@ -487,6 +530,20 @@ export const FrameExtractionModal = ({
                   className="max-w-full max-h-full object-contain"
                 />
               </div>
+              
+              {/* Add timestamp slider to review step */}
+              {videoInfo && (
+                <TimestampSlider 
+                  timestamps={extractedFrames.map(frame => frame.timestamp)}
+                  videoDuration={videoInfo.duration}
+                  onTimestampClick={(timestamp) => {
+                    const index = extractedFrames.findIndex(frame => frame.timestamp === timestamp);
+                    if (index !== -1) {
+                      setCurrentFrameIndex(index);
+                    }
+                  }}
+                />
+              )}
               
               <div className="flex flex-col sm:flex-row justify-between items-center">
                 <div className="text-sm mb-2 sm:mb-0">
