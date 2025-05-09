@@ -1,12 +1,11 @@
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
-import { FileText, Edit, Download, Trash, Folder as FolderIcon } from "lucide-react";
+import { FileText, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Project } from "@/services/projectService";
 import { FileSizeBadge } from "./FileSizeBadge";
 import { formatDate } from "@/utils/formatUtils";
-import { formatDuration } from "@/utils/formatUtils";
 import { 
   DropdownMenu, 
   DropdownMenuTrigger, 
@@ -46,11 +45,11 @@ export function ProjectRow({
   handleEditTitle,
   handleExport
 }: ProjectRowProps) {
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [loadingFolders, setLoadingFolders] = useState(false);
-  const [movingToFolder, setMovingToFolder] = useState(false);
+  const [folders, setFolders] = React.useState<Folder[]>([]);
+  const [loadingFolders, setLoadingFolders] = React.useState(false);
+  const [movingToFolder, setMovingToFolder] = React.useState(false);
 
-  useEffect(() => {
+  React.useEffect(() => {
     // Only load folders when the dropdown is opened
     const loadFolders = async () => {
       try {
@@ -95,85 +94,51 @@ export function ProjectRow({
           <div className="p-2 bg-primary/10 rounded">
             <FileText className="h-5 w-5 text-primary" />
           </div>
-          <div className="font-medium">
-            {project.title}
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-6 w-6 ml-2 text-muted-foreground hover:text-foreground" 
-              onClick={() => handleEditTitle(project)}
-            >
-              <Edit className="h-3.5 w-3.5" />
-              <span className="sr-only">Edit title</span>
-            </Button>
+          <div>
+            <div className="font-medium">{project.title}</div>
+            <div className="text-xs text-muted-foreground">
+              {formatDate(project.created_at)}
+              {project.video_metadata?.duration && (
+                <span className="ml-2">• {project.video_metadata?.file_type || 'Video'}</span>
+              )}
+            </div>
           </div>
         </div>
       </td>
-      <td className="p-4 hidden md:table-cell text-muted-foreground">
-        {formatDate(project.created_at)}
-      </td>
-      <td className="p-4 hidden md:table-cell text-muted-foreground">
-        {project.video_metadata?.original_file_name || 'N/A'}
-      </td>
-      <td className="p-4 hidden md:table-cell text-muted-foreground">
-        {project.video_metadata?.duration 
-          ? formatDuration(project.video_metadata.duration)
-          : 'N/A'}
-      </td>
-      <td className="p-4 hidden lg:table-cell text-muted-foreground">
+      <td className="p-4 hidden lg:table-cell text-muted-foreground text-sm">
         {project.slides && Array.isArray(project.slides) 
-          ? project.slides.length 
-          : 0}
+          ? `${project.slides.length} slides` 
+          : "0 slides"}
       </td>
       <td className="p-4">
         <FileSizeBadge fileSize={project.video_metadata?.file_size} projectId={project.id} />
       </td>
       <td className="p-4 text-right">
         <div className="flex justify-end items-center gap-2">
-          <Button asChild variant="outline" size="icon" className="h-8 w-8">
+          <Button asChild variant="outline" size="sm" className="h-8">
             <Link to={`/projects/${project.id}`}>
-              <FileText className="h-4 w-4" />
-              <span className="sr-only">View</span>
+              <FileText className="h-4 w-4 mr-1" />
+              <span>View</span>
             </Link>
           </Button>
           
-          {/* Export Dropdown Button */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-8 w-8">
-                <Download className="h-4 w-4" />
-                <span className="sr-only">Export</span>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">More options</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport(project.id, "pdf")}>
-                Export as PDF
+              <DropdownMenuItem onClick={() => handleEditTitle(project)}>
+                Rename Project
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport(project.id, "pptx")}>
-                Export as PowerPoint
-              </DropdownMenuItem>
+              
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleExport(project.id, "images")}>
-                Export as Images
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          {/* Folder Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-8 w-8">
-                <FolderIcon className="h-4 w-4" />
-                <span className="sr-only">Move to Folder</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+              
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
-                  <div className="flex items-center">
-                    <FolderIcon className="h-4 w-4 mr-2" />
-                    <span>Move to Folder</span>
-                  </div>
+                  Move to Folder
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   <DropdownMenuRadioGroup 
@@ -206,35 +171,52 @@ export function ProjectRow({
                   </DropdownMenuRadioGroup>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+              
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  Export Project
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onClick={() => handleExport(project.id, "pdf")}>
+                    Export as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport(project.id, "pptx")}>
+                    Export as PowerPoint
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport(project.id, "images")}>
+                    Export as Images
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              
+              <DropdownMenuSeparator />
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive">
+                    Delete Project
+                  </DropdownMenuItem>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Project?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete "{project.title}"? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={() => handleDeleteProject(project.id)}
+                      className="bg-destructive hover:bg-destructive/90"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </DropdownMenuContent>
           </DropdownMenu>
-          
-          {/* Delete Confirmation Dialog */}
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
-                <Trash className="h-4 w-4" />
-                <span className="sr-only">Delete</span>
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Project?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete "{project.title}"? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction 
-                  onClick={() => handleDeleteProject(project.id)}
-                  className="bg-destructive hover:bg-destructive/90"
-                >
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
       </td>
     </tr>
