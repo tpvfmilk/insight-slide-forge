@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { FileVideo, Upload, RefreshCw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -8,33 +8,55 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
 import { SliderControl } from "./SliderControl";
+import { FileUploader } from "@/components/ui/file-uploader";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 export const VideoUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [title, setTitle] = useState<string>("");
   const navigate = useNavigate();
   
-  const handleFileButtonClick = () => {
-    fileInputRef.current?.click();
-  };
+  // Set default title from filename when a file is selected
+  useEffect(() => {
+    if (selectedFile) {
+      const filename = selectedFile.name.replace(/\.[^/.]+$/, ""); // Remove extension
+      setTitle(filename);
+    }
+  }, [selectedFile]);
   
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileSelected = (files: FileList | null) => {
+    if (files && files[0]) {
+      // Check if the file is a video
+      if (!files[0].type.startsWith('video/')) {
+        toast.error("Please upload a video file");
+        return;
+      }
+      
+      // Check file size (limit to 100MB)
+      if (files[0].size > 100 * 1024 * 1024) {
+        toast.error("File size must be less than 100MB");
+        return;
+      }
+      
+      setSelectedFile(files[0]);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    if (!file) return;
-    
-    // Check file type
-    if (!file.type.includes('video/')) {
-      toast.error("Please upload a video file");
+    if (!selectedFile) {
+      toast.error("Please select a video file");
       return;
     }
     
-    // Check file size (limit to 100MB)
-    if (file.size > 100 * 1024 * 1024) {
-      toast.error("File size must be less than 100MB");
+    if (!title.trim()) {
+      toast.error("Please enter a title for your project");
       return;
     }
     
@@ -57,8 +79,8 @@ export const VideoUpload = () => {
     try {
       // Perform the actual upload with slides per minute
       const project = await createProjectFromVideo(
-        file, 
-        undefined, 
+        selectedFile, 
+        title, 
         contextPrompt,
         "", // No transcript
         slidesPerMinute
@@ -84,38 +106,65 @@ export const VideoUpload = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/50">
-      <FileVideo className="h-8 w-8 text-muted-foreground mb-4" />
-      <h3 className="font-medium mb-1">Upload a video file</h3>
-      <p className="text-sm text-muted-foreground mb-4 text-center">
-        MP4 or WebM format, up to 100MB
-      </p>
-      
-      <div className="w-full space-y-6 mb-6">
-        <SliderControl 
-          value={slidesPerMinute}
-          onChange={setSlidesPerMinute}
-        />
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="video-title">Project Title</Label>
+          <Input
+            id="video-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Enter a title for your project"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Upload Video</Label>
+          <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/50">
+            <FileVideo className="h-8 w-8 text-muted-foreground mb-4" />
+            <h3 className="font-medium mb-1">Upload a video file</h3>
+            <p className="text-sm text-muted-foreground mb-4 text-center">
+              MP4 or WebM format, up to 100MB
+            </p>
+            
+            <FileUploader
+              onFilesSelected={handleFileSelected}
+              accept="video/*"
+              maxSize={100}
+              multiple={false}
+              className="w-full"
+            />
+            
+            {selectedFile && (
+              <div className="mt-4 text-sm text-center">
+                <p className="font-medium">{selectedFile.name}</p>
+                <p className="text-muted-foreground">
+                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="mb-2 block">Slides per minute</Label>
+          <SliderControl 
+            value={slidesPerMinute}
+            onChange={setSlidesPerMinute}
+          />
+        </div>
         
-        <ContextPromptInput 
-          value={contextPrompt}
-          onChange={setContextPrompt}
-        />
+        <div className="space-y-2">
+          <Label className="mb-2 block">Add series or content context (optional)</Label>
+          <ContextPromptInput 
+            value={contextPrompt}
+            onChange={setContextPrompt}
+          />
+        </div>
       </div>
       
-      <input 
-        type="file" 
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        className="sr-only" 
-        accept="video/*"
-      />
-      <Button onClick={handleFileButtonClick} disabled={isUploading}>
-        <Upload className="h-4 w-4 mr-2" />
-        Choose File
-      </Button>
-      
-      {isUploading && (
+      {isUploading ? (
         <div className="w-full mt-6 space-y-2">
           <div className="flex justify-between text-sm mb-1">
             <span>Uploading...</span>
@@ -123,7 +172,14 @@ export const VideoUpload = () => {
           </div>
           <Progress value={uploadProgress} />
         </div>
+      ) : (
+        <div className="flex justify-end">
+          <Button type="submit" disabled={!selectedFile || !title.trim()}>
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Video
+          </Button>
+        </div>
       )}
-    </div>
+    </form>
   );
 };

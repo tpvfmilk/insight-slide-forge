@@ -11,9 +11,8 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { extractAudioFromVideo } from "@/services/audioExtractionService";
 import { Card, CardContent } from "@/components/ui/card";
-import { FileText, Mic, Upload } from "lucide-react";
+import { FileText, Mic } from "lucide-react";
 import { SliderControl } from "@/components/upload/SliderControl";
-import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
 
 export const TranscriptExtractor = () => {
   const { user } = useAuth();
@@ -23,7 +22,6 @@ export const TranscriptExtractor = () => {
   const [title, setTitle] = useState<string>("");
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [useSpeakerDetection, setUseSpeakerDetection] = useState<boolean>(true);
-  const [contextPrompt, setContextPrompt] = useState<string>("");
   const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   
   // Set default title from filename when a file is selected
@@ -74,7 +72,7 @@ export const TranscriptExtractor = () => {
         audioBlob, 
         title, 
         useSpeakerDetection,
-        contextPrompt,
+        "", // No context prompt
         slidesPerMinute
       );
       
@@ -155,14 +153,6 @@ export const TranscriptExtractor = () => {
           <Label htmlFor="speakerDetection">
             Use speaker detection and format transcript with line breaks
           </Label>
-        </div>
-        
-        <div>
-          <Label className="mb-2 block">Context for future slide generation (optional)</Label>
-          <ContextPromptInput 
-            value={contextPrompt}
-            onChange={setContextPrompt}
-          />
         </div>
         
         <div>
