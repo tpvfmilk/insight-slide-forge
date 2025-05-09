@@ -96,6 +96,7 @@ export const getUserStorageInfo = async () => {
  */
 export const getProjectTotalSize = async (projectId: string): Promise<number> => {
   try {
+    console.log(`Calculating storage size for project: ${projectId}`);
     const { data, error } = await supabase.rpc('calculate_project_storage_size', {
       project_id: projectId
     });
@@ -105,6 +106,7 @@ export const getProjectTotalSize = async (projectId: string): Promise<number> =>
       return 0;
     }
     
+    console.log(`Project ${projectId} size calculation result:`, data);
     return Number(data) || 0;
   } catch (error) {
     console.error("Failed to get project total size:", error);

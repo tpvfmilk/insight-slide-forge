@@ -3,6 +3,7 @@ import { formatFileSize } from "@/utils/formatUtils";
 import { useEffect, useState } from "react";
 import { getProjectTotalSize } from "@/services/storageService";
 import { Badge } from "@/components/ui/badge";
+import { Database, Storage } from "lucide-react";
 
 interface FileSizeBadgeProps {
   fileSize?: number;
@@ -48,5 +49,10 @@ export function FileSizeBadge({
     return <Badge variant="outline" className="font-normal">Unknown</Badge>;
   }
   
-  return <Badge variant="secondary" className="font-normal">{formatFileSize(totalSize)}</Badge>;
+  return (
+    <Badge variant="secondary" className="font-normal flex items-center gap-1">
+      <Storage className="h-3 w-3" />
+      {formatFileSize(totalSize)}
+    </Badge>
+  );
 }

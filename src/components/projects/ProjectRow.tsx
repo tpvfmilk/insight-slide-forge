@@ -5,7 +5,7 @@ import { FileText, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Project } from "@/services/projectService";
 import { FileSizeBadge } from "./FileSizeBadge";
-import { formatDate } from "@/utils/formatUtils";
+import { formatDate, formatDuration } from "@/utils/formatUtils";
 import { 
   DropdownMenu, 
   DropdownMenuTrigger, 
@@ -87,6 +87,14 @@ export function ProjectRow({
     }
   };
 
+  // Get the original file name from video metadata
+  const originalFileName = project.video_metadata?.original_file_name || "Unknown file";
+  
+  // Get the duration and format it
+  const duration = project.video_metadata?.duration 
+    ? formatDuration(project.video_metadata.duration) 
+    : "Unknown";
+
   return (
     <tr key={project.id} className="border-t hover:bg-muted/30">
       <td className="p-4">
@@ -98,17 +106,13 @@ export function ProjectRow({
             <div className="font-medium">{project.title}</div>
             <div className="text-xs text-muted-foreground">
               {formatDate(project.created_at)}
-              {project.video_metadata?.duration && (
-                <span className="ml-2">• {project.video_metadata?.file_type || 'Video'}</span>
-              )}
+              <span className="ml-2">• {originalFileName}</span>
             </div>
           </div>
         </div>
       </td>
       <td className="p-4 hidden lg:table-cell text-muted-foreground text-sm">
-        {project.slides && Array.isArray(project.slides) 
-          ? `${project.slides.length} slides` 
-          : "0 slides"}
+        {duration}
       </td>
       <td className="p-4">
         <FileSizeBadge fileSize={project.video_metadata?.file_size} projectId={project.id} />
