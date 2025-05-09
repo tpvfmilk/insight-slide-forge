@@ -17,8 +17,10 @@ import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 import { getProjectTotalSize } from "@/services/storageService";
 import { FileSizeBadge } from "@/components/projects/FileSizeBadge";
-import { handleManualFrameSelectionComplete } from "@/utils/frameUtils";
+import { handleManualFrameSelectionComplete, Slide as FrameUtilsSlide } from "@/utils/frameUtils";
 
+// Define a local interface that ensures id is required 
+// while still being compatible with the imported Slide type
 interface Slide {
   id: string;
   title: string;
@@ -669,11 +671,11 @@ export const SlideEditor = () => {
     try {
       // Update current slide with selected frames
       await handleManualFrameSelectionComplete(
-        project?.id || "",
+        projectId,
         selectedFrames,
         currentSlideIndex,
         slides,
-        setSlides,  // This is the correct way to pass the function, not with an arrow function wrapper
+        (updatedSlides: Slide[]) => setSlides(updatedSlides), // Wrap setSlides to match the expected function signature
         updateSlidesInDatabase
       );
       
