@@ -14,6 +14,7 @@ export interface Folder {
 export interface CreateFolderData {
   name: string;
   description?: string;
+  user_id?: string; // Make user_id optional in the interface as we'll add it in the function
 }
 
 export interface UpdateFolderData {
@@ -42,9 +43,22 @@ export const fetchFolders = async (): Promise<Folder[]> => {
  * Create a new folder
  */
 export const createFolder = async (folderData: CreateFolderData): Promise<Folder> => {
+  // Get the current user session
+  const { data: sessionData } = await supabase.auth.getSession();
+  
+  if (!sessionData.session?.user) {
+    throw new Error('User must be logged in to create a folder');
+  }
+  
+  // Add user_id to the folder data
+  const folderWithUserId = {
+    ...folderData,
+    user_id: sessionData.session.user.id
+  };
+  
   const { data, error } = await supabase
     .from('folders')
-    .insert([folderData])
+    .insert([folderWithUserId])
     .select()
     .single();
 
@@ -102,11 +116,9 @@ export const deleteFolder = async (id: string): Promise<void> => {
  * Move projects to a folder
  */
 export const moveProjectsToFolder = async (projectIds: string[], folderId: string | null): Promise<void> => {
-  const updateData = { folder_id: folderId };
-  
   const { error } = await supabase
     .from('projects')
-    .update(updateData)
+    .update({ folder_id: folderId })
     .in('id', projectIds);
 
   if (error) {
