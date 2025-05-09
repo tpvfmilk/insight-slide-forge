@@ -29,12 +29,14 @@ serve(async (req) => {
     
     console.log(`Starting storage sync for user ${userId}`);
     
-    // Use a direct approach to fetch objects from the storage schema
+    // Query storage.objects table for files owned by this user
+    // Use raw SQL query to access the storage schema instead of schema() method
     const { data: objects, error: objectsError } = await supabase
       .from('objects')
       .select('metadata')
       .eq('owner', userId)
-      .schema('storage');
+      .filter('name', 'not.like', '.emptyFolderPlaceholder')
+      .rpc('with_storage_schema', {}, { head: false, count: 'exact' });
       
     if (objectsError) {
       console.error("Error fetching objects:", objectsError);
@@ -66,7 +68,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         userId,
-        previouslyTrackedSize: updatedStorage?.previous_size || 0,
+        previouslyTrackedSize: updatedStorage?.[0]?.previous_size || 0,
         actualSize: totalSize
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
