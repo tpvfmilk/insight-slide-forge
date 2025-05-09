@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -87,6 +88,9 @@ serve(async (req) => {
       ? Math.round((wordCount / 150) * project.slides_per_minute) // 150 words per minute is a rough estimate
       : 0; // 0 means AI decides
 
+    // Try to get actual video duration from project.video_metadata if available
+    const actualVideoDuration = project.video_metadata?.duration || videoDuration;
+
     // Process with AI and track token usage
     const { slideDeck, usageData } = await generateSlidesWithAI(
       contentForProcessing, 
@@ -95,7 +99,7 @@ serve(async (req) => {
       targetSlideCount,
       project.user_id,
       projectId,
-      videoDuration // Pass video duration to generateSlidesWithAI function
+      actualVideoDuration // Pass video duration to generateSlidesWithAI function
     );
     
     // Insert usage data into openai_usage table
@@ -201,9 +205,11 @@ async function generateSlidesWithAI(
       timestampInstructions += `
     CRITICAL VIDEO DURATION CONSTRAINT:
     - This video is exactly ${videoDuration} seconds long (${formattedDuration})
-    - All timestamps MUST be within the range 00:00:00 to ${formattedDuration}
+    - ALL timestamps MUST be within the range 00:00:00 to ${formattedDuration}
+    - ALL timestamps MUST be at least 5 seconds EARLIER than ${formattedDuration}
     - DO NOT generate any timestamps beyond ${formattedDuration}
-    - If you're unsure about a timestamp's position, choose an earlier one within the video's duration
+    - To ensure validity, generate timestamps that are well within the video duration
+    - Generate timestamps between 00:00:00 and ${formatDuration(Math.max(0, videoDuration - 5))}
     - Double check all timestamps to ensure they are valid and within the video length
     `;
     }
@@ -224,6 +230,9 @@ async function generateSlidesWithAI(
     - DO NOT create a conclusion or summary slide
     - DO NOT include any slides titled "Conclusion", "Summary", or similar
     - The last slide should be on the last topic from the content, not a summary
+    ${videoDuration ? `- This video is ONLY ${videoDuration} seconds long (${formatDuration(videoDuration)})` : ''}
+    ${videoDuration ? `- ALL timestamps MUST be within the range 00:00:00 to ${formatDuration(videoDuration)}` : ''}
+    ${videoDuration ? `- NEVER generate timestamps beyond ${formatDuration(videoDuration)}` : ''}
     
     Here's the content to transform into slides:
     ${content}
@@ -309,12 +318,38 @@ async function generateSlidesWithAI(
           validatedTimestamps = transcriptTimestamps
             .filter(timestamp => {
               const seconds = timestampToSeconds(timestamp);
-              const isValid = seconds <= videoDuration;
+              // Add a safety margin of 1 second to avoid edge cases
+              const isValid = seconds < videoDuration - 1;
               if (!isValid) {
-                console.log(`Filtering out invalid timestamp: ${timestamp} (${seconds}s) exceeds video duration of ${videoDuration}s`);
+                console.log(`Filtering out invalid timestamp: ${timestamp} (${seconds}s) exceeds or is too close to video duration of ${videoDuration}s`);
               }
               return isValid;
             });
+            
+          // If no valid timestamps remain, try to create some valid ones
+          if (validatedTimestamps.length === 0 && videoDuration > 0) {
+            console.log(`No valid timestamps for slide ${index + 1}, creating fallback timestamps`);
+            
+            // Use 25%, 50%, and 75% points of the video as fallbacks
+            const quarterPoint = Math.floor(videoDuration * 0.25);
+            const midPoint = Math.floor(videoDuration * 0.5);
+            const threeQuarterPoint = Math.floor(videoDuration * 0.75);
+            
+            validatedTimestamps = [
+              formatDuration(Math.min(quarterPoint, Math.max(0, videoDuration - 5)))
+            ];
+            
+            // Only add more points for longer videos
+            if (videoDuration > 15) {
+              validatedTimestamps.push(formatDuration(Math.min(midPoint, Math.max(0, videoDuration - 5))));
+            }
+            
+            if (videoDuration > 30) {
+              validatedTimestamps.push(formatDuration(Math.min(threeQuarterPoint, Math.max(0, videoDuration - 5))));
+            }
+            
+            console.log(`Created fallback timestamps: ${validatedTimestamps.join(', ')}`);
+          }
         }
         
         // Limit to max 4 timestamps to keep things manageable

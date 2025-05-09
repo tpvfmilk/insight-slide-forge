@@ -1,3 +1,4 @@
+
 import { timestampToSeconds } from "./formatUtils";
 
 /**
@@ -60,14 +61,21 @@ export async function extractFramesFromVideoUrl(
         const actualVideoDuration = video.duration;
         console.log(`Actual video duration: ${actualVideoDuration}s`);
         
-        // Filter timestamps that exceed video duration
-        // Use the provided videoDuration parameter if available, otherwise use the actual duration from the video
-        const maxDuration = videoDuration || actualVideoDuration;
+        // Use the smaller of the provided videoDuration parameter and the actual video.duration
+        // This ensures we always use the most accurate (and most restrictive) duration
+        const maxDuration = videoDuration !== undefined 
+          ? Math.min(videoDuration, actualVideoDuration)
+          : actualVideoDuration;
+          
+        console.log(`Using max duration of ${maxDuration}s for timestamp validation`);
+        
+        // Filter timestamps that exceed video duration, with a safety margin
+        const safetyMarginSeconds = 1; // 1 second safety margin
         const validTimestamps = timestamps.filter(ts => {
           const seconds = timestampToSeconds(ts);
-          const isValid = seconds <= maxDuration;
+          const isValid = seconds <= (maxDuration - safetyMarginSeconds);
           if (!isValid) {
-            console.log(`Timestamp ${ts} (${seconds}s) exceeds video duration (${maxDuration}s) and will be skipped`);
+            console.log(`Timestamp ${ts} (${seconds}s) exceeds safe video duration (${maxDuration - safetyMarginSeconds}s) and will be skipped`);
           }
           return isValid;
         });
@@ -76,7 +84,30 @@ export async function extractFramesFromVideoUrl(
         
         if (validTimestamps.length === 0) {
           console.warn("No valid timestamps found within video duration");
-          resolve([]); // Return empty array if no valid timestamps
+          
+          // If the video has some duration, create a few frames at strategic points
+          if (maxDuration > 0) {
+            const fallbackTimestamps = [];
+            
+            // Take frames at 25%, 50%, and 75% of the video duration
+            const points = [0.25, 0.5, 0.75];
+            for (const point of points) {
+              if (point * maxDuration < maxDuration - safetyMarginSeconds) {
+                const timestamp = formatDuration(point * maxDuration);
+                fallbackTimestamps.push(timestamp);
+              }
+            }
+            
+            if (fallbackTimestamps.length > 0) {
+              console.log(`Generated ${fallbackTimestamps.length} fallback timestamps: ${fallbackTimestamps.join(', ')}`);
+              
+              // Process the fallback timestamps
+              processNextTimestamp(fallbackTimestamps, 0);
+              return;
+            }
+          }
+          
+          resolve([]); // Return empty array if no valid timestamps and couldn't create fallbacks
           return;
         }
         
@@ -334,6 +365,19 @@ export async function extractFramesFromVideoUrl(
         }, "image/jpeg", 0.95);
       } else {
         callback();
+      }
+    }
+    
+    // Helper function to format seconds as a timestamp string
+    function formatDuration(seconds: number): string {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = Math.floor(seconds % 60);
+      
+      if (hours > 0) {
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      } else {
+        return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
       }
     }
     
