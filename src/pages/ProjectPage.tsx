@@ -1,4 +1,3 @@
-
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -6,9 +5,7 @@ import { InsightLayout } from "@/components/layout/InsightLayout";
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { ProjectPageHeader } from "@/components/project/ProjectPageHeader";
-import { TranscriptDialog } from "@/components/project/TranscriptDialog";
-import { DensityDialog } from "@/components/project/DensityDialog";
-import { ContextDialog } from "@/components/project/ContextDialog";
+import { ProjectSettingsDialog } from "@/components/project/ProjectSettingsDialog";
 import { ActionButtons } from "@/components/project/ActionButtons";
 import { TranscriptView } from "@/components/project/TranscriptView";
 import { useProjectState } from "@/hooks/useProjectState";
@@ -75,23 +72,13 @@ const ProjectPage = () => {
           />
           
           <div className="flex items-center space-x-2">
-            {/* Transcript Dialog */}
-            <TranscriptDialog
+            {/* Combined Settings Dialog */}
+            <ProjectSettingsDialog
               project={project}
               transcript={transcript}
               setTranscript={setTranscript}
-            />
-            
-            {/* Slide Density Dialog */}
-            <DensityDialog
-              project={project}
               slidesPerMinute={slidesPerMinute}
               setSlidesPerMinute={setSlidesPerMinute}
-            />
-            
-            {/* Context Dialog */}
-            <ContextDialog
-              project={project}
               contextPrompt={contextPrompt}
               setContextPrompt={setContextPrompt}
             />

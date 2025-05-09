@@ -1,12 +1,12 @@
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { SlidersIcon, RefreshCw } from "lucide-react";
 import { Project } from "@/services/projectService";
 import { updateProject } from "@/services/uploadService";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface DensityDialogProps {
   project: Project | null;
@@ -38,69 +38,81 @@ export const DensityDialog = ({ project, slidesPerMinute, setSlidesPerMinute }: 
     }
   };
 
-  return (
-    <Dialog open={isDensityDialogOpen} onOpenChange={setIsDensityDialogOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <SlidersIcon className="h-4 w-4 mr-1" />
-          Slide Density
+  // Content to be used in both standalone and tabbed modes
+  const TabContent = () => (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Adjust how many slides are generated per minute of content.
+          Higher values create more detailed slides, while lower values create
+          more summarized content.
+        </p>
+      </div>
+      
+      <div className="flex items-center space-x-2">
+        <span className="text-sm text-muted-foreground">1</span>
+        <Slider
+          value={[slidesPerMinute]}
+          min={1}
+          max={20}
+          step={1}
+          onValueChange={(values) => setSlidesPerMinute(values[0])}
+          className="flex-1"
+        />
+        <span className="text-sm text-muted-foreground">20</span>
+        <span className="w-8 text-right text-sm font-medium">{slidesPerMinute}</span>
+      </div>
+      
+      <p className="text-xs text-muted-foreground italic">
+        Changes will apply the next time slides are generated.
+      </p>
+      
+      <div className="flex justify-end mt-4 space-x-2">
+        <Button 
+          variant="outline" 
+          onClick={() => setIsDensityDialogOpen(false)}
+          disabled={isSaving}
+        >
+          Cancel
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Slide Density Control</DialogTitle>
-        </DialogHeader>
-        <div className="py-4">
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground mb-4">
-                Adjust how many slides are generated per minute of content.
-                Higher values create more detailed slides, while lower values create
-                more summarized content.
-              </p>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-muted-foreground">1</span>
-              <Slider
-                value={[slidesPerMinute]}
-                min={1}
-                max={20}
-                step={1}
-                onValueChange={(values) => setSlidesPerMinute(values[0])}
-                className="flex-1"
-              />
-              <span className="text-sm text-muted-foreground">20</span>
-              <span className="w-8 text-right text-sm font-medium">{slidesPerMinute}</span>
-            </div>
-            
-            <p className="text-xs text-muted-foreground italic">
-              Changes will apply the next time slides are generated.
-            </p>
+        <Button 
+          onClick={handleSaveDensity}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <>
+              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+              Saving...
+            </>
+          ) : "Save Setting"}
+        </Button>
+      </div>
+    </div>
+  );
+
+  // For standalone mode
+  return (
+    <>
+      {/* When used standalone */}
+      <Dialog open={isDensityDialogOpen} onOpenChange={setIsDensityDialogOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <SlidersIcon className="h-4 w-4 mr-1" />
+            Slide Density
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Slide Density Control</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <TabContent />
           </div>
-          
-          <div className="flex justify-end mt-4 space-x-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsDensityDialogOpen(false)}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSaveDensity}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                  Saving...
-                </>
-              ) : "Save Setting"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* When used in tabs mode */}
+      {project && <TabContent />}
+    </>
   );
 };
