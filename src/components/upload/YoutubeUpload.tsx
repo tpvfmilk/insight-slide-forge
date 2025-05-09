@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ArrowRight, Youtube, RefreshCw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { createProjectFromUrl } from "@/services/uploadService";
@@ -12,6 +13,7 @@ import { SliderControl } from "./SliderControl";
 
 export const YoutubeUpload = () => {
   const [videoUrl, setVideoUrl] = useState<string>("");
+  const [title, setTitle] = useState<string>("");
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
@@ -23,6 +25,11 @@ export const YoutubeUpload = () => {
     
     if (!videoUrl) {
       toast.error("Please enter a YouTube or Vimeo URL");
+      return;
+    }
+    
+    if (!title.trim()) {
+      toast.error("Please enter a title for your project");
       return;
     }
     
@@ -56,7 +63,7 @@ export const YoutubeUpload = () => {
       // Create project from URL with slides per minute
       const project = await createProjectFromUrl(
         videoUrl, 
-        undefined, 
+        title, 
         contextPrompt,
         slidesPerMinute
       );
@@ -83,9 +90,24 @@ export const YoutubeUpload = () => {
   return (
     <form onSubmit={handleYouTubeSubmit} className="space-y-4">
       <div className="space-y-2">
-        <label htmlFor="video-url" className="text-sm font-medium">
+        <Label htmlFor="project-title" className="text-sm font-medium">
+          Project Title
+        </Label>
+        <Input 
+          id="project-title"
+          placeholder="Enter a title for your project"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="mb-2"
+          required
+          disabled={isUploading}
+        />
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="video-url" className="text-sm font-medium">
           YouTube or Vimeo URL
-        </label>
+        </Label>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -110,15 +132,21 @@ export const YoutubeUpload = () => {
       </div>
 
       <div className="space-y-4 mt-4">
-        <SliderControl 
-          value={slidesPerMinute}
-          onChange={setSlidesPerMinute}
-        />
+        <div>
+          <Label className="mb-2 block">Slides per minute</Label>
+          <SliderControl 
+            value={slidesPerMinute}
+            onChange={setSlidesPerMinute}
+          />
+        </div>
         
-        <ContextPromptInput 
-          value={contextPrompt}
-          onChange={setContextPrompt}
-        />
+        <div>
+          <Label className="mb-2 block">Add series or content context (optional)</Label>
+          <ContextPromptInput 
+            value={contextPrompt}
+            onChange={setContextPrompt}
+          />
+        </div>
       </div>
       
       {isUploading && (
