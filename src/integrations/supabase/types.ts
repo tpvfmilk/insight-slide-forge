@@ -337,6 +337,13 @@ export type Database = {
         Args: { file_size_change: number }
         Returns: boolean
       }
+      update_user_storage_with_value: {
+        Args: { user_id_param: string; new_storage_value: number }
+        Returns: {
+          previous_size: number
+          new_size: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
