@@ -65,7 +65,7 @@ const LandingPage = () => {
             </div>
             
             <div className="relative aspect-video rounded-xl overflow-hidden shadow-xl border">
-              <img alt="Distill Interface" className="w-full h-full object-contain" src="/lovable-uploads/bfb92377-3db4-4cca-80b0-63f5c92d6ae7.png" />
+              <img alt="Distill Interface" className="w-full h-full object-contain" src="/lovable-uploads/ca306d00-2995-46cf-aabc-36c2353682e4.png" />
             </div>
           </div>
         </div>
