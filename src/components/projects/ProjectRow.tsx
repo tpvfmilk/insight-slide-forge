@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FileText, Edit, Download, Trash, FolderPen } from "lucide-react";
+import { FileText, Edit, Download, Trash, Folder } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Project } from "@/services/projectService";
 import { FileSizeBadge } from "./FileSizeBadge";
@@ -30,7 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Folder, fetchFolders, moveProjectsToFolder } from "@/services/folderService";
+import { Folder as FolderType, fetchFolders, moveProjectsToFolder } from "@/services/folderService";
 import { toast } from "sonner";
 
 interface ProjectRowProps {
@@ -163,7 +163,7 @@ export function ProjectRow({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="h-8 w-8">
-                <FolderPen className="h-4 w-4" />
+                <Folder className="h-4 w-4" />
                 <span className="sr-only">Move to Folder</span>
               </Button>
             </DropdownMenuTrigger>
@@ -171,7 +171,7 @@ export function ProjectRow({
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <div className="flex items-center">
-                    <FolderPen className="h-4 w-4 mr-2" />
+                    <Folder className="h-4 w-4 mr-2" />
                     <span>Move to Folder</span>
                   </div>
                 </DropdownMenuSubTrigger>

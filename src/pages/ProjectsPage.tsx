@@ -10,8 +10,8 @@ import { ProjectTitleEditor } from "@/components/projects/ProjectTitleEditor";
 import { Button } from "@/components/ui/button";
 import { FolderList } from "@/components/folders/FolderList";
 import { FolderDialog } from "@/components/folders/FolderDialog";
-import { FolderPen } from "lucide-react";
-import { Folder, createFolder, deleteFolder, fetchFolders } from "@/services/folderService";
+import { Folder } from "lucide-react";
+import { Folder as FolderType, createFolder, deleteFolder, fetchFolders } from "@/services/folderService";
 
 const ProjectsPage = () => {
   const queryClient = useQueryClient();
@@ -145,7 +145,7 @@ const ProjectsPage = () => {
           />
           
           <Button onClick={handleCreateFolder} className="w-full md:w-auto">
-            <FolderPen className="h-4 w-4 mr-2" />
+            <Folder className="h-4 w-4 mr-2" />
             Create Folder
           </Button>
         </div>

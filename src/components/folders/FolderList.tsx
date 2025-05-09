@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Folder } from "@/services/folderService";
 import { Project } from "@/services/projectService";
 import { ProjectRow } from "@/components/projects/ProjectRow";
-import { FolderPen, MoreVertical, Trash } from "lucide-react";
+import { Folder as FolderIcon, MoreVertical, Trash } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 interface FolderListProps {
@@ -63,7 +63,7 @@ export function FolderList({
               <div className="flex items-center justify-between pr-4">
                 <AccordionTrigger className="flex-1 hover:no-underline px-4">
                   <div className="flex items-center gap-2 text-left">
-                    <FolderPen className="h-5 w-5 text-primary" />
+                    <FolderIcon className="h-5 w-5 text-primary" />
                     <div>
                       <div className="font-medium">{folder.name}</div>
                       <div className="text-xs text-muted-foreground">{folderProjects.length} projects</div>
@@ -80,7 +80,7 @@ export function FolderList({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => onEditFolder(folder)}>
-                      <FolderPen className="h-4 w-4 mr-2" />
+                      <FolderIcon className="h-4 w-4 mr-2" />
                       Edit Folder
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -139,7 +139,7 @@ export function FolderList({
         <AccordionItem value="unassigned" className="border rounded-md mb-4">
           <AccordionTrigger className="px-4 hover:no-underline">
             <div className="flex items-center gap-2">
-              <FolderPen className="h-5 w-5 text-muted-foreground" />
+              <FolderIcon className="h-5 w-5 text-muted-foreground" />
               <div>
                 <div className="font-medium">Unfiled Projects</div>
                 <div className="text-xs text-muted-foreground">
