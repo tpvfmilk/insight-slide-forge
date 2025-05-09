@@ -279,6 +279,14 @@ export const SlideEditor = () => {
     fetchProjectSize();
   };
   
+  // Modified goToSlide function to handle transitions between slides
+  const goToSlide = (index: number) => {
+    if (index !== currentSlideIndex && !isTransitioning) {
+      saveChanges();
+      setCurrentSlideIndex(index);
+    }
+  };
+  
   const goToNextSlide = () => {
     if (currentSlideIndex < slides.length - 1) {
       saveChanges();
@@ -829,6 +837,27 @@ export const SlideEditor = () => {
       </div>
       
       <Separator />
+      
+      {/* Individual slide buttons */}
+      <div className="px-6 pt-4 flex justify-center">
+        <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-2">
+          {slides.map((_, index) => (
+            <Button
+              key={`slide-button-${index}`}
+              variant={index === currentSlideIndex ? "default" : "outline"}
+              size="sm"
+              onClick={() => goToSlide(index)}
+              className={`min-w-[32px] w-8 h-8 p-0 rounded-full ${
+                index === currentSlideIndex 
+                  ? "bg-primary text-primary-foreground" 
+                  : "bg-background text-foreground border-input hover:bg-accent"
+              }`}
+            >
+              {index + 1}
+            </Button>
+          ))}
+        </div>
+      </div>
       
       {/* Bottom navigation with added new slide and delete slide buttons */}
       <div className="flex justify-between items-center p-4">
