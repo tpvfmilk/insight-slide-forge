@@ -765,7 +765,7 @@ export const SlideEditor = () => {
                     <Plus className="h-4 w-4 mr-1" />
                     Add More
                   </Button>
-                  <input id="image-upload-single" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploadingImage} />
+                  <input id="image-upload-single" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                 </label>
               </div>
             ) : (
@@ -881,12 +881,16 @@ export const SlideEditor = () => {
         <Dialog open={isFrameSelectorOpen} onOpenChange={setIsFrameSelectorOpen}>
           <DialogContent className="sm:max-w-[900px]">
             <FrameSelector
-              frames={allExtractedFrames}
-              onSelectFrames={handleFrameSelection}
+              availableFrames={allExtractedFrames}
+              selectedFrames={[]}
+              onSelect={handleFrameSelection}
               onClose={() => {
                 setIsFrameSelectorOpen(false);
                 cleanupFrameSelectorDialog();
               }}
+              projectId={projectId}
+              onRefresh={loadProject}
+              slides={slides as unknown as FrameUtilsSlide[]}
             />
           </DialogContent>
         </Dialog>
