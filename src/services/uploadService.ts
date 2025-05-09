@@ -310,17 +310,6 @@ export const extractTranscriptionFromVideo = async (
   slidesPerMinute: number = 6
 ): Promise<Project | null> => {
   try {
-    // Convert the blob to base64
-    const reader = new FileReader();
-    const base64Audio = await new Promise<string>((resolve, reject) => {
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(audioBlob);
-    });
-    
     // Create a project for the transcript
     const projectData = {
       title: title,
@@ -336,7 +325,57 @@ export const extractTranscriptionFromVideo = async (
       throw new Error('Failed to create project');
     }
     
-    toast.loading('Processing transcript...', { id: 'process-transcript' });
+    toast.loading("Processing transcript...", { id: "process-transcript" });
+    
+    // Convert the blob to base64 with chunking for larger files
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    const reader = new FileReader();
+    let base64Audio = '';
+    
+    try {
+      if (audioBlob.size > 10 * 1024 * 1024) {
+        console.log(`Large audio file detected (${(audioBlob.size / (1024 * 1024)).toFixed(2)}MB), using chunked processing`);
+        
+        // For large files, process in chunks
+        const totalChunks = Math.ceil(audioBlob.size / chunkSize);
+        
+        for (let chunk = 0; chunk < totalChunks; chunk++) {
+          const start = chunk * chunkSize;
+          const end = Math.min(start + chunkSize, audioBlob.size);
+          const chunkBlob = audioBlob.slice(start, end);
+          
+          // Process each chunk
+          const chunkBase64 = await new Promise<string>((resolve) => {
+            const chunkReader = new FileReader();
+            chunkReader.onload = () => {
+              const result = chunkReader.result as string;
+              const base64 = result.split(',')[1];
+              resolve(base64);
+            };
+            chunkReader.readAsDataURL(chunkBlob);
+          });
+          
+          base64Audio += chunkBase64;
+          console.log(`Processed audio chunk ${chunk + 1}/${totalChunks}`);
+        }
+      } else {
+        // For smaller files, process all at once
+        base64Audio = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const base64 = (reader.result as string).split(',')[1];
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(audioBlob);
+        });
+      }
+    } catch (error) {
+      console.error("Error converting audio to base64:", error);
+      throw new Error("Failed to process audio data");
+    }
+    
+    console.log(`Audio converted to base64 (${(base64Audio.length / 1024 / 1024).toFixed(2)}MB)`);
+    toast.loading("Sending audio for transcription...", { id: "process-transcript" });
     
     // Call the edge function to process the audio and generate a transcript
     const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/transcribe-video', {
