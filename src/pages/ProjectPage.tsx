@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
-import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { ProjectPageHeader } from "@/components/project/ProjectPageHeader";
 import { ProjectSettingsDialog } from "@/components/project/ProjectSettingsDialog";
 import { ActionButtons } from "@/components/project/ActionButtons";
@@ -48,7 +47,9 @@ const ProjectPage = () => {
       return;
     }
     
-    modals.openFramePickerModal();
+    // Just trigger the frame picker in SlideEditor by navigating to it
+    // We no longer need the modal here since it will be handled in SlideEditor
+    // We'll rely on the button in ActionButtons to handle the modal opening
   };
 
   // Simplified to only open the manual frame picker
@@ -116,19 +117,6 @@ const ProjectPage = () => {
             <SlideEditor />
           )}
         </div>
-        
-        {/* Frame Picker Modal - Only including this one */}
-        {project && project.source_file_path && (
-          <FramePickerModal
-            open={modals.isFramePickerModalOpen}
-            onClose={() => modals.closeFramePickerModal()}
-            videoPath={project.source_file_path}
-            projectId={projectId || ""}
-            onComplete={handleManualFrameSelectionComplete}
-            videoMetadata={videoMetadata || undefined}
-            existingFrames={extractedFrames}
-          />
-        )}
       </div>
     </InsightLayout>
   );

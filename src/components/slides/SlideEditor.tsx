@@ -613,6 +613,9 @@ export const SlideEditor = () => {
       
       // Update project size
       fetchProjectSize();
+      
+      // Add toast notification for user feedback
+      toast.success(`${selectedFrames.length} ${selectedFrames.length === 1 ? 'frame' : 'frames'} applied to slide`);
     } catch (error) {
       console.error("Error handling manual frame selection:", error);
       toast.error("Failed to apply selected frames to slide");
@@ -699,9 +702,9 @@ export const SlideEditor = () => {
         <div className="flex-1 min-w-0 flex flex-col border-b md:border-b-0 md:border-r">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Visual</h3>
-            {/* Frame tools - Only show manual frame picker button */}
+            {/* Frame tools */}
             <div className="flex gap-2">
-              {/* Only include the manual frame picker button */}
+              {/* Only include the manual frame picker button when videoPath exists */}
               {videoPath && (
                 <Button 
                   variant="outline" 
@@ -859,6 +862,35 @@ export const SlideEditor = () => {
           <ChevronRight className="h-4 w-4 ml-1" />
         </Button>
       </div>
+      
+      {/* Add FramePickerModal at the end of the component */}
+      {videoPath && (
+        <FramePickerModal
+          open={isFramePickerModalOpen}
+          onClose={() => setIsFramePickerModalOpen(false)}
+          videoPath={videoPath}
+          projectId={projectId || ""}
+          onComplete={onManualFrameSelectionComplete}
+          videoMetadata={videoMetadata || undefined}
+          existingFrames={allExtractedFrames}
+        />
+      )}
+
+      {/* Add the FrameSelector modal for the existing functionality */}
+      {isFrameSelectorOpen && allExtractedFrames.length > 0 && (
+        <Dialog open={isFrameSelectorOpen} onOpenChange={setIsFrameSelectorOpen}>
+          <DialogContent className="sm:max-w-[900px]">
+            <FrameSelector
+              frames={allExtractedFrames}
+              onSelectFrames={handleFrameSelection}
+              onClose={() => {
+                setIsFrameSelectorOpen(false);
+                cleanupFrameSelectorDialog();
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
