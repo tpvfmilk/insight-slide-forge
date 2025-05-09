@@ -1,3 +1,4 @@
+
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +16,7 @@ import { fetchStorageInfo, fetchTotalUsageStats, UsageStatistics } from "@/servi
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Wallet } from "lucide-react";
+import { useProjects } from "@/hooks/useProjects";
 
 const SettingsPage = () => {
   const [darkMode, setDarkMode] = useState(false);
@@ -30,6 +32,9 @@ const SettingsPage = () => {
     queryKey: ['storageInfo'],
     queryFn: fetchStorageInfo,
   });
+  
+  // Fetch all user projects
+  const { projects, loading: projectsLoading } = useProjects({ limit: 100 });
   
   const handlePasswordSave = () => {
     toast.success("Password updated successfully!");
@@ -161,7 +166,9 @@ const SettingsPage = () => {
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span>Projects</span>
-                        <span className="font-medium">Unlimited active projects</span>
+                        <span className="font-medium">
+                          {projectsLoading ? 'Loading...' : `${projects.length} active projects`}
+                        </span>
                       </div>
                       
                       <div className="mt-4 text-sm text-muted-foreground">
