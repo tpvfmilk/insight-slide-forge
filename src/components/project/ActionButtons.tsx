@@ -1,12 +1,10 @@
 
 import { Button } from "@/components/ui/button";
-import { RefreshCw, FileText, Image, Film, Info } from "lucide-react";
+import { RefreshCw, FileText, Film } from "lucide-react";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { Project } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Slide } from "@/utils/frameUtils";
-import { useState } from "react";
-import { toast } from "sonner";
 
 interface ActionButtonsProps {
   project: Project | null;
@@ -26,18 +24,13 @@ interface ActionButtonsProps {
 
 export const ActionButtons = ({
   project,
-  needsFrameExtraction,
-  isExtractingFrames,
-  handleExtractFrames,
   needsTranscription,
   isTranscribing,
   handleTranscribeVideo,
   isGenerating,
   handleGenerateSlides,
   handleOpenManualFramePicker,
-  extractedFrames,
   isTranscriptOnlyProject,
-  refreshProject
 }: ActionButtonsProps) => {
   return (
     <div className="flex items-center space-x-2">

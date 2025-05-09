@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
@@ -260,7 +259,7 @@ export const FramePickerModal = ({
     }
   };
   
-  // Improved captureFrame function with techniques from videoFrameExtractor.ts
+  // Improved captureFrame function with enhanced techniques to avoid black frames
   const captureFrame = async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -280,122 +279,169 @@ export const FramePickerModal = ({
       }
       
       // Set canvas dimensions to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = video.videoWidth || 1280; // Fallback if video width is not available
+      canvas.height = video.videoHeight || 720; // Fallback if video height is not available
       
       // Create timestamp for the current position
       const currentTimestamp = formatDuration(video.currentTime);
       
-      // Function to check if frame is black
-      const checkFrameForContent = (ctx: CanvasRenderingContext2D): boolean => {
-        const imageData = ctx.getImageData(0, 0, 20, 20);
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          const r = imageData.data[i];
-          const g = imageData.data[i+1]; 
-          const b = imageData.data[i+2];
-          // More lenient threshold (15 instead of 5) to catch nearly black frames
-          if (r > 15 || g > 15 || b > 15) {
-            return true; // Has content
-          }
-        }
-        return false; // Is black
-      };
+      // Log dimensions for debugging
+      console.log(`Canvas dimensions: ${canvas.width}x${canvas.height}`);
+      console.log(`Video dimensions: ${video.videoWidth}x${video.videoHeight}`);
       
-      // Function to draw frame and check content
-      const drawAndCheckFrame = (ctx: CanvasRenderingContext2D): boolean => {
-        // Clear canvas before drawing
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw the current frame on the canvas
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Return whether frame has content
-        return checkFrameForContent(ctx);
-      };
-      
-      // Function to extract frame with retries
-      const extractFrameWithRetries = async (): Promise<boolean> => {
+      const captureWithRetries = async () => {
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           throw new Error("Could not get canvas context");
         }
         
-        // Initial frame capture
-        let hasContent = false;
-        
-        // Wait for the frame to load after seeking
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // First attempt
-        hasContent = drawAndCheckFrame(ctx);
-        
-        // If we got a black frame, try the forward/back seeking approach
-        if (!hasContent) {
-          console.warn(`Frame at ${currentTimestamp} appears to be black, trying forward/back approach...`);
+        // Function to check if a frame has content (not black)
+        const hasContent = (imageData: ImageData): boolean => {
+          let nonBlackPixels = 0;
+          const totalPixels = imageData.width * imageData.height;
+          const sampleSize = Math.min(totalPixels, 1000); // Sample up to 1000 pixels
           
-          // Store current position
-          const originalTime = video.currentTime;
-          
-          // Try forward offset
-          video.currentTime = originalTime + 0.5;
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
-          // Go back to original
-          video.currentTime = originalTime;
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
-          // Check again
-          hasContent = drawAndCheckFrame(ctx);
-          
-          // If still black, try with different offsets
-          if (!hasContent) {
-            console.warn("Still getting black frame, trying different offsets...");
+          // Sample pixels throughout the image
+          for (let i = 0; i < sampleSize; i++) {
+            const pixelIndex = Math.floor(Math.random() * totalPixels) * 4;
+            const r = imageData.data[pixelIndex];
+            const g = imageData.data[pixelIndex + 1];
+            const b = imageData.data[pixelIndex + 2];
             
-            const offsets = [0.1, 0.2, -0.1, -0.2, 1.0, -0.5];
-            
-            for (const offset of offsets) {
-              video.currentTime = originalTime + offset;
-              await new Promise(resolve => setTimeout(resolve, 300));
-              
-              hasContent = drawAndCheckFrame(ctx);
-              
-              if (hasContent) {
-                console.log(`Found content with offset ${offset}`);
-                break;
+            // Consider anything not very dark as content (more lenient threshold)
+            if (r > 15 || g > 15 || b > 15) {
+              nonBlackPixels++;
+            }
+          }
+          
+          // If at least 5% of sampled pixels have content, consider it valid
+          return (nonBlackPixels / sampleSize) > 0.05;
+        };
+        
+        // Function to draw frame and check content
+        const drawAndCheck = (): boolean => {
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw the video frame
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // Check a sample of pixels to see if we have content
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          return hasContent(imageData);
+        };
+        
+        // Initial frame capture attempt with longer preloading time
+        console.log(`Attempting to capture frame at ${currentTimestamp} (${video.currentTime}s)...`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second for frame to fully load
+        
+        let hasValidContent = drawAndCheck();
+        console.log(`First attempt result: ${hasValidContent ? 'Valid content' : 'Black/empty frame'}`);
+        
+        // If first attempt failed, try with multiple techniques
+        if (!hasValidContent) {
+          console.log("First attempt produced black frame, trying alternative methods...");
+          
+          // Try multiple techniques in sequence
+          const techniques = [
+            {
+              name: "Seek forward and back",
+              action: async () => {
+                const originalTime = video.currentTime;
+                // Seek forward slightly
+                video.currentTime = originalTime + 0.5;
+                await new Promise(resolve => setTimeout(resolve, 500));
+                // Seek back to original position
+                video.currentTime = originalTime;
+                await new Promise(resolve => setTimeout(resolve, 500));
+                return drawAndCheck();
               }
+            },
+            {
+              name: "Try different offsets",
+              action: async () => {
+                const originalTime = video.currentTime;
+                // Try different time offsets
+                for (const offset of [0.1, 0.2, 0.3, -0.1, -0.2]) {
+                  video.currentTime = originalTime + offset;
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  if (drawAndCheck()) return true;
+                }
+                // Reset to original time
+                video.currentTime = originalTime;
+                await new Promise(resolve => setTimeout(resolve, 500));
+                return drawAndCheck();
+              }
+            },
+            {
+              name: "Play briefly and pause",
+              action: async () => {
+                const originalTime = video.currentTime;
+                // Try playing for a moment
+                try {
+                  await video.play();
+                  await new Promise(resolve => setTimeout(resolve, 200));
+                  video.pause();
+                } catch (err) {
+                  console.log("Couldn't play video briefly:", err);
+                }
+                // Move back to original time
+                video.currentTime = originalTime;
+                await new Promise(resolve => setTimeout(resolve, 500));
+                return drawAndCheck();
+              }
+            }
+          ];
+          
+          // Try each technique until one works
+          for (const technique of techniques) {
+            console.log(`Trying technique: ${technique.name}`);
+            hasValidContent = await technique.action();
+            if (hasValidContent) {
+              console.log(`Success with technique: ${technique.name}`);
+              break;
             }
           }
         }
         
-        // Add timestamp overlay for reference (whether we got content or not)
-        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-        ctx.fillRect(10, 10, 300, 30);
-        ctx.fillStyle = "white";
-        ctx.font = "16px Arial";
-        ctx.fillText(`Timestamp: ${currentTimestamp}`, 15, 30);
-        
-        // If we still don't have content, add a warning
-        if (!hasContent) {
-          ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+        // If we still couldn't get content, create a placeholder with warning
+        if (!hasValidContent) {
+          console.log("All capture attempts failed, creating placeholder frame");
+          
+          // Clear canvas and set background
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#2563eb"; // Blue background
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Add warning text
           ctx.fillStyle = "white";
-          ctx.font = "20px Arial";
+          ctx.font = "bold 24px Arial";
           ctx.textAlign = "center";
-          ctx.fillText("Frame may be black - try a different timestamp", canvas.width / 2, canvas.height / 2);
+          ctx.fillText(`Frame at ${currentTimestamp} unavailable`, canvas.width / 2, canvas.height / 2 - 15);
+          ctx.font = "18px Arial";
+          ctx.fillText("Frame could not be extracted from video", canvas.width / 2, canvas.height / 2 + 20);
         }
         
-        return true; // We proceed even if frame is black
+        // Add timestamp overlay
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(10, 10, 250, 30);
+        ctx.fillStyle = "white";
+        ctx.font = "16px Arial";
+        ctx.textAlign = "left";
+        ctx.fillText(`Timestamp: ${currentTimestamp}`, 15, 30);
+        
+        return true;
       };
       
-      // Execute the extraction
-      await extractFrameWithRetries();
+      // Execute capture with retries
+      await captureWithRetries();
       
-      // Convert to blob
+      // Convert to blob with high quality
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(blob => {
           if (blob) resolve(blob);
           else reject(new Error("Failed to create blob from canvas"));
-        }, 'image/jpeg', 0.95);
+        }, 'image/jpeg', 0.95); // High quality JPEG
       });
       
       // Create a file from the blob

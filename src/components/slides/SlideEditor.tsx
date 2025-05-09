@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, Plus, X, Undo, Film } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, Plus, X, Undo, Film } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -10,8 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProjectById } from "@/services/projectService";
 import { uploadSlideImage } from "@/services/imageService";
 import { exportToPDF, exportToCSV, exportToAnki, downloadFile } from "@/services/exportService";
-import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, ExtractedFrame } from "@/services/clientFrameExtractionService";
-import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
+import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { FrameSelector } from "@/components/slides/FrameSelector";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
@@ -57,8 +56,6 @@ export const SlideEditor = () => {
     anki: false,
     csv: false
   });
-  const [isExtractingFrames, setIsExtractingFrames] = useState<boolean>(false);
-  const [isFrameExtractionModalOpen, setIsFrameExtractionModalOpen] = useState<boolean>(false);
   const [isFrameSelectorOpen, setIsFrameSelectorOpen] = useState<boolean>(false);
   const [allExtractedFrames, setAllExtractedFrames] = useState<LocalExtractedFrame[]>([]);
   const [videoPath, setVideoPath] = useState<string>("");
@@ -245,71 +242,9 @@ export const SlideEditor = () => {
     }
   };
   
-  const handleExtractFrames = async () => {
-    if (!projectId || !videoPath || isExtractingFrames || timestamps.length === 0) {
-      if (!videoPath) {
-        toast.error("No video available for this project");
-      } else if (timestamps.length === 0) {
-        toast.error("No timestamps found in slides");
-      }
-      return;
-    }
-    setIsExtractingFrames(true);
-    toast.loading("Preparing video frames extraction...", {
-      id: "extract-prep"
-    });
-    try {
-      let result;
-
-      // Try with the current path first
-      result = await clientExtractFramesFromVideo(projectId, videoPath, timestamps);
-      if (!result.success && result.error?.includes("Failed to get video URL")) {
-        // If that fails, try getting the source_url from the project and see if we can use that
-        console.log("Original video path failed, checking project for alternate sources");
-        const {
-          data: project
-        } = await supabase.from('projects').select('source_url').eq('id', projectId).maybeSingle();
-        if (project?.source_url) {
-          toast.info("Trying alternate video source...", {
-            id: "extract-prep"
-          });
-          result = await clientExtractFramesFromVideo(projectId, project.source_url, timestamps);
-        }
-      }
-      toast.dismiss("extract-prep");
-      if (result.success) {
-        setIsFrameExtractionModalOpen(true);
-      } else {
-        toast.error(`Failed to prepare frame extraction: ${result.error}`);
-      }
-    } finally {
-      setIsExtractingFrames(false);
-    }
-  };
-  
-  const handleFrameExtractionComplete = async (frames: Array<{ timestamp: string, imageUrl: string }>) => {
-    if (!projectId) return;
-    setIsFrameExtractionModalOpen(false);
-    if (frames.length === 0) {
-      toast.info("No frames were extracted");
-      return;
-    }
-
-    // Update the project's slides with the extracted frames
-    const success = await updateSlidesWithExtractedFrames(projectId, frames);
-    if (success) {
-      // Reload the project to get the updated slides with images
-      await loadProject();
-      toast.success("Frame extraction completed successfully");
-      
-      // Update project size
-      fetchProjectSize();
-    }
-  };
-  
   const handleSelectFrames = () => {
     if (allExtractedFrames.length === 0) {
-      toast.warning("No frames available. Extract frames or use the manual frame picker first.");
+      toast.warning("No frames available. Use the manual frame picker first.");
       return;
     }
     setIsFrameSelectorOpen(true);
@@ -576,7 +511,6 @@ export const SlideEditor = () => {
     fetchProjectSize();
   };
   
-  // Add new slide function
   const addNewSlide = () => {
     // Create a new slide with default content
     const newSlide = {
@@ -602,7 +536,6 @@ export const SlideEditor = () => {
     // Removed toast notification for slide creation
   };
   
-  // Delete current slide with undo functionality
   const deleteCurrentSlide = () => {
     // Don't allow deleting the last slide
     if (slides.length <= 1) {
@@ -631,7 +564,6 @@ export const SlideEditor = () => {
     // Removed toast notification for slide deletion
   };
   
-  // Undo delete slide
   const undoDeleteSlide = () => {
     if (!lastDeletedSlide) return;
     
@@ -764,14 +696,9 @@ export const SlideEditor = () => {
         <div className="flex-1 min-w-0 flex flex-col border-b md:border-b-0 md:border-r">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Visual</h3>
-            {/* Frame tools - Now include Select Video Frames button next to Extract Frames */}
+            {/* Frame tools - Only show manual frame picker button */}
             <div className="flex gap-2">
-              {videoPath && timestamps.length > 0 && <Button variant="outline" size="sm" onClick={handleExtractFrames} disabled={isExtractingFrames}>
-                  {isExtractingFrames ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <FrameIcon className="h-4 w-4 mr-1" />}
-                  Extract Frames
-                </Button>}
-              
-              {/* Add Select Video Frames button here */}
+              {/* Only include the manual frame picker button */}
               {videoPath && (
                 <Button 
                   variant="outline" 
@@ -833,10 +760,6 @@ export const SlideEditor = () => {
                 <div className="flex flex-col gap-2 mt-4">
                   {/* Buttons for when no images exist */}
                   <div className="flex gap-2">
-                    {videoPath && timestamps.length > 0 && <Button variant="outline" size="sm" onClick={handleExtractFrames} disabled={isExtractingFrames}>
-                        <FrameIcon className="h-4 w-4 mr-1" />
-                        Extract Frames
-                      </Button>}
                     
                     {allExtractedFrames.length > 0 && <Button variant="outline" size="sm" onClick={handleSelectFrames}>
                         <ImageIcon className="h-4 w-4 mr-1" />
@@ -889,98 +812,4 @@ export const SlideEditor = () => {
           Previous
         </Button>
         
-        <div className="flex gap-1 items-center">
-          {slides.map((_, index) => <Button key={index} variant={index === currentSlideIndex ? "default" : "ghost"} size="icon" className="w-8 h-8 rounded-full" onClick={() => {
-            saveChanges();
-            setCurrentSlideIndex(index);
-          }}>
-              {index + 1}
-            </Button>)}
-            
-          {/* Add new slide button */}
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="w-8 h-8 rounded-full ml-1" 
-            onClick={addNewSlide}
-            title="Add new slide"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-          
-          {/* Delete current slide button with undo button */}
-          <div className="relative">
-            <Button 
-              variant="destructive" 
-              size="icon" 
-              className="w-8 h-8 rounded-full ml-1" 
-              onClick={deleteCurrentSlide}
-              title="Delete current slide"
-              disabled={slides.length <= 1}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-            
-            {/* Undo button that appears after deletion */}
-            {showUndoButton && (
-              <Button 
-                variant="secondary"
-                size="sm"
-                className="absolute -top-10 -right-2 whitespace-nowrap shadow-md"
-                onClick={undoDeleteSlide}
-              >
-                <Undo className="h-4 w-4 mr-1" />
-                Undo Delete
-              </Button>
-            )}
-          </div>
-        </div>
-        
-        <Button variant="outline" onClick={goToNextSlide} disabled={currentSlideIndex === slides.length - 1}>
-          Next
-          <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      </div>
-
-      {/* Frame Selection Modal with fixed height/overflow - updated with proper type handling */}
-      <FrameSelector 
-        open={isFrameSelectorOpen} 
-        onClose={() => {
-          setIsFrameSelectorOpen(false);
-          // Ensure proper cleanup
-          cleanupFrameSelectorDialog();
-        }} 
-        availableFrames={allExtractedFrames as unknown as ExtractedFrame[]} 
-        selectedFrames={
-          currentSlide?.imageUrls?.map(url => {
-            // Find frame with matching URL
-            const frame = allExtractedFrames.find(f => f.imageUrl === url);
-            return frame || {
-              imageUrl: url,
-              timestamp: "unknown",
-              id: `unknown-${url}`
-            };
-          }) as unknown as ExtractedFrame[] || []
-        } 
-        onSelect={handleFrameSelection}
-        projectId={projectId}
-        onRefresh={loadProject}
-      />
-      
-      {/* Frame Picker Modal */}
-      {videoPath && (
-        <FramePickerModal
-          open={isFramePickerModalOpen}
-          onClose={() => setIsFramePickerModalOpen(false)}
-          videoPath={videoPath}
-          projectId={projectId || ""}
-          onComplete={onManualFrameSelectionComplete}
-          videoMetadata={videoMetadata || undefined}
-          existingFrames={allExtractedFrames}
-        />
-      )}
-      
-      {/* Frame Extraction Modal */}
-      {videoPath && <FrameExtractionModal open={isFrameExtractionModalOpen} onClose={() => setIsFrameExtractionModalOpen(false)} videoPath={videoPath} projectId={projectId || ""} timestamps={timestamps} onComplete={handleFrameExtractionComplete} />}
-    </div>;
-};
+        <div className="
