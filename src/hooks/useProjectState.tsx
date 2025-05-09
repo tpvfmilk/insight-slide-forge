@@ -9,7 +9,7 @@ import { initializeStorage } from "@/services/storageService";
 import { useNavigate } from "react-router-dom";
 import { generateSlidesForProject } from "@/services/slideGenerationService";
 import { transcribeVideo, updateProject } from "@/services/uploadService";
-import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
+import { updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
 
 export const useProjectState = (projectId: string | undefined) => {
   const navigate = useNavigate();
@@ -199,66 +199,11 @@ export const useProjectState = (projectId: string | undefined) => {
     }
   };
 
+  // Simplified handleExtractFrames - now just a stub that doesn't do anything
+  // We'll use manual frame picker directly instead
   const handleExtractFrames = async () => {
-    if (!projectId || !project?.source_file_path || isExtractingFrames || allTimestamps.length === 0) {
-      return;
-    }
-    
-    setIsExtractingFrames(true);
-    
-    try {
-      // Log important information for debugging
-      console.log(`Attempting to extract frames for video with duration: ${videoMetadata?.duration || 'unknown'}`);
-      console.log(`Timestamps to extract: ${allTimestamps.join(', ')}`);
-      
-      // First check if we already have all the frames extracted
-      if (extractedFrames.length > 0) {
-        const allTimestampsExtracted = allTimestamps.every(timestamp => 
-          extractedFrames.some(frame => frame.timestamp === timestamp)
-        );
-        
-        if (allTimestampsExtracted) {
-          toast.success("All frames already extracted");
-          setNeedsFrameExtraction(false);
-          
-          // Update the slides with these frames
-          await updateSlidesWithExtractedFrames(projectId, extractedFrames);
-          await loadProject(); // Reload the project to get updated slides
-          return;
-        }
-      }
-      
-      // Get remaining timestamps to extract
-      const remainingTimestamps = allTimestamps.filter(timestamp => 
-        !extractedFrames.some(frame => frame.timestamp === timestamp)
-      );
-      
-      console.log(`Attempting to extract ${remainingTimestamps.length} remaining frames`);
-      
-      const result = await clientExtractFramesFromVideo(
-        projectId, 
-        project.source_file_path, 
-        remainingTimestamps,
-        videoMetadata?.duration // Pass the video duration to help validate timestamps
-      );
-      
-      if (result.success) {
-        // If we retrieved previously extracted frames, use them directly
-        if (result.frames && result.frames.length > 0) {
-          await updateSlidesWithExtractedFrames(projectId, result.frames);
-          await loadProject(); // Reload the project with updated slides
-          setNeedsFrameExtraction(false);
-        } else {
-          return { openFrameExtractionModal: true };
-        }
-      } else {
-        toast.error(`Failed to prepare frame extraction: ${result.error}`);
-      }
-    } finally {
-      setIsExtractingFrames(false);
-    }
-    
-    return { openFrameExtractionModal: false };
+    // Empty function as we're disabling automatic extraction
+    return;
   };
   
   const handleFrameExtractionComplete = async (frames: Array<{ timestamp: string, imageUrl: string }>) => {

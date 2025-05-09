@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
-import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { ProjectPageHeader } from "@/components/project/ProjectPageHeader";
 import { ProjectSettingsDialog } from "@/components/project/ProjectSettingsDialog";
@@ -40,7 +39,6 @@ const ProjectPage = () => {
     handleGenerateSlides,
     handleTranscribeVideo,
     handleExtractFrames,
-    handleFrameExtractionComplete,
     handleManualFrameSelectionComplete,
   } = useProjectState(projectId);
   
@@ -53,13 +51,9 @@ const ProjectPage = () => {
     modals.openFramePickerModal();
   };
 
+  // Simplified to only open the manual frame picker
   const processFrameExtraction = async () => {
-    if (!project?.source_file_path) return;
-    
-    const result = await handleExtractFrames();
-    if (result?.openFrameExtractionModal) {
-      modals.openFrameExtractionModal();
-    }
+    handleOpenManualFramePicker();
   };
   
   return (
@@ -123,23 +117,7 @@ const ProjectPage = () => {
           )}
         </div>
         
-        {/* Frame Extraction Modal */}
-        {project && project.source_file_path && (
-          <FrameExtractionModal
-            open={modals.isFrameExtractionModalOpen}
-            onClose={() => modals.closeFrameExtractionModal()}
-            videoPath={project.source_file_path}
-            projectId={projectId || ""}
-            timestamps={allTimestamps.filter(timestamp => 
-              !extractedFrames.some(frame => frame.timestamp === timestamp)
-            )}
-            onComplete={handleFrameExtractionComplete}
-            videoMetadata={videoMetadata || undefined}
-            previouslyExtractedFrames={extractedFrames}
-          />
-        )}
-        
-        {/* Frame Picker Modal */}
+        {/* Frame Picker Modal - Only including this one */}
         {project && project.source_file_path && (
           <FramePickerModal
             open={modals.isFramePickerModalOpen}

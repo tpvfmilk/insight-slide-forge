@@ -41,27 +41,15 @@ export const ActionButtons = ({
 }: ActionButtonsProps) => {
   return (
     <div className="flex items-center space-x-2">
-      {/* Removing the "Select Video Frames" button from here as it will be moved to SlideEditor */}
-      
-      {/* Frame Management Section */}
-      {needsFrameExtraction && (
+      {/* Show only the Manual Frame Picker button for video projects */}
+      {project?.source_type === 'video' && (
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={handleExtractFrames} 
-          disabled={isExtractingFrames}
+          onClick={handleOpenManualFramePicker}
         >
-          {isExtractingFrames ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Preparing...
-            </>
-          ) : (
-            <>
-              <Image className="h-4 w-4 mr-2" />
-              {extractedFrames.length > 0 ? "Extract Missing Frames" : "Extract Video Frames"}
-            </>
-          )}
+          <Film className="h-4 w-4 mr-2" />
+          Select Video Frames
         </Button>
       )}
       
