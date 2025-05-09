@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -224,41 +223,18 @@ export const useProjectState = (projectId: string | undefined) => {
           // Update the slides with these frames
           await updateSlidesWithExtractedFrames(projectId, extractedFrames);
           await loadProject(); // Reload the project to get updated slides
-          return;
+          return { openFrameExtractionModal: false };
         }
       }
       
-      // Get remaining timestamps to extract
-      const remainingTimestamps = allTimestamps.filter(timestamp => 
-        !extractedFrames.some(frame => frame.timestamp === timestamp)
-      );
-      
-      console.log(`Attempting to extract ${remainingTimestamps.length} remaining frames`);
-      
-      const result = await clientExtractFramesFromVideo(
-        projectId, 
-        project.source_file_path, 
-        remainingTimestamps,
-        videoMetadata?.duration // Pass the video duration to help validate timestamps
-      );
-      
-      if (result.success) {
-        // If we retrieved previously extracted frames, use them directly
-        if (result.frames && result.frames.length > 0) {
-          await updateSlidesWithExtractedFrames(projectId, result.frames);
-          await loadProject(); // Reload the project with updated slides
-          setNeedsFrameExtraction(false);
-        } else {
-          return { openFrameExtractionModal: true };
-        }
-      } else {
-        toast.error(`Failed to prepare frame extraction: ${result.error}`);
-      }
+      // With the enhanced FramePickerModal, we'll skip the preparation step
+      // and go straight to opening the modal for manual/auto extraction
+      return { openFrameExtractionModal: false, openFramePickerModal: true };
     } finally {
       setIsExtractingFrames(false);
     }
     
-    return { openFrameExtractionModal: false };
+    return { openFrameExtractionModal: false, openFramePickerModal: true };
   };
   
   const handleFrameExtractionComplete = async (frames: Array<{ timestamp: string, imageUrl: string }>) => {
