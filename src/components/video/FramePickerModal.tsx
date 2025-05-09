@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { 
   Play, Pause, SkipBack, SkipForward, Camera, AlertCircle,
-  RefreshCw, CheckCircle2, X, Trash2, Cloud
+  RefreshCw, CheckCircle2, X, Trash2
 } from "lucide-react";
 import { formatDuration } from "@/utils/formatUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,8 +16,6 @@ import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { useUIReset } from "@/context/UIResetContext";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { serverSideExtractFrames } from "@/services/serverFrameExtractionService";
 
 interface FramePickerModalProps {
   open: boolean;
@@ -51,7 +49,6 @@ export const FramePickerModal = ({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
   const [isCaptureLoading, setIsCaptureLoading] = useState<boolean>(false);
-  const [isUsingSeverSide, setIsUsingServerSide] = useState<boolean>(false);
   const { registerUIElement, unregisterUIElement } = useUIReset();
   const elementId = useRef(`frame-picker-${Math.random().toString(36).substring(2, 9)}`);
   
@@ -264,10 +261,6 @@ export const FramePickerModal = ({
   
   // Improved captureFrame function with enhanced techniques to avoid black frames
   const captureFrame = async () => {
-    if (isUsingSeverSide) {
-      return captureFrameServerSide();
-    }
-    
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
@@ -411,13 +404,11 @@ export const FramePickerModal = ({
           }
         }
         
-        // If we still couldn't get content, fall back to server-side extraction
+        // If we still couldn't get content, show an error
         if (!hasValidContent) {
-          console.log("All capture attempts failed, falling back to server-side extraction");
+          toast.error("Could not capture a valid frame. Please try again or try at a different timestamp.");
           setIsCaptureLoading(false);
-          setIsUsingServerSide(true);
-          toast.info("Client-side extraction failed. Switching to server-side extraction.");
-          return captureFrameServerSide();
+          return false;
         }
         
         // Add timestamp overlay
@@ -432,7 +423,10 @@ export const FramePickerModal = ({
       };
       
       // Execute capture with retries
-      await captureWithRetries();
+      const success = await captureWithRetries();
+      if (!success) {
+        return;
+      }
       
       // Convert to blob with high quality
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -478,85 +472,6 @@ export const FramePickerModal = ({
     } catch (err) {
       console.error("Error capturing frame:", err);
       toast.error(`Failed to capture frame: ${err instanceof Error ? err.message : "Unknown error"}`);
-      
-      // If client-side extraction fails, offer to use server-side
-      if (!isUsingSeverSide) {
-        toast.info("Having trouble capturing frames? Try using server-side extraction.", {
-          action: {
-            label: "Use Server",
-            onClick: () => {
-              setIsUsingServerSide(true);
-              toast.success("Switched to server-side extraction. Try capturing frames now.");
-            }
-          }
-        });
-      }
-    } finally {
-      setIsCaptureLoading(false);
-    }
-  };
-  
-  // New function for server-side frame extraction
-  const captureFrameServerSide = async () => {
-    if (!videoPath || !projectId) {
-      toast.error("Missing required information for server-side extraction");
-      return;
-    }
-    
-    setIsCaptureLoading(true);
-    const currentTimestamp = formatDuration(currentTime);
-    
-    try {
-      console.log(`Server-side extracting frame at timestamp ${currentTimestamp}`);
-      
-      // Call the extract-frames endpoint with a single timestamp
-      const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/extract-frames`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
-        body: JSON.stringify({
-          projectId,
-          timestamps: [currentTimestamp],
-          videoPath,
-          fallbackToServer: true,
-          clientSideFailed: true
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Server-side extraction failed");
-      }
-      
-      const result = await response.json();
-      
-      if (!result.success || !result.frames || result.frames.length === 0) {
-        throw new Error("No frames returned from server");
-      }
-      
-      const newFrame = result.frames[0];
-      
-      // Add to captured frames
-      setCapturedFrames(prev => {
-        // Check if we already have a frame with this timestamp
-        const exists = prev.some(frame => frame.timestamp === currentTimestamp);
-        if (exists) {
-          // Replace the existing frame
-          return prev.map(frame => 
-            frame.timestamp === currentTimestamp ? newFrame : frame
-          );
-        } else {
-          // Add new frame
-          return [...prev, newFrame];
-        }
-      });
-      
-      toast.success(`Server-side frame captured at ${currentTimestamp}!`);
-    } catch (error) {
-      console.error("Server-side extraction error:", error);
-      toast.error(`Server-side extraction failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setIsCaptureLoading(false);
     }
@@ -583,14 +498,6 @@ export const FramePickerModal = ({
     onClose();
   };
   
-  const toggleExtractionMode = () => {
-    setIsUsingServerSide(!isUsingSeverSide);
-    toast.info(isUsingSeverSide 
-      ? "Switched to client-side extraction" 
-      : "Switched to server-side extraction"
-    );
-  };
-  
   return (
     <SafeDialog 
       open={open} 
@@ -604,29 +511,6 @@ export const FramePickerModal = ({
           <div className="flex justify-between items-center">
             <DialogTitle>Frame Picker</DialogTitle>
             <div className="flex items-center gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={isUsingSeverSide ? "default" : "outline"}
-                      onClick={toggleExtractionMode}
-                    >
-                      <Cloud className="h-4 w-4 mr-1" />
-                      {isUsingSeverSide ? "Server-side" : "Client-side"}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-sm">
-                      {isUsingSeverSide 
-                        ? "Currently using server-side extraction (more reliable)"
-                        : "Currently using client-side extraction (faster)"
-                      }
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              
               <Button
                 onClick={handleClose}
                 variant="outline"
@@ -741,7 +625,7 @@ export const FramePickerModal = ({
                   ) : (
                     <>
                       <Camera className="h-4 w-4 mr-2" />
-                      Capture Frame {isUsingSeverSide ? "(Server-side)" : ""}
+                      Capture Frame
                     </>
                   )}
                 </Button>

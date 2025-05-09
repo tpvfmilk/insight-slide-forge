@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { RefreshCw, FileText, Film, Cloud } from "lucide-react";
+import { RefreshCw, FileText, Film } from "lucide-react";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { Project } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";

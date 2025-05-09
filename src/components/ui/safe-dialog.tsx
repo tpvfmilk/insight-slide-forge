@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 interface DialogProps extends React.ComponentPropsWithoutRef<typeof Dialog> {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  className?: string; // Add className prop
 }
 
 // Extended DialogProps with onOpenChange
@@ -14,7 +15,7 @@ interface SafeDialogProps extends DialogProps {
   children: React.ReactNode;
 }
 
-export const SafeDialog = ({ children, onOpenChange, open, ...props }: SafeDialogProps) => {
+export const SafeDialog = ({ children, onOpenChange, open, className, ...props }: SafeDialogProps) => {
   const { registerUIElement, unregisterUIElement } = useUIReset();
   const id = useId();
   
@@ -38,7 +39,7 @@ export const SafeDialog = ({ children, onOpenChange, open, ...props }: SafeDialo
   }, [open, id, registerUIElement, unregisterUIElement, onOpenChange]);
   
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} {...props}>
+    <Dialog open={open} onOpenChange={onOpenChange} className={className} {...props}>
       {children}
     </Dialog>
   );

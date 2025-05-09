@@ -10,7 +10,7 @@ import { TranscriptView } from "@/components/project/TranscriptView";
 import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
-import { serverSideExtractFrames } from "@/services/serverFrameExtractionService";
+import { clientExtractFramesFromVideo } from "@/services/clientFrameExtractionService";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -53,8 +53,7 @@ const ProjectPage = () => {
     // We'll rely on the button in ActionButtons to handle the modal opening
   };
 
-  // Now we just delegate to the improved serverSideExtractFrames function 
-  // when manual extraction is required
+  // Process frames using client-side extraction only
   const processFrameExtraction = async () => {
     if (!project?.source_file_path || !projectId || !allTimestamps || allTimestamps.length === 0) {
       toast.error("Unable to extract frames: missing video or timestamps");
@@ -62,19 +61,19 @@ const ProjectPage = () => {
     }
     
     try {
-      // Use server-side extraction when needed
-      const result = await serverSideExtractFrames(
+      // Use client-side extraction
+      const result = await clientExtractFramesFromVideo(
         projectId,
         project.source_file_path,
         allTimestamps,
-        false // Not coming from a client-side failure
+        videoMetadata?.duration
       );
       
       if (result.success && result.frames) {
         handleManualFrameSelectionComplete(result.frames);
         toast.success(`Successfully extracted ${result.frames.length} frames`);
       } else {
-        toast.error("Failed to extract frames");
+        toast.error(result.error || "Failed to extract frames");
       }
     } catch (error) {
       console.error("Frame extraction error:", error);
