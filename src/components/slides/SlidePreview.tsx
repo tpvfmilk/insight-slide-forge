@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -195,6 +194,18 @@ export const SlidePreview = () => {
     }
   };
   
+  const goToSlide = (index: number) => {
+    if (index !== currentSlideIndex && !isTransitioning) {
+      setTransitionDirection(index > currentSlideIndex ? "next" : "prev");
+      setIsTransitioning(true);
+      
+      setTimeout(() => {
+        setCurrentSlideIndex(index);
+        setIsTransitioning(false);
+      }, 300);
+    }
+  };
+  
   useEffect(() => {
     const loadProject = async () => {
       if (!projectId) return;
@@ -330,6 +341,27 @@ export const SlidePreview = () => {
         {/* Progress bar */}
         <div className="w-full">
           <Progress value={((currentSlideIndex + 1) / slides.length) * 100} className="h-1 rounded-none bg-white/10" />
+        </div>
+        
+        {/* Individual slide buttons */}
+        <div className="px-6 pt-4 flex justify-center">
+          <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-2">
+            {slides.map((_, index) => (
+              <Button
+                key={`slide-button-${index}`}
+                variant={index === currentSlideIndex ? "default" : "outline"}
+                size="sm"
+                onClick={() => goToSlide(index)}
+                className={`min-w-[32px] w-8 h-8 p-0 rounded-full ${
+                  index === currentSlideIndex 
+                    ? "bg-primary text-primary-foreground" 
+                    : "bg-black/30 text-white border-white/20 hover:bg-white/20"
+                }`}
+              >
+                {index + 1}
+              </Button>
+            ))}
+          </div>
         </div>
         
         {/* Controls */}
