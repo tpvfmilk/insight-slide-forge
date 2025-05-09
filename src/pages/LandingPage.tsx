@@ -39,7 +39,7 @@ const LandingPage = () => {
       </header>
       
       {/* Hero section */}
-      <section className="py-20 border-b bg-gradient-to-b from-accent to-background">
+      <section className="py-20 border-b bg-gradient-to-b from-accent to-background bg-slate-400">
         <div className="container">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div className="space-y-6">
