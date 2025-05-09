@@ -74,11 +74,7 @@ export const ProjectPageHeader = ({ project, isLoading, videoFileName }: Project
                project?.source_type === 'transcript-only' ? 'Extracted transcript' :
                project?.source_type === 'transcript' ? 'From transcript' : 'Unknown source'}
             </p>
-            {videoFileName && (
-              <Badge variant="outline" className="text-xs font-normal">
-                {videoFileName}
-              </Badge>
-            )}
+            {/* Filename badge has been hidden as requested */}
           </div>
         </div>
       </div>
