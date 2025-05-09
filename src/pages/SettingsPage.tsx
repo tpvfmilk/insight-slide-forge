@@ -1,3 +1,4 @@
+
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,11 +12,25 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ProfileForm } from "@/components/auth/ProfileForm";
 import { useAuth } from "@/context/AuthContext";
+import { fetchStorageInfo, fetchTotalUsageStats, UsageStatistics } from "@/services/usageService";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Wallet } from "lucide-react";
 
 const SettingsPage = () => {
   const [darkMode, setDarkMode] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const { signOut } = useAuth();
+  
+  const { data: usageStats } = useQuery({
+    queryKey: ['usageStats'],
+    queryFn: fetchTotalUsageStats,
+  });
+  
+  const { data: storageInfo } = useQuery({
+    queryKey: ['storageInfo'],
+    queryFn: fetchStorageInfo,
+  });
   
   const handlePasswordSave = () => {
     toast.success("Password updated successfully!");
@@ -47,6 +62,7 @@ const SettingsPage = () => {
           <TabsList>
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>
+            <TabsTrigger value="billing">Billing</TabsTrigger>
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
           </TabsList>
           
@@ -118,6 +134,128 @@ const SettingsPage = () => {
                     >
                       Delete Account
                     </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="billing" className="space-y-6">
+            <div className="border rounded-lg p-6 space-y-6">
+              <div>
+                <h2 className="text-xl font-semibold mb-4">Current Plan</h2>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Wallet className="h-5 w-5" />
+                      Free Plan
+                    </CardTitle>
+                    <CardDescription>Basic access to all features</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Storage</span>
+                        <span className="font-medium">{storageInfo?.storageLimit ? `${Math.round(storageInfo.storageLimit / 1024 / 1024)} MB` : '500 MB'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Projects</span>
+                        <span className="font-medium">5 active projects</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>API Usage</span>
+                        <span className="font-medium">{usageStats?.totalTokens ?? 0} tokens used</span>
+                      </div>
+                      
+                      <div className="mt-4">
+                        <Button className="w-full">Upgrade Plan</Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h2 className="text-xl font-semibold mb-4">Available Plans</h2>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Pro Plan</CardTitle>
+                      <CardDescription>For power users</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="mb-4">
+                        <span className="text-3xl font-bold">$14.99</span>
+                        <span className="text-muted-foreground"> / month</span>
+                      </div>
+                      <ul className="space-y-2 mb-6">
+                        <li className="flex items-center">
+                          <span className="mr-2">✓</span>
+                          <span>Unlimited projects</span>
+                        </li>
+                        <li className="flex items-center">
+                          <span className="mr-2">✓</span>
+                          <span>5GB storage</span>
+                        </li>
+                        <li className="flex items-center">
+                          <span className="mr-2">✓</span>
+                          <span>Priority processing</span>
+                        </li>
+                      </ul>
+                      <Button variant="outline" className="w-full">Subscribe</Button>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Enterprise Plan</CardTitle>
+                      <CardDescription>For teams and businesses</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="mb-4">
+                        <span className="text-3xl font-bold">$49.99</span>
+                        <span className="text-muted-foreground"> / month</span>
+                      </div>
+                      <ul className="space-y-2 mb-6">
+                        <li className="flex items-center">
+                          <span className="mr-2">✓</span>
+                          <span>Everything in Pro</span>
+                        </li>
+                        <li className="flex items-center">
+                          <span className="mr-2">✓</span>
+                          <span>25GB storage</span>
+                        </li>
+                        <li className="flex items-center">
+                          <span className="mr-2">✓</span>
+                          <span>Team collaboration</span>
+                        </li>
+                        <li className="flex items-center">
+                          <span className="mr-2">✓</span>
+                          <span>Dedicated support</span>
+                        </li>
+                      </ul>
+                      <Button variant="outline" className="w-full">Contact Sales</Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h2 className="text-xl font-semibold mb-4">Billing History</h2>
+                <div className="border rounded-md">
+                  <div className="px-4 py-3 bg-muted/50 text-sm font-medium grid grid-cols-3">
+                    <div>Date</div>
+                    <div>Amount</div>
+                    <div>Status</div>
+                  </div>
+                  <div className="px-4 py-3 text-sm grid grid-cols-3 border-t">
+                    <div>No billing history available</div>
+                    <div></div>
+                    <div></div>
                   </div>
                 </div>
               </div>
