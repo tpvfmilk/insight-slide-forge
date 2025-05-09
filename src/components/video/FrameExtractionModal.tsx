@@ -8,6 +8,7 @@ import { extractFramesFromVideoUrl as clientExtractFrames } from '@/utils/videoF
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { timestampToSeconds } from '@/utils/formatUtils';
+import { supabase } from '@/integrations/supabase/client';
 
 interface FrameExtractionModalProps {
   open: boolean;
@@ -124,8 +125,6 @@ export const FrameExtractionModal = ({
         
         // Try to get a fresh signed URL from 'video_uploads' bucket
         try {
-          const { data: supabase } = await import('@/integrations/supabase/client');
-          
           // Check if path uses a full prefix or just a filename
           let bucket = 'video_uploads';
           let filePath = videoPath;
@@ -158,13 +157,15 @@ export const FrameExtractionModal = ({
           
           // Try to check if we can get the source URL from the project
           try {
-            const { data: supabase } = await import('@/integrations/supabase/client');
-            
-            const { data: projectData } = await supabase
+            const { data: projectData, error } = await supabase
               .from('projects')
               .select('source_url')
               .eq('id', projectId)
               .single();
+            
+            if (error) {
+              throw new Error(error.message);
+            }
             
             if (projectData?.source_url) {
               console.log("Falling back to project source URL:", projectData.source_url);
