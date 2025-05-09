@@ -15,3 +15,6 @@ verify_jwt = true
 
 [functions.init-storage]
 verify_jwt = true
+
+[functions.sync-storage-usage]
+verify_jwt = true

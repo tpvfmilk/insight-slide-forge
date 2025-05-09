@@ -3,7 +3,7 @@ import { formatFileSize } from "@/utils/formatUtils";
 import { useEffect, useState } from "react";
 import { getProjectTotalSize } from "@/services/storageService";
 import { Badge } from "@/components/ui/badge";
-import { Database, Store } from "lucide-react";
+import { Store } from "lucide-react";
 
 interface FileSizeBadgeProps {
   fileSize?: number;
