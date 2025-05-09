@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -34,7 +33,7 @@ export const TranscriptDialog = ({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [editedTranscript, setEditedTranscript] = useState<string>("");
   const [originalTranscript, setOriginalTranscript] = useState<string>("");
-  const [previewMode, setPreviewMode] = useState<boolean>(false);
+  const [previewMode, setPreviewMode] = useState<boolean>(true); // Changed to default to true
   const [showTimestamps, setShowTimestamps] = useState<boolean>(true);
   const [highlightSpeakers, setHighlightSpeakers] = useState<boolean>(true);
 

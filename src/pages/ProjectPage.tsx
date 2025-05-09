@@ -1,3 +1,4 @@
+
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -35,7 +36,7 @@ const ProjectPage = () => {
     extractedFrames,
     needsTranscription,
     isTranscriptOnlyProject,
-    loadProject,
+    loadProject, // This will be passed to ActionButtons
     handleGenerateSlides,
     handleTranscribeVideo,
     handleExtractFrames,
@@ -97,6 +98,7 @@ const ProjectPage = () => {
               handleOpenManualFramePicker={handleOpenManualFramePicker}
               extractedFrames={extractedFrames}
               isTranscriptOnlyProject={isTranscriptOnlyProject}
+              refreshProject={loadProject} // Pass this to allow refreshing after purging
             />
           </div>
         </div>
