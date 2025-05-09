@@ -669,11 +669,11 @@ export const SlideEditor = () => {
     try {
       // Update current slide with selected frames
       await handleManualFrameSelectionComplete(
-        projectId,
+        project?.id || "",
         selectedFrames,
         currentSlideIndex,
         slides,
-        (updatedSlides) => setSlides(updatedSlides),
+        setSlides,  // This is the correct way to pass the function, not with an arrow function wrapper
         updateSlidesInDatabase
       );
       

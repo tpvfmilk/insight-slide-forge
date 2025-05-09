@@ -108,47 +108,84 @@ export async function extractFramesFromVideoUrl(
       video.onseeked = function() {
         console.log(`Seeked to ${video.currentTime}s for timestamp ${timestamp}`);
         
-        if (ctx) {
-          // Draw the current frame on the canvas
-          ctx.drawImage(video, 0, 0);
-          
-          // Add timestamp as text overlay for debugging (can be commented out in production)
-          ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-          ctx.fillRect(10, 10, 300, 30);
-          ctx.fillStyle = "white";
-          ctx.font = "16px Arial";
-          ctx.fillText(`Timestamp: ${timestamp} (${seconds.toFixed(2)}s)`, 15, 30);
-          
-          // Convert canvas to blob
-          canvas.toBlob((blob) => {
-            if (blob) {
-              frames.push({
-                timestamp,
-                frame: blob
-              });
+        // Make sure video is fully ready before capturing frames
+        // This is the key fix for black frames - we ensure the video frame is fully loaded
+        setTimeout(() => {
+          if (ctx) {
+            // Clear the canvas before drawing new content
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw the current frame on the canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Add timestamp as text overlay for debugging (can be commented out in production)
+            ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+            ctx.fillRect(10, 10, 300, 30);
+            ctx.fillStyle = "white";
+            ctx.font = "16px Arial";
+            ctx.fillText(`Timestamp: ${timestamp} (${seconds.toFixed(2)}s)`, 15, 30);
+            
+            // Check if canvas is actually rendering content (debug for black frames)
+            const imageData = ctx.getImageData(0, 0, 20, 20);
+            let hasContent = false;
+            for (let i = 0; i < imageData.data.length; i += 4) {
+              if (imageData.data[i] > 0 || imageData.data[i+1] > 0 || imageData.data[i+2] > 0) {
+                hasContent = true;
+                break;
+              }
+            }
+            
+            if (!hasContent) {
+              console.warn(`Frame at ${timestamp} appears to be black or empty. Trying to fix...`);
+              
+              // Force a redraw to try to fix black frames
+              video.currentTime = seconds + 0.01;
+              setTimeout(() => {
+                ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
+                finalizeFrame();
+              }, 100);
             } else {
-              console.error(`Failed to create blob for timestamp ${timestamp}`);
+              finalizeFrame();
             }
             
-            // Update progress
-            framesProcessed++;
-            if (progressCallback) {
-              progressCallback(framesProcessed, validTimestamps.length);
+            function finalizeFrame() {
+              // Convert canvas to blob
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  frames.push({
+                    timestamp,
+                    frame: blob
+                  });
+                } else {
+                  console.error(`Failed to create blob for timestamp ${timestamp}`);
+                }
+                
+                // Update progress
+                framesProcessed++;
+                if (progressCallback) {
+                  progressCallback(framesProcessed, validTimestamps.length);
+                }
+                
+                // Process next timestamp
+                processNextTimestamp(validTimestamps, index + 1);
+              }, "image/jpeg", 0.95); // Use JPEG format with 95% quality
             }
-            
-            // Process next timestamp
+          } else {
+            console.error("Canvas context is null");
             processNextTimestamp(validTimestamps, index + 1);
-          }, "image/jpeg", 0.95); // Use JPEG format with 95% quality
-        } else {
-          console.error("Canvas context is null");
-          processNextTimestamp(validTimestamps, index + 1);
-        }
+          }
+        }, 100); // Short delay to ensure frame is loaded
       };
     }
     
     // Start loading the video
     console.log(`Loading video from URL: ${videoUrl}`);
-    video.src = videoUrl;
+    video.muted = true;  // Mute to avoid any audio playback
+    video.playsInline = true; // Better mobile compatibility
     video.preload = "auto";
+    video.src = videoUrl;
+    
+    // Force the video to load its metadata
+    video.load();
   });
 }
