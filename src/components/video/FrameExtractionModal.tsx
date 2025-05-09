@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Play, RefreshCw } from 'lucide-react';
-import { extractFramesFromVideo as clientExtractFrames } from '@/utils/videoFrameExtractor';
+import { extractFramesFromVideoUrl as clientExtractFrames } from '@/utils/videoFrameExtractor';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { timestampToSeconds } from '@/utils/formatUtils';
@@ -118,14 +118,24 @@ export const FrameExtractionModal = ({
         (current, total) => {
           const progressPercent = Math.round((current / total) * 100);
           setProgress(progressPercent);
-        }
+        },
+        videoMetadata?.duration // Pass video duration to validate timestamps
       );
 
       // If we successfully got frames, store them
       if (frames && frames.length > 0) {
-        setExtractedFrames(frames);
+        const framesWithUrls = frames.map(frameData => {
+          const objectUrl = URL.createObjectURL(frameData.frame);
+          return {
+            timestamp: frameData.timestamp,
+            imageUrl: objectUrl,
+            id: `frame-${frameData.timestamp}`
+          };
+        });
+        
+        setExtractedFrames(framesWithUrls);
         setCurrentStep('review');
-        toast.success(`Extracted ${frames.length} frames successfully`, { id: "extracting-frames" });
+        toast.success(`Extracted ${framesWithUrls.length} frames successfully`, { id: "extracting-frames" });
       } else {
         throw new Error("No frames were extracted");
       }
