@@ -91,10 +91,13 @@ export function ProjectRow({
   // Get the original file name from video metadata
   const originalFileName = project.video_metadata?.original_file_name || "Unknown file";
   
-  // Get the duration and format it
-  const duration = project.video_metadata?.duration 
-    ? formatDuration(project.video_metadata.duration) 
-    : "Unknown";
+  // Get the duration and format it, or display "Transcript Only" for transcript projects
+  let durationDisplay = "Unknown";
+  if (project.video_metadata?.duration) {
+    durationDisplay = formatDuration(project.video_metadata.duration);
+  } else if (project.source_type === 'transcript-only' || project.source_type === 'transcript') {
+    durationDisplay = "Transcript Only";
+  }
 
   return (
     <TableRow key={project.id}>
@@ -115,7 +118,7 @@ export function ProjectRow({
         {formatDate(project.created_at)}
       </TableCell>
       <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
-        {duration}
+        {durationDisplay}
       </TableCell>
       <TableCell>
         <FileSizeBadge fileSize={project.video_metadata?.file_size} projectId={project.id} />

@@ -194,6 +194,11 @@ async function generateSlidesWithAI(
     
     ${optimalSlideInstructions}
     
+    IMPORTANT:
+    - DO NOT create a conclusion or summary slide
+    - DO NOT include any slides titled "Conclusion", "Summary", or similar
+    - The last slide should be on the last topic from the content, not a summary
+    
     Here's the content to transform into slides:
     ${content}
     ${contextInfo}
