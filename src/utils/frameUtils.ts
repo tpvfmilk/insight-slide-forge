@@ -1,8 +1,21 @@
 
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
-import { Slide } from "@/services/projectService";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+
+/**
+ * Interface for slides that matches the structure used in the project
+ */
+export interface Slide {
+  id?: string;
+  title?: string;
+  content?: string;
+  timestamp?: string;
+  imageUrl?: string;
+  transcriptTimestamps?: string[];
+  imageUrls?: string[];
+  [key: string]: any; // Allow for additional properties
+}
 
 /**
  * Gets frame usage statistics

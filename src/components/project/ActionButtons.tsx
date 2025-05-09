@@ -9,7 +9,7 @@ import {
   TooltipProvider, 
   TooltipTrigger 
 } from "@/components/ui/tooltip";
-import { getFrameStatistics, purgeUnusedFrames } from "@/utils/frameUtils";
+import { getFrameStatistics, purgeUnusedFrames, Slide } from "@/utils/frameUtils";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -54,10 +54,13 @@ export const ActionButtons = ({
     toast.loading("Purging unused frames...", { id: "purge-frames" });
     
     try {
+      // Ensure project.slides is treated as Slide[]
+      const slides = project.slides as unknown as Slide[];
+      
       const success = await purgeUnusedFrames(
         project.id, 
         extractedFrames, 
-        project.slides
+        slides
       );
       
       if (success && refreshProject) {
@@ -75,7 +78,7 @@ export const ActionButtons = ({
   
   // Calculate frame statistics
   const frameStats = project?.slides 
-    ? getFrameStatistics(extractedFrames, project.slides)
+    ? getFrameStatistics(extractedFrames, project.slides as unknown as Slide[])
     : { totalExtracted: 0, usedCount: 0, unusedCount: 0 };
     
   return (
