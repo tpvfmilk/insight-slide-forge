@@ -673,7 +673,7 @@ export const SlideEditor = () => {
         selectedFrames,
         currentSlideIndex,
         slides,
-        setSlides,
+        (updatedSlides) => setSlides(updatedSlides),
         updateSlidesInDatabase
       );
       
@@ -783,7 +783,7 @@ export const SlideEditor = () => {
               
               {allExtractedFrames.length > 0 && <Button variant="outline" size="sm" onClick={handleSelectFrames}>
                   <ImageIcon className="h-4 w-4 mr-1" />
-                  Select Frames
+                  Insert
                 </Button>}
             </div>
           </div>
@@ -838,7 +838,7 @@ export const SlideEditor = () => {
                     
                     {allExtractedFrames.length > 0 && <Button variant="outline" size="sm" onClick={handleSelectFrames}>
                         <ImageIcon className="h-4 w-4 mr-1" />
-                        Select Frames
+                        Insert
                       </Button>}
                   </div>
                   
