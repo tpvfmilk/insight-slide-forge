@@ -1,4 +1,3 @@
-
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -158,19 +157,11 @@ const SettingsPage = () => {
                         <span>Storage</span>
                         <span className="font-medium">
                           {storageInfo?.storageUsed ? `${Math.round(storageInfo.storageUsed / 1024 / 1024)} MB used` : 'Loading...'}
-                          <span className="text-muted-foreground ml-1">(unlimited)*</span>
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span>Projects</span>
                         <span className="font-medium">Unlimited active projects</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span>API Usage</span>
-                        <span className="font-medium">
-                          {usageStats?.totalTokens ?? 0} tokens used
-                          <span className="text-muted-foreground ml-1">(unlimited)*</span>
-                        </span>
                       </div>
                       
                       <div className="mt-4 text-sm text-muted-foreground">
