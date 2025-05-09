@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
@@ -182,10 +183,9 @@ export const FramePickerModal = ({
   
   const captureFrame = async () => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
     
-    if (!video || !canvas || !projectId) {
-      toast.error("Cannot capture frame: missing video or canvas");
+    if (!video || !videoUrl) {
+      toast.error("Cannot capture frame: video not properly loaded");
       return;
     }
     
@@ -201,65 +201,58 @@ export const FramePickerModal = ({
       // Create the timestamp for the current time
       const currentTimestamp = formatDuration(video.currentTime);
       
-      // Rather than capturing directly, use the extractFramesFromVideoUrl utility
-      // This uses the same frame extraction logic that works in auto-capture
-      if (videoUrl) {
-        const progressCallback = (completed: number, total: number) => {
-          // Not needed for single frame, but required by function
-        };
+      // Extract just this single frame at the current time using the same method as auto-capture
+      const progressCallback = () => {}; // Not needed for a single frame
+      
+      // Use the extractFramesFromVideoUrl function for consistent behavior
+      const extractedFrames = await extractFramesFromVideoUrl(
+        videoUrl,
+        [currentTimestamp],
+        progressCallback,
+        videoDuration
+      );
+      
+      if (extractedFrames.length > 0) {
+        // Process the extracted frame
+        const frameData = extractedFrames[0];
         
-        // Extract just this single frame at the current time
-        const extractedFrames = await extractFramesFromVideoUrl(
-          videoUrl,
-          [currentTimestamp],
-          progressCallback,
-          videoDuration
+        // Create a file from the blob
+        const file = new File(
+          [frameData.frame], 
+          `frame-${frameData.timestamp.replace(/:/g, "-")}.jpg`, 
+          { type: 'image/jpeg' }
         );
         
-        if (extractedFrames.length > 0) {
-          // Process the extracted frame
-          const frameData = extractedFrames[0];
-          
-          // Create a file from the blob
-          const file = new File(
-            [frameData.frame], 
-            `frame-${frameData.timestamp.replace(/:/g, "-")}.jpg`, 
-            { type: 'image/jpeg' }
-          );
-          
-          // Upload to storage
-          const uploadResult = await uploadSlideImage(file);
-          
-          if (!uploadResult || !uploadResult.url) {
-            throw new Error("Failed to upload frame image");
-          }
-          
-          // Add to captured frames
-          const newFrame: ExtractedFrame = {
-            timestamp: frameData.timestamp,
-            imageUrl: uploadResult.url
-          };
-          
-          setCapturedFrames(prev => {
-            // Check if we already have a frame with this timestamp
-            const exists = prev.some(frame => frame.timestamp === frameData.timestamp);
-            if (exists) {
-              // Replace the existing frame
-              return prev.map(frame => 
-                frame.timestamp === frameData.timestamp ? newFrame : frame
-              );
-            } else {
-              // Add new frame
-              return [...prev, newFrame];
-            }
-          });
-          
-          toast.success(`Frame at ${frameData.timestamp} captured!`);
-        } else {
-          throw new Error("Failed to extract frame");
+        // Upload to storage
+        const uploadResult = await uploadSlideImage(file);
+        
+        if (!uploadResult || !uploadResult.url) {
+          throw new Error("Failed to upload frame image");
         }
+        
+        // Add to captured frames
+        const newFrame: ExtractedFrame = {
+          timestamp: frameData.timestamp,
+          imageUrl: uploadResult.url
+        };
+        
+        setCapturedFrames(prev => {
+          // Check if we already have a frame with this timestamp
+          const exists = prev.some(frame => frame.timestamp === frameData.timestamp);
+          if (exists) {
+            // Replace the existing frame
+            return prev.map(frame => 
+              frame.timestamp === frameData.timestamp ? newFrame : frame
+            );
+          } else {
+            // Add new frame
+            return [...prev, newFrame];
+          }
+        });
+        
+        toast.success(`Frame at ${frameData.timestamp} captured!`);
       } else {
-        throw new Error("Video URL not available");
+        throw new Error("Failed to extract frame");
       }
     } catch (err) {
       console.error("Error capturing frame:", err);
@@ -278,6 +271,7 @@ export const FramePickerModal = ({
     }
     
     setIsAutoCapturing(true);
+    setAutoCaptureFraction(0);
     
     try {
       // Ensure video is paused
@@ -303,9 +297,6 @@ export const FramePickerModal = ({
           }
         });
       }
-      
-      // Don't use toast for progress anymore
-      setAutoCaptureFraction(0);
       
       // Use the extractFramesFromVideoUrl function from utils
       const progressCallback = (completed: number, total: number) => {
