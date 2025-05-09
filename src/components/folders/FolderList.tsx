@@ -66,7 +66,7 @@ export function FolderList({
                     <FolderIcon className="h-5 w-5 text-primary" />
                     <div>
                       <div className="font-medium px-[10px]">{folder.name}</div>
-                      <div className="text-xs text-muted-foreground">{folderProjects.length} projects</div>
+                      <div className="text-xs text-muted-foreground px-[15px]">{folderProjects.length} projects</div>
                     </div>
                   </div>
                 </AccordionTrigger>
