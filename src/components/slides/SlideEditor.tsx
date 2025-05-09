@@ -281,7 +281,7 @@ export const SlideEditor = () => {
   
   // Modified goToSlide function to handle transitions between slides
   const goToSlide = (index: number) => {
-    if (index !== currentSlideIndex && !isTransitioning) {
+    if (index !== currentSlideIndex) {
       saveChanges();
       setCurrentSlideIndex(index);
     }
