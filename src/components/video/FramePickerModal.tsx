@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
+import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -13,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { uploadSlideImage } from "@/services/imageService";
 import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
+import { useUIReset } from "@/context/UIResetContext";
 
 interface FramePickerModalProps {
   open: boolean;
@@ -46,9 +48,28 @@ export const FramePickerModal = ({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
   const [isCaptureLoading, setIsCaptureLoading] = useState<boolean>(false);
+  const { registerUIElement, unregisterUIElement } = useUIReset();
+  const elementId = useRef(`frame-picker-${Math.random().toString(36).substring(2, 9)}`);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Register with UIResetContext when dialog opens
+  useEffect(() => {
+    if (open) {
+      registerUIElement({
+        id: elementId.current,
+        type: 'dialog',
+        close: () => {
+          handleClose();
+        },
+      });
+    }
+    
+    return () => {
+      unregisterUIElement(elementId.current);
+    };
+  }, [open, registerUIElement, unregisterUIElement]);
   
   // Load the video when the component mounts
   useEffect(() => {
@@ -176,8 +197,36 @@ export const FramePickerModal = ({
     const video = videoRef.current;
     if (!video) return;
     
-    // Use the video's duration or fall back to the metadata
-    setVideoDuration(video.duration || videoMetadata?.duration || 0);
+    // Attempt to play the video for a moment to ensure frames are loaded
+    video.play().catch(err => {
+      console.log("Video auto-play attempt failed (expected):", err);
+    });
+    
+    setTimeout(() => {
+      video.pause();
+      // Use the video's duration or fall back to the metadata
+      setVideoDuration(video.duration || videoMetadata?.duration || 0);
+      console.log("Video ready. Dimensions:", video.videoWidth, "x", video.videoHeight, ", Duration:", video.duration + "s");
+      
+      // Verify any timestamps that exceed duration
+      if (videoMetadata?.duration) {
+        const exceededTimestamps = [];
+        for (let i = 0; i < 10; i++) {
+          // Check some common timestamps
+          const minutes = String(i).padStart(2, '0');
+          for (let j = 0; j < 60; j += 15) {
+            const seconds = String(j).padStart(2, '0');
+            const timestamp = `00:${minutes}:${seconds}`;
+            if (formatDuration(video.duration) < timestamp) {
+              exceededTimestamps.push(timestamp);
+            }
+          }
+        }
+        if (exceededTimestamps.length > 0) {
+          console.warn("Found", exceededTimestamps.length, "timestamps that exceed video duration:", exceededTimestamps);
+        }
+      }
+    }, 1000);
   };
   
   const handleTimeChange = (value: number[]) => {
@@ -237,7 +286,44 @@ export const FramePickerModal = ({
         throw new Error("Could not get canvas context");
       }
       
+      // Clear canvas before drawing
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw the current frame on the canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Check if we got a black frame
+      const imageData = ctx.getImageData(0, 0, 20, 20);
+      let hasContent = false;
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        const r = imageData.data[i];
+        const g = imageData.data[i+1]; 
+        const b = imageData.data[i+2];
+        if (r > 15 || g > 15 || b > 15) {
+          hasContent = true;
+          break;
+        }
+      }
+      
+      if (!hasContent) {
+        console.warn("Captured frame appears to be black, trying to fix...");
+        
+        // Add a visual indicator on black frames
+        ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "white";
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("Frame may be black - try a different timestamp", canvas.width / 2, canvas.height / 2);
+      }
+      
+      // Add timestamp overlay for reference
+      const timestamp = formatDuration(video.currentTime);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      ctx.fillRect(10, 10, 300, 30);
+      ctx.fillStyle = "white";
+      ctx.font = "16px Arial";
+      ctx.fillText(`Timestamp: ${timestamp}`, 15, 30);
       
       // Convert to blob
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -294,11 +380,23 @@ export const FramePickerModal = ({
   
   const handleComplete = () => {
     onComplete(capturedFrames);
+    handleClose();
+  };
+  
+  const handleClose = () => {
+    // Clean up properly to prevent UI blockers
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.src = "";
+      videoRef.current.load();
+    }
+    
+    onClose();
   };
   
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-4xl">
+    <SafeDialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
+      <SafeDialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Select Video Frames</DialogTitle>
         </DialogHeader>
@@ -444,7 +542,7 @@ export const FramePickerModal = ({
             
             {/* Footer actions */}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose}>
+              <Button variant="outline" onClick={handleClose}>
                 <X className="h-4 w-4 mr-2" /> 
                 Cancel
               </Button>
@@ -455,7 +553,7 @@ export const FramePickerModal = ({
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </SafeDialogContent>
+    </SafeDialog>
   );
 };

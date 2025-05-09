@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings } from "lucide-react";
@@ -31,15 +31,20 @@ export const ProjectSettingsDialog = ({
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("transcript");
 
+  // Function to properly close the dialog and clean up UI elements
+  const handleClose = () => {
+    setIsOpen(false);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <SafeDialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Settings className="h-4 w-4 mr-1" />
           Project Settings
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl">
+      <SafeDialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Project Settings</DialogTitle>
         </DialogHeader>
@@ -59,7 +64,7 @@ export const ProjectSettingsDialog = ({
               isOpen={activeTab === "transcript"}
               onOpenChange={(open) => {
                 if (!open) {
-                  setIsOpen(false);
+                  handleClose();
                 }
               }}
             />
@@ -81,13 +86,13 @@ export const ProjectSettingsDialog = ({
               isOpen={activeTab === "context"}
               onOpenChange={(open) => {
                 if (!open) {
-                  setIsOpen(false);
+                  handleClose();
                 }
               }}
             />
           </TabsContent>
         </Tabs>
-      </DialogContent>
-    </Dialog>
+      </SafeDialogContent>
+    </SafeDialog>
   );
 };

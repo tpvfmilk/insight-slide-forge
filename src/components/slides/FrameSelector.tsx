@@ -1,5 +1,6 @@
+
 import { useState, useRef, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
 import { Button } from "@/components/ui/button";
 import { Check, Search, X, Trash2, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -136,7 +137,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
     : { totalExtracted: 0, usedCount: 0, unusedCount: 0 };
 
   return (
-    <Dialog 
+    <SafeDialog 
       open={open} 
       onOpenChange={(isOpen) => {
         if (!isOpen) {
@@ -144,7 +145,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
         }
       }}
     >
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+      <SafeDialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Select Frames</DialogTitle>
         </DialogHeader>
@@ -255,7 +256,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SafeDialogContent>
+    </SafeDialog>
   );
 };
