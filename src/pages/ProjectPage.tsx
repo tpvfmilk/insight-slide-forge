@@ -13,6 +13,8 @@ import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { FrameSelector } from "@/components/slides/FrameSelector";
+import { ExtractedFrame } from "@/services/clientFrameExtractionService";
+import { Slide } from "@/utils/frameUtils";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -158,18 +160,12 @@ const ProjectPage = () => {
           <FrameSelector
             open={modals.isFramePickerModalOpen} 
             onClose={() => modals.closeFramePickerModal()}
-            availableFrames={extractedFrames.map(frame => ({
-              ...frame,
-              id: frame.timestamp // Using timestamp as ID if not available
-            }))}
-            selectedFrames={extractedFrames.map(frame => ({
-              ...frame,
-              id: frame.timestamp
-            }))}
-            onSelect={handleManualFrameSelectionComplete}
+            availableFrames={extractedFrames}
+            selectedFrames={extractedFrames}
+            onSelect={(frames: ExtractedFrame[]) => handleManualFrameSelectionComplete(frames)}
             projectId={projectId}
             onRefresh={loadProject}
-            slides={project.slides}
+            slides={project.slides as Slide[]}
           />
         )}
       </div>

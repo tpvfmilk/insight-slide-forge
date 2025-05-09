@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, FileText, Image, Film, Info } from "lucide-react";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { Project } from "@/services/projectService";
+import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Slide } from "@/utils/frameUtils";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -18,7 +19,7 @@ interface ActionButtonsProps {
   isGenerating: boolean;
   handleGenerateSlides: () => Promise<void>;
   handleOpenManualFramePicker: () => void;
-  extractedFrames: Array<{ timestamp: string, imageUrl: string }>;
+  extractedFrames: ExtractedFrame[];
   isTranscriptOnlyProject: boolean;
   refreshProject?: () => Promise<void>;
 }

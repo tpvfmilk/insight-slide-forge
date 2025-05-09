@@ -1,4 +1,3 @@
-
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";

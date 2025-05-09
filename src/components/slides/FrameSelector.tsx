@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,12 +8,8 @@ import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 import { getFrameStatistics, purgeUnusedFrames } from "@/utils/frameUtils";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
-
-interface ExtractedFrame {
-  imageUrl: string;
-  timestamp: string;
-  id: string;
-}
+import { ExtractedFrame } from "@/services/clientFrameExtractionService";
+import { Slide } from "@/utils/frameUtils";
 
 interface FrameSelectorProps {
   open: boolean;
@@ -24,7 +19,7 @@ interface FrameSelectorProps {
   onSelect: (frames: ExtractedFrame[]) => void;
   projectId?: string;
   onRefresh?: () => Promise<void>;
-  slides?: any[];
+  slides?: Slide[];
 }
 
 export const FrameSelector: React.FC<FrameSelectorProps> = ({
@@ -113,7 +108,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
       const success = await purgeUnusedFrames(
         projectId, 
         availableFrames, 
-        slides
+        slides as Slide[]
       );
       
       if (success && onRefresh) {
@@ -137,7 +132,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
   
   // Calculate frame statistics
   const frameStats = slides && availableFrames 
-    ? getFrameStatistics(availableFrames, slides)
+    ? getFrameStatistics(availableFrames, slides as Slide[])
     : { totalExtracted: 0, usedCount: 0, unusedCount: 0 };
 
   return (
@@ -222,7 +217,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-1 py-2">
               {filteredFrames.map((frame) => (
                 <div 
-                  key={frame.id}
+                  key={frame.id || frame.timestamp}
                   className={`relative rounded-md border overflow-hidden cursor-pointer transition-all ${
                     isSelected(frame) ? 'ring-2 ring-primary' : 'hover:opacity-90'
                   }`}
