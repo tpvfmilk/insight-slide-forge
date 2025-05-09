@@ -373,3 +373,28 @@ export const extractTranscriptionFromVideo = async (
     return null;
   }
 };
+
+/**
+ * Updates a project with new data
+ * @param projectId The ID of the project to update
+ * @param data The data to update the project with
+ * @returns The updated project
+ */
+export const updateProject = async (projectId: string, data: any): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('projects')
+      .update(data)
+      .eq('id', projectId);
+    
+    if (error) {
+      console.error('Error updating project:', error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error in updateProject:', error);
+    return false;
+  }
+};

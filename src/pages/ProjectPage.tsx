@@ -1,6 +1,7 @@
+
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Project, fetchProjectById, updateProject } from "@/services/projectService";
+import { Project, fetchProjectById } from "@/services/projectService";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
 import { InsightLayout } from "@/components/layout/InsightLayout";
@@ -9,11 +10,12 @@ import { ArrowLeft, RefreshCw, Settings2, FileText, SlidersIcon, Edit2, Image, F
 import { generateSlidesForProject, hasValidSlides } from "@/services/slideGenerationService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
-import { transcribeVideo } from "@/services/uploadService";
+import { transcribeVideo, updateProject } from "@/services/uploadService";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { initializeStorage } from "@/services/storageService";
 import { slidesNeedFrameExtraction } from "@/services/imageService";
