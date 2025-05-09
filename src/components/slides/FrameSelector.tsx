@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
 import { Button } from "@/components/ui/button";
+import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Check, Search, X, Trash2, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useUIReset } from "@/context/UIResetContext";

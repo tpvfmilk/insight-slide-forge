@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
@@ -317,13 +316,15 @@ export const FramePickerModal = ({
         ctx.fillText("Frame may be black - try a different timestamp", canvas.width / 2, canvas.height / 2);
       }
       
+      // Create the timestamp just once and reuse it
+      const currentTimestamp = formatDuration(video.currentTime);
+      
       // Add timestamp overlay for reference
-      const timestamp = formatDuration(video.currentTime);
       ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
       ctx.fillRect(10, 10, 300, 30);
       ctx.fillStyle = "white";
       ctx.font = "16px Arial";
-      ctx.fillText(`Timestamp: ${timestamp}`, 15, 30);
+      ctx.fillText(`Timestamp: ${currentTimestamp}`, 15, 30);
       
       // Convert to blob
       const blob = await new Promise<Blob>((resolve, reject) => {
@@ -333,9 +334,8 @@ export const FramePickerModal = ({
         }, 'image/jpeg', 0.95);
       });
       
-      // Create a file from the blob
-      const timestamp = formatDuration(video.currentTime);
-      const file = new File([blob], `frame-${timestamp.replace(/:/g, "-")}.jpg`, { type: 'image/jpeg' });
+      // Create a file from the blob - using the currentTimestamp we already defined
+      const file = new File([blob], `frame-${currentTimestamp.replace(/:/g, "-")}.jpg`, { type: 'image/jpeg' });
       
       // Upload to storage
       const uploadResult = await uploadSlideImage(file);
@@ -346,17 +346,17 @@ export const FramePickerModal = ({
       
       // Add to captured frames
       const newFrame: ExtractedFrame = {
-        timestamp,
+        timestamp: currentTimestamp,
         imageUrl: uploadResult.url
       };
       
       setCapturedFrames(prev => {
         // Check if we already have a frame with this timestamp
-        const exists = prev.some(frame => frame.timestamp === timestamp);
+        const exists = prev.some(frame => frame.timestamp === currentTimestamp);
         if (exists) {
           // Replace the existing frame
           return prev.map(frame => 
-            frame.timestamp === timestamp ? newFrame : frame
+            frame.timestamp === currentTimestamp ? newFrame : frame
           );
         } else {
           // Add new frame
@@ -364,7 +364,7 @@ export const FramePickerModal = ({
         }
       });
       
-      toast.success(`Frame at ${timestamp} captured!`);
+      toast.success(`Frame at ${currentTimestamp} captured!`);
     } catch (err) {
       console.error("Error capturing frame:", err);
       toast.error(`Failed to capture frame: ${err instanceof Error ? err.message : "Unknown error"}`);

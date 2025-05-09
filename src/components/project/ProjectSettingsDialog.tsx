@@ -3,6 +3,7 @@ import { useState } from "react";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Settings } from "lucide-react";
 import { Project } from "@/services/projectService";
 import { TranscriptDialog } from "@/components/project/TranscriptDialog";
