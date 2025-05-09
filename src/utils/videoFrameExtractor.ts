@@ -57,25 +57,40 @@ export async function extractFramesFromVideoUrl(
           return;
         }
         
+        // Get actual video duration from the loaded video
+        const actualVideoDuration = video.duration;
+        console.log(`Actual video duration: ${actualVideoDuration}s`);
+        
+        // Filter timestamps that exceed video duration
+        // Use the provided videoDuration parameter if available, otherwise use the actual duration from the video
+        const maxDuration = videoDuration || actualVideoDuration;
+        const validTimestamps = timestamps.filter(ts => {
+          const seconds = timestampToSeconds(ts);
+          const isValid = seconds <= maxDuration;
+          if (!isValid) {
+            console.log(`Timestamp ${ts} (${seconds}s) exceeds video duration (${maxDuration}s) and will be skipped`);
+          }
+          return isValid;
+        });
+        
+        console.log(`Processing ${validTimestamps.length} valid timestamps out of ${timestamps.length} provided`);
+        
+        if (validTimestamps.length === 0) {
+          console.warn("No valid timestamps found within video duration");
+          resolve([]); // Return empty array if no valid timestamps
+          return;
+        }
+        
         // Sort timestamps and deduplicate them
-        const uniqueTimestamps = Array.from(new Set(timestamps)).sort((a, b) => 
+        const uniqueTimestamps = Array.from(new Set(validTimestamps)).sort((a, b) => 
           timestampToSeconds(a) - timestampToSeconds(b)
         );
         
         // Log the timestamps we'll be processing
         console.log(`Processing ${uniqueTimestamps.length} timestamps: ${uniqueTimestamps.join(", ")}`);
         
-        // Filter timestamps that exceed video duration
-        const validTimestamps = videoDuration 
-          ? uniqueTimestamps.filter(ts => timestampToSeconds(ts) <= videoDuration)
-          : uniqueTimestamps;
-        
-        if (validTimestamps.length < uniqueTimestamps.length) {
-          console.warn(`Filtered out ${uniqueTimestamps.length - validTimestamps.length} timestamps that exceed video duration`);
-        }
-        
         // Process timestamps sequentially
-        processNextTimestamp(validTimestamps, 0);
+        processNextTimestamp(uniqueTimestamps, 0);
       }, 1000); // Give the video a second to load frames
     };
     
@@ -267,7 +282,7 @@ export async function extractFramesFromVideoUrl(
                   // Update progress
                   framesProcessed++;
                   if (progressCallback) {
-                    progressCallback(framesProcessed, timestamps.length);
+                    progressCallback(framesProcessed, validTimestamps.length);
                   }
                   
                   callback(true);
@@ -313,7 +328,7 @@ export async function extractFramesFromVideoUrl(
             // Update progress
             framesProcessed++;
             if (progressCallback) {
-              progressCallback(framesProcessed, timestamps.length);
+              progressCallback(framesProcessed, validTimestamps.length);
             }
           }
           callback();

@@ -16,7 +16,8 @@ export interface ExtractedFrame {
 export const clientExtractFramesFromVideo = async (
   projectId: string,
   videoPath: string,
-  timestamps: string[]
+  timestamps: string[],
+  videoDuration?: number // Add optional videoDuration parameter
 ): Promise<{ 
   success: boolean; 
   frames?: ExtractedFrame[]; 
@@ -31,7 +32,7 @@ export const clientExtractFramesFromVideo = async (
     // First check if we already have the extracted frames
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('extracted_frames')
+      .select('extracted_frames, video_metadata')
       .eq('id', projectId)
       .single();
 
@@ -41,6 +42,19 @@ export const clientExtractFramesFromVideo = async (
     }
 
     const existingFrames: ExtractedFrame[] = project.extracted_frames as unknown as ExtractedFrame[] || [];
+    
+    // Get video duration from project if not provided
+    if (!videoDuration && project.video_metadata) {
+      try {
+        const metadata = project.video_metadata as { duration?: number };
+        if (metadata.duration) {
+          videoDuration = metadata.duration;
+          console.log(`Using video duration from metadata: ${videoDuration}s`);
+        }
+      } catch (error) {
+        console.warn('Could not extract video duration from metadata:', error);
+      }
+    }
     
     // Check if we already have all the timestamps
     if (existingFrames.length > 0) {
@@ -68,7 +82,8 @@ export const clientExtractFramesFromVideo = async (
     // Return success to indicate the video is ready to be processed by the client
     return { 
       success: true,
-      frames: existingFrames
+      frames: existingFrames,
+      videoDuration // Pass duration to client for validation
     };
     
   } catch (error) {

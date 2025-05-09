@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -168,7 +167,11 @@ export const FrameExtractionModal = ({
   const validTimestamps = timestamps.filter(timestamp => {
     if (!videoDuration) return true; // Keep all if we don't know duration yet
     const seconds = timestampToSeconds(timestamp);
-    return seconds <= videoDuration;
+    const isValid = seconds <= videoDuration;
+    if (!isValid) {
+      console.warn(`Timestamp ${timestamp} (${seconds}s) exceeds video duration (${videoDuration}s)`);
+    }
+    return isValid;
   });
   
   // Handle video loaded data event
@@ -238,7 +241,7 @@ export const FrameExtractionModal = ({
       // Add debug info for each timestamp
       sortedTimestamps.forEach((timestamp, i) => {
         const seconds = timestampToSeconds(timestamp);
-        const percentage = (seconds / videoDuration * 100).toFixed(1);
+        const percentage = videoDuration ? (seconds / videoDuration * 100).toFixed(1) : "unknown";
         console.log(`Timestamp ${i+1}: ${timestamp} (${seconds}s, ${percentage}% into video)`);
       });
       

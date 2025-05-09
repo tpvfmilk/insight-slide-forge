@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -206,6 +207,10 @@ export const useProjectState = (projectId: string | undefined) => {
     setIsExtractingFrames(true);
     
     try {
+      // Log important information for debugging
+      console.log(`Attempting to extract frames for video with duration: ${videoMetadata?.duration || 'unknown'}`);
+      console.log(`Timestamps to extract: ${allTimestamps.join(', ')}`);
+      
       // First check if we already have all the frames extracted
       if (extractedFrames.length > 0) {
         const allTimestampsExtracted = allTimestamps.every(timestamp => 
@@ -228,7 +233,14 @@ export const useProjectState = (projectId: string | undefined) => {
         !extractedFrames.some(frame => frame.timestamp === timestamp)
       );
       
-      const result = await clientExtractFramesFromVideo(projectId, project.source_file_path, remainingTimestamps);
+      console.log(`Attempting to extract ${remainingTimestamps.length} remaining frames`);
+      
+      const result = await clientExtractFramesFromVideo(
+        projectId, 
+        project.source_file_path, 
+        remainingTimestamps,
+        videoMetadata?.duration // Pass the video duration to help validate timestamps
+      );
       
       if (result.success) {
         // If we retrieved previously extracted frames, use them directly
