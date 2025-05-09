@@ -1,3 +1,4 @@
+
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -182,7 +183,8 @@ const SettingsPage = () => {
               
               <Separator />
               
-              <div>
+              {/* Hidden Available Plans section - can be unhidden later */}
+              <div className="hidden">
                 <h2 className="text-xl font-semibold mb-4">Available Plans</h2>
                 <div className="grid md:grid-cols-2 gap-4">
                   <Card>
