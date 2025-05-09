@@ -8,7 +8,7 @@ import {
   Play, Pause, SkipBack, SkipForward, Camera, AlertCircle,
   RefreshCw, CheckCircle2, X, Trash2
 } from "lucide-react";
-import { formatDuration } from "@/utils/formatUtils";
+import { formatDuration, timestampToSeconds } from "@/utils/formatUtils";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadSlideImage } from "@/services/imageService";
 import { toast } from "sonner";
@@ -229,12 +229,11 @@ export const FramePickerModal = ({
     }, 1000);
   };
   
-  const handleTimeChange = (value: number[]) => {
-    const newTime = value[0];
-    setCurrentTime(newTime);
+  const handleTimeChange = (time: number) => {
+    setCurrentTime(time);
     
     if (videoRef.current) {
-      videoRef.current.currentTime = newTime;
+      videoRef.current.currentTime = time;
     }
   };
   
@@ -394,6 +393,89 @@ export const FramePickerModal = ({
     
     onClose();
   };
+
+  // Added to fix the loadVideo error
+  const retryLoadVideo = async () => {
+    if (!open) return;
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // First try with 'video_uploads' bucket
+      try {
+        const { data, error } = await supabase.storage
+          .from("video_uploads")
+          .createSignedUrl(videoPath, 3600); // 1 hour expiry
+        
+        if (error) throw error;
+        
+        if (!data || !data.signedUrl) {
+          throw new Error("Failed to get video URL from video_uploads");
+        }
+        
+        setVideoUrl(data.signedUrl);
+        console.log("Successfully loaded video from video_uploads bucket");
+        setIsLoading(false);
+        return;
+      } catch (videoUploadsError) {
+        console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...");
+          
+        // Try with 'videos' bucket as alternative
+        try {
+          // Extract just the filename from the path
+          const filename = videoPath.split('/').pop();
+          if (!filename) {
+            throw new Error("Invalid video path format");
+          }
+          
+          const { data, error } = await supabase.storage
+            .from('videos')
+            .createSignedUrl(filename, 3600);
+          
+          if (error || !data?.signedUrl) {
+            throw new Error(`Error from videos bucket: ${error?.message}`);
+          }
+          
+          setVideoUrl(data.signedUrl);
+          console.log("Successfully loaded video from videos bucket");
+          setIsLoading(false);
+          return;
+        } catch (videosBucketError) {
+          console.error("Error creating signed URL for video:", { 
+            videoUploadsError, 
+            videosBucketError 
+          });
+          
+          // Try to check if the video exists in the database but with a different path
+          const { data: projectData, error: projectPathError } = await supabase
+            .from('projects')
+            .select('source_url')
+            .eq('id', projectId)
+            .maybeSingle();
+            
+          if (projectPathError) {
+            console.error("Error fetching project source URL:", projectPathError);
+          }
+          
+          // If we have a source URL in the project, try that instead
+          if (projectData?.source_url) {
+            console.log("Found source URL in project, trying that instead:", projectData.source_url);
+            setVideoUrl(projectData.source_url);
+            setIsLoading(false);
+            return;
+          }
+          
+          throw new Error("Failed to get video URL. Please check if the video file exists in storage.");
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching video:", err);
+      setError(err instanceof Error ? err.message : "Failed to load video");
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   return (
     <SafeDialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
@@ -417,7 +499,7 @@ export const FramePickerModal = ({
                 <Button 
                   variant="outline" 
                   className="mt-4 bg-white/10 hover:bg-white/20 border-white/30 text-white"
-                  onClick={loadVideo}
+                  onClick={retryLoadVideo}
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Retry Loading Video
@@ -431,6 +513,7 @@ export const FramePickerModal = ({
                 onLoadedData={handleVideoLoaded}
                 onTimeUpdate={() => videoRef.current && setCurrentTime(videoRef.current.currentTime)}
                 crossOrigin="anonymous"
+                src={videoUrl || undefined}
               >
                 Your browser does not support the video tag.
               </video>
@@ -500,7 +583,7 @@ export const FramePickerModal = ({
               
               <Button 
                 variant="secondary"
-                onClick={captureCurrentFrame}
+                onClick={captureFrame}
                 disabled={isLoading || !!error || isCaptureLoading}
               >
                 {isCaptureLoading ? (
@@ -514,7 +597,7 @@ export const FramePickerModal = ({
           </div>
 
           {/* Captured Frames */}
-          <div>
+          <div className="overflow-auto p-4">
             <h3 className="font-medium mb-2">Captured Frames ({capturedFrames.length})</h3>
             
             {capturedFrames.length === 0 ? (
@@ -548,6 +631,9 @@ export const FramePickerModal = ({
             )}
           </div>
         </div>
+
+        {/* Hidden canvas element for frame capture */}
+        <canvas ref={canvasRef} className="hidden" />
 
         <div className="flex justify-between pt-4 border-t">
           <Button 
