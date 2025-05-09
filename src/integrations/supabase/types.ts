@@ -344,6 +344,10 @@ export type Database = {
           new_size: number
         }[]
       }
+      with_storage_schema: {
+        Args: Record<PropertyKey, never>
+        Returns: unknown[]
+      }
     }
     Enums: {
       [_ in never]: never

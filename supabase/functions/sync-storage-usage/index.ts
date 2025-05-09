@@ -30,7 +30,7 @@ serve(async (req) => {
     console.log(`Starting storage sync for user ${userId}`);
     
     // Query storage.objects table for files owned by this user
-    // Use raw SQL query to access the storage schema instead of schema() method
+    // Use the with_storage_schema RPC function to access the storage schema
     const { data: objects, error: objectsError } = await supabase
       .from('objects')
       .select('metadata')
@@ -52,7 +52,7 @@ serve(async (req) => {
     
     console.log(`Total storage used by user ${userId}: ${totalSize} bytes`);
     
-    // Update the user_storage record
+    // Update the user_storage record using our new function
     const { data: updatedStorage, error: updateError } = await supabase
       .rpc('update_user_storage_with_value', { 
         user_id_param: userId,
