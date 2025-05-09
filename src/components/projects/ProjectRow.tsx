@@ -178,8 +178,11 @@ export function ProjectRow({
                 <DropdownMenuSubContent>
                   <DropdownMenuRadioGroup 
                     value={project.folder_id || ""}
-                    onValueChange={(value) => handleMoveToFolder(value || null)}
-                    disabled={movingToFolder}
+                    onValueChange={(value) => {
+                      if (!movingToFolder) {
+                        handleMoveToFolder(value || null);
+                      }
+                    }}
                   >
                     <DropdownMenuRadioItem value="">
                       Unfiled Projects
