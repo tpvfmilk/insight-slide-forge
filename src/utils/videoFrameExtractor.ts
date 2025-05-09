@@ -267,7 +267,7 @@ export async function extractFramesFromVideoUrl(
                   // Update progress
                   framesProcessed++;
                   if (progressCallback) {
-                    progressCallback(framesProcessed, validTimestamps.length);
+                    progressCallback(framesProcessed, timestamps.length);
                   }
                   
                   callback(true);
