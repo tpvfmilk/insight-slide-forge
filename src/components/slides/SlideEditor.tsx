@@ -13,9 +13,11 @@ import { exportToPDF, exportToCSV, exportToAnki, downloadFile } from "@/services
 import { clientExtractFramesFromVideo, updateSlidesWithExtractedFrames, ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { FrameSelector } from "@/components/slides/FrameSelector";
+import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 import { getProjectTotalSize } from "@/services/storageService";
 import { FileSizeBadge } from "@/components/projects/FileSizeBadge";
+import { handleManualFrameSelectionComplete } from "@/utils/frameUtils";
 
 interface Slide {
   id: string;
@@ -63,6 +65,12 @@ export const SlideEditor = () => {
   const [showUndoButton, setShowUndoButton] = useState<boolean>(false);
   const [projectSize, setProjectSize] = useState<number>(0);
   const [isFramePickerModalOpen, setIsFramePickerModalOpen] = useState<boolean>(false);
+  const [videoMetadata, setVideoMetadata] = useState<{
+    duration?: number;
+    original_file_name?: string;
+    file_type?: string;
+    file_size?: number;
+  } | null>(null);
   
   const currentSlide = slides[currentSlideIndex];
   
@@ -91,6 +99,11 @@ export const SlideEditor = () => {
       // Store video path for frame extraction
       if (project.source_type === 'video' && project.source_file_path) {
         setVideoPath(project.source_file_path);
+      }
+
+      // Set video metadata
+      if (project.video_metadata) {
+        setVideoMetadata(project.video_metadata);
       }
 
       // Load all extracted frames
@@ -648,6 +661,29 @@ export const SlideEditor = () => {
     
     setIsFramePickerModalOpen(true);
   };
+
+  // Handler for when frame selection is complete in the manual frame picker
+  const onManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]) => {
+    if (!projectId || selectedFrames.length === 0) return;
+    
+    try {
+      // Update current slide with selected frames
+      await handleManualFrameSelectionComplete(
+        projectId,
+        selectedFrames,
+        currentSlideIndex,
+        slides,
+        setSlides,
+        updateSlidesInDatabase
+      );
+      
+      // Update project size
+      fetchProjectSize();
+    } catch (error) {
+      console.error("Error handling manual frame selection:", error);
+      toast.error("Failed to apply selected frames to slide");
+    }
+  };
   
   if (isLoading) {
     return <div className="h-full w-full flex items-center justify-center">
@@ -936,12 +972,7 @@ export const SlideEditor = () => {
           onClose={() => setIsFramePickerModalOpen(false)}
           videoPath={videoPath}
           projectId={projectId || ""}
-          onComplete={(frames) => {
-            // When frames are selected in the frame picker, close the modal
-            setIsFramePickerModalOpen(false);
-            // Handle the selected frames
-            handleManualFrameSelectionComplete(frames);
-          }}
+          onComplete={onManualFrameSelectionComplete}
           videoMetadata={videoMetadata || undefined}
           existingFrames={allExtractedFrames}
         />

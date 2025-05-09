@@ -137,7 +137,15 @@ export async function purgeUnusedFrames(
   }
 }
 
-// Add a helper function to handle the frame selection from the manual frame picker
+/**
+ * Handle the frame selection from the manual frame picker
+ * @param projectId The ID of the project
+ * @param selectedFrames The frames selected in the picker
+ * @param currentSlideIndex The index of the current slide
+ * @param slides The current slides array
+ * @param setSlides Function to update the slides state
+ * @param updateSlidesInDatabase Optional function to update slides in the database
+ */
 export async function handleManualFrameSelectionComplete(
   projectId: string,
   selectedFrames: ExtractedFrame[],
