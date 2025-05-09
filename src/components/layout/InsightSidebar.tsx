@@ -1,6 +1,5 @@
-
 import { Button } from "@/components/ui/button";
-import { Droplet, Home, UsersRound, FilePlus, Folder, ChevronRight } from "lucide-react";
+import { Droplet, Home, UsersRound, FilePlus, Folder as FolderIcon, ChevronRight } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useEffect } from "react";
@@ -35,7 +34,7 @@ export function InsightSidebar({
   }, {
     title: "Projects",
     href: "/projects",
-    icon: <Folder className="h-4 w-4" />
+    icon: <FolderIcon className="h-4 w-4" />
   }];
   return <div className={cn("fixed top-0 left-0 flex flex-col w-64 h-full bg-background border-r z-40 transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static", isOpen ? "translate-x-0" : "-translate-x-full", isMobile ? "bg-background/95 backdrop-blur-sm" : "")}>
       <div className="flex items-center justify-between h-14 border-b px-[10px]">

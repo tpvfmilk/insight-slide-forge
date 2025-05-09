@@ -7,6 +7,7 @@ import { ProjectRow } from "@/components/projects/ProjectRow";
 import { Folder as FolderIcon, MoreVertical, Trash } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+
 interface FolderListProps {
   folders: Folder[];
   projects: Project[];

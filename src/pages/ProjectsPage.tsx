@@ -10,18 +10,18 @@ import { ProjectTitleEditor } from "@/components/projects/ProjectTitleEditor";
 import { Button } from "@/components/ui/button";
 import { FolderList } from "@/components/folders/FolderList";
 import { FolderDialog } from "@/components/folders/FolderDialog";
-import { Folder } from "lucide-react";
+import { Folder as FolderIcon } from "lucide-react";
 import { Folder as FolderType, createFolder, deleteFolder, fetchFolders } from "@/services/folderService";
 
 const ProjectsPage = () => {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folders, setFolders] = useState<FolderType[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingFolders, setLoadingFolders] = useState(true);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
+  const [editingFolder, setEditingFolder] = useState<FolderType | null>(null);
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   
   const loadProjects = async () => {
@@ -103,7 +103,7 @@ const ProjectsPage = () => {
     loadFolders();
   };
   
-  const handleEditFolder = (folder: Folder) => {
+  const handleEditFolder = (folder: FolderType) => {
     setEditingFolder(folder);
   };
   
@@ -145,7 +145,7 @@ const ProjectsPage = () => {
           />
           
           <Button onClick={handleCreateFolder} className="w-full md:w-auto">
-            <Folder className="h-4 w-4 mr-2" />
+            <FolderIcon className="h-4 w-4 mr-2" />
             Create Folder
           </Button>
         </div>
