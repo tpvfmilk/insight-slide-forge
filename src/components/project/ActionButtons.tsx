@@ -1,9 +1,10 @@
+
 import { Button } from "@/components/ui/button";
-import { RefreshCw, FileText, Film } from "lucide-react";
+import { RefreshCw, FileText, Film, Cloud } from "lucide-react";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { Project } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
-import { Slide } from "@/utils/frameUtils";
+
 interface ActionButtonsProps {
   project: Project | null;
   needsFrameExtraction: boolean;
@@ -19,6 +20,7 @@ interface ActionButtonsProps {
   isTranscriptOnlyProject: boolean;
   refreshProject?: () => Promise<void>;
 }
+
 export const ActionButtons = ({
   project,
   needsTranscription,
@@ -30,8 +32,17 @@ export const ActionButtons = ({
   isTranscriptOnlyProject
 }: ActionButtonsProps) => {
   return <div className="flex items-center space-x-2">
-      {/* Show only the Manual Frame Picker button for video projects */}
-      {project?.source_type === 'video'}
+      {/* Show frame picker button for video projects */}
+      {project?.source_type === 'video' && (
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleOpenManualFramePicker}
+        >
+          <Film className="h-4 w-4 mr-1" />
+          Select Video Frames
+        </Button>
+      )}
       
       {/* Transcribe Button */}
       {needsTranscription && <Button variant="outline" size="sm" onClick={handleTranscribeVideo} disabled={isTranscribing}>

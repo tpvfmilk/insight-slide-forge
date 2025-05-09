@@ -3,12 +3,15 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { updateProject } from './projectService';
 import { Json } from '@/integrations/supabase/types';
+import { extractFramesFromVideoUrl } from '@/utils/videoFrameExtractor';
+import { toast } from 'sonner';
 
 // Update ExtractedFrame to be JSON-compatible
 export interface ExtractedFrame {
   timestamp: string;
   imageUrl: string;
   id?: string;
+  isPlaceholder?: boolean; // Add flag to indicate if frame is a placeholder
   [key: string]: string | number | boolean | null | undefined;
 }
 
@@ -17,7 +20,11 @@ export const clientExtractFramesFromVideo = async (
   projectId: string,
   videoPath: string,
   timestamps: string[],
-  videoDuration?: number // Add optional videoDuration parameter
+  videoDuration?: number, // Add optional videoDuration parameter
+  options?: {
+    fallbackToServer?: boolean; // Option to use server-side extraction as primary method
+    forceServerSide?: boolean; // Option to force server-side extraction
+  }
 ): Promise<{ 
   success: boolean; 
   frames?: ExtractedFrame[]; 
@@ -29,6 +36,9 @@ export const clientExtractFramesFromVideo = async (
     return { success: false, error: 'No timestamps provided for extraction' };
   }
 
+  const fallbackToServer = options?.fallbackToServer || false;
+  const forceServerSide = options?.forceServerSide || false;
+  
   try {
     // First check if we already have the extracted frames
     const { data: project, error: projectError } = await supabase
@@ -80,13 +90,120 @@ export const clientExtractFramesFromVideo = async (
       return { success: false, error: urlError.message };
     }
 
-    // Return success to indicate the video is ready to be processed by the client
-    return { 
-      success: true,
-      frames: existingFrames,
-      videoDuration // Pass duration to client for validation
-    };
+    // If forceServerSide is true, skip client-side extraction and use server-side
+    if (forceServerSide) {
+      console.log('Server-side extraction requested, calling extract-frames edge function');
+      return await serverSideExtractFrames(projectId, videoPath, timestamps, true);
+    }
     
+    // First attempt: client-side extraction (unless fallbackToServer is true)
+    if (!fallbackToServer) {
+      try {
+        console.log('Attempting client-side frame extraction');
+        const videoUrl = urlData.signedUrl;
+        
+        // Inform the user we're extracting frames
+        toast.loading('Extracting frames from video...', {
+          id: 'extract-frames',
+          duration: Infinity
+        });
+        
+        // Extract frames from video
+        const extractedFrames = await extractFramesFromVideoUrl(
+          videoUrl, 
+          timestamps,
+          (completed, total) => {
+            console.log(`Frame extraction progress: ${completed}/${total}`);
+          },
+          videoDuration
+        );
+        
+        // Check if any frames were extracted
+        if (!extractedFrames || extractedFrames.length === 0) {
+          toast.error('No frames could be extracted from the video', {
+            id: 'extract-frames'
+          });
+          console.error('Client-side extraction failed: No frames extracted');
+          
+          // Fall back to server-side extraction
+          console.log('Falling back to server-side extraction');
+          return await serverSideExtractFrames(projectId, videoPath, timestamps, true);
+        }
+        
+        toast.success(`Successfully extracted ${extractedFrames.length} frames`, {
+          id: 'extract-frames'
+        });
+        
+        // Upload each extracted frame
+        const uploadedFrames: ExtractedFrame[] = [];
+        
+        for (const { frame, timestamp } of extractedFrames) {
+          try {
+            // Create a File from the Blob
+            const file = new File([frame], `frame-${timestamp.replace(/:/g, "-")}.jpg`, {
+              type: 'image/jpeg'
+            });
+            
+            // Upload the file
+            const { data: uploadData } = await supabase
+              .storage
+              .from('slide_stills')
+              .upload(`${projectId}/${timestamp.replace(/:/g, '_')}.jpg`, file, {
+                cacheControl: '3600',
+                upsert: true
+              });
+              
+            if (!uploadData?.path) {
+              console.warn(`Failed to upload frame at ${timestamp}`);
+              continue;
+            }
+            
+            // Get public URL
+            const { data: urlData } = supabase
+              .storage
+              .from('slide_stills')
+              .getPublicUrl(uploadData.path);
+              
+            uploadedFrames.push({
+              timestamp,
+              imageUrl: urlData.publicUrl,
+              id: `frame-${timestamp.replace(/:/g, "-")}`,
+              isPlaceholder: false
+            });
+            
+          } catch (uploadError) {
+            console.error(`Error uploading frame at ${timestamp}:`, uploadError);
+          }
+        }
+        
+        if (uploadedFrames.length > 0) {
+          // Save these frames to the project
+          await saveExtractedFramesToProject(projectId, uploadedFrames);
+          
+          return { 
+            success: true, 
+            frames: [...uploadedFrames, ...existingFrames.filter(existing => 
+              !uploadedFrames.some(uploaded => uploaded.timestamp === existing.timestamp)
+            )]
+          };
+        } else {
+          console.error('Client-side extraction succeeded but uploads failed');
+          // Fall back to server-side extraction
+          return await serverSideExtractFrames(projectId, videoPath, timestamps, true);
+        }
+        
+      } catch (clientError) {
+        console.error('Error in client-side extraction:', clientError);
+        
+        // Fall back to server-side extraction
+        console.log('Falling back to server-side extraction after client error');
+        return await serverSideExtractFrames(projectId, videoPath, timestamps, true);
+      }
+    } else {
+      // Skip client-side extraction and directly use server-side
+      console.log('Skipping client-side extraction, using server-side directly');
+      return await serverSideExtractFrames(projectId, videoPath, timestamps, false);
+    }
   } catch (error) {
     console.error('Error in client frame extraction preparation:', error);
     return { 
@@ -95,6 +212,102 @@ export const clientExtractFramesFromVideo = async (
     };
   }
 };
+
+// Helper function to save extracted frames to the project
+async function saveExtractedFramesToProject(projectId: string, frames: ExtractedFrame[]): Promise<void> {
+  // Get existing frames
+  const { data: project } = await supabase
+    .from('projects')
+    .select('extracted_frames')
+    .eq('id', projectId)
+    .single();
+    
+  const existingFrames: ExtractedFrame[] = project?.extracted_frames as unknown as ExtractedFrame[] || [];
+  
+  // Merge existing and new frames, avoiding duplicates
+  const updatedFrames = [
+    ...frames,
+    ...existingFrames.filter(existing => 
+      !frames.some(frame => frame.timestamp === existing.timestamp)
+    )
+  ];
+  
+  // Update project
+  await updateProject(projectId, {
+    extracted_frames: updatedFrames
+  });
+}
+
+// Function to use server-side frame extraction
+async function serverSideExtractFrames(
+  projectId: string, 
+  videoPath: string, 
+  timestamps: string[],
+  clientSideFailed: boolean = false
+): Promise<{ 
+  success: boolean; 
+  frames?: ExtractedFrame[]; 
+  error?: string;
+}> {
+  try {
+    console.log(`Calling server-side frame extraction for ${timestamps.length} timestamps`);
+    
+    toast.loading(clientSideFailed 
+      ? 'Client-side extraction failed. Trying server-side extraction...' 
+      : 'Extracting frames from video...', 
+      { id: 'extract-frames', duration: Infinity }
+    );
+    
+    // Call the extract-frames edge function
+    const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/extract-frames`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+      },
+      body: JSON.stringify({
+        projectId,
+        timestamps,
+        videoPath,
+        fallbackToServer: true,
+        clientSideFailed
+      })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Server-side frame extraction failed');
+    }
+    
+    const result = await response.json();
+    
+    if (!result.success || !result.frames) {
+      throw new Error('No frames returned from server');
+    }
+    
+    // Save these frames to the project
+    await saveExtractedFramesToProject(projectId, result.frames);
+    
+    toast.success(`Server-side extraction complete. ${result.frames.length} frames processed.`, {
+      id: 'extract-frames'
+    });
+    
+    return {
+      success: true,
+      frames: result.frames
+    };
+  } catch (error) {
+    console.error('Server-side extraction error:', error);
+    toast.error(`Frame extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+      id: 'extract-frames'
+    });
+    
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error in server-side extraction'
+    };
+  }
+}
 
 // Function to update slides with extracted frames
 export const updateSlidesWithExtractedFrames = async (

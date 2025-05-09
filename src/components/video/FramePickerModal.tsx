@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
@@ -6,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { 
   Play, Pause, SkipBack, SkipForward, Camera, AlertCircle,
-  RefreshCw, CheckCircle2, X, Trash2
+  RefreshCw, CheckCircle2, X, Trash2, Cloud
 } from "lucide-react";
 import { formatDuration } from "@/utils/formatUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +17,7 @@ import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { useUIReset } from "@/context/UIResetContext";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { serverSideExtractFrames } from "@/services/serverFrameExtractionService";
 
 interface FramePickerModalProps {
   open: boolean;
@@ -49,6 +51,7 @@ export const FramePickerModal = ({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
   const [isCaptureLoading, setIsCaptureLoading] = useState<boolean>(false);
+  const [isUsingSeverSide, setIsUsingServerSide] = useState<boolean>(false);
   const { registerUIElement, unregisterUIElement } = useUIReset();
   const elementId = useRef(`frame-picker-${Math.random().toString(36).substring(2, 9)}`);
   
@@ -261,6 +264,10 @@ export const FramePickerModal = ({
   
   // Improved captureFrame function with enhanced techniques to avoid black frames
   const captureFrame = async () => {
+    if (isUsingSeverSide) {
+      return captureFrameServerSide();
+    }
+    
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
@@ -404,22 +411,13 @@ export const FramePickerModal = ({
           }
         }
         
-        // If we still couldn't get content, create a placeholder with warning
+        // If we still couldn't get content, fall back to server-side extraction
         if (!hasValidContent) {
-          console.log("All capture attempts failed, creating placeholder frame");
-          
-          // Clear canvas and set background
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.fillStyle = "#2563eb"; // Blue background
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          // Add warning text
-          ctx.fillStyle = "white";
-          ctx.font = "bold 24px Arial";
-          ctx.textAlign = "center";
-          ctx.fillText(`Frame at ${currentTimestamp} unavailable`, canvas.width / 2, canvas.height / 2 - 15);
-          ctx.font = "18px Arial";
-          ctx.fillText("Frame could not be extracted from video", canvas.width / 2, canvas.height / 2 + 20);
+          console.log("All capture attempts failed, falling back to server-side extraction");
+          setIsCaptureLoading(false);
+          setIsUsingServerSide(true);
+          toast.info("Client-side extraction failed. Switching to server-side extraction.");
+          return captureFrameServerSide();
         }
         
         // Add timestamp overlay
@@ -457,7 +455,9 @@ export const FramePickerModal = ({
       // Add to captured frames
       const newFrame: ExtractedFrame = {
         timestamp: currentTimestamp,
-        imageUrl: uploadResult.url
+        imageUrl: uploadResult.url,
+        id: `frame-${currentTimestamp.replace(/:/g, "-")}`,
+        isPlaceholder: false
       };
       
       setCapturedFrames(prev => {
@@ -478,6 +478,85 @@ export const FramePickerModal = ({
     } catch (err) {
       console.error("Error capturing frame:", err);
       toast.error(`Failed to capture frame: ${err instanceof Error ? err.message : "Unknown error"}`);
+      
+      // If client-side extraction fails, offer to use server-side
+      if (!isUsingSeverSide) {
+        toast.info("Having trouble capturing frames? Try using server-side extraction.", {
+          action: {
+            label: "Use Server",
+            onClick: () => {
+              setIsUsingServerSide(true);
+              toast.success("Switched to server-side extraction. Try capturing frames now.");
+            }
+          }
+        });
+      }
+    } finally {
+      setIsCaptureLoading(false);
+    }
+  };
+  
+  // New function for server-side frame extraction
+  const captureFrameServerSide = async () => {
+    if (!videoPath || !projectId) {
+      toast.error("Missing required information for server-side extraction");
+      return;
+    }
+    
+    setIsCaptureLoading(true);
+    const currentTimestamp = formatDuration(currentTime);
+    
+    try {
+      console.log(`Server-side extracting frame at timestamp ${currentTimestamp}`);
+      
+      // Call the extract-frames endpoint with a single timestamp
+      const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/extract-frames`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          projectId,
+          timestamps: [currentTimestamp],
+          videoPath,
+          fallbackToServer: true,
+          clientSideFailed: true
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Server-side extraction failed");
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success || !result.frames || result.frames.length === 0) {
+        throw new Error("No frames returned from server");
+      }
+      
+      const newFrame = result.frames[0];
+      
+      // Add to captured frames
+      setCapturedFrames(prev => {
+        // Check if we already have a frame with this timestamp
+        const exists = prev.some(frame => frame.timestamp === currentTimestamp);
+        if (exists) {
+          // Replace the existing frame
+          return prev.map(frame => 
+            frame.timestamp === currentTimestamp ? newFrame : frame
+          );
+        } else {
+          // Add new frame
+          return [...prev, newFrame];
+        }
+      });
+      
+      toast.success(`Server-side frame captured at ${currentTimestamp}!`);
+    } catch (error) {
+      console.error("Server-side extraction error:", error);
+      toast.error(`Server-side extraction failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setIsCaptureLoading(false);
     }
@@ -504,76 +583,134 @@ export const FramePickerModal = ({
     onClose();
   };
   
+  const toggleExtractionMode = () => {
+    setIsUsingServerSide(!isUsingSeverSide);
+    toast.info(isUsingSeverSide 
+      ? "Switched to client-side extraction" 
+      : "Switched to server-side extraction"
+    );
+  };
+  
   return (
-    <SafeDialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <SafeDialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Select Video Frames</DialogTitle>
+    <SafeDialog 
+      open={open} 
+      onOpenChange={(isOpen) => {
+        if (!isOpen) handleClose();
+      }}
+      className="w-full max-w-7xl"
+    >
+      <SafeDialogContent className="w-full max-w-7xl max-h-[95vh] overflow-hidden p-0 gap-0">
+        <DialogHeader className="px-6 py-4 border-b">
+          <div className="flex justify-between items-center">
+            <DialogTitle>Frame Picker</DialogTitle>
+            <div className="flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant={isUsingSeverSide ? "default" : "outline"}
+                      onClick={toggleExtractionMode}
+                    >
+                      <Cloud className="h-4 w-4 mr-1" />
+                      {isUsingSeverSide ? "Server-side" : "Client-side"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-sm">
+                      {isUsingSeverSide 
+                        ? "Currently using server-side extraction (more reliable)"
+                        : "Currently using client-side extraction (faster)"
+                      }
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              <Button
+                onClick={handleClose}
+                variant="outline"
+                size="icon"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </DialogHeader>
         
-        {isLoading ? (
-          <div className="flex justify-center items-center p-8">
-            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="ml-2 text-muted-foreground">Loading video...</p>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center p-8 text-destructive">
-            <AlertCircle className="h-10 w-10 mb-2" />
-            <p>{error}</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Video player */}
-            <div className="relative bg-black aspect-video">
-              <video 
-                ref={videoRef}
-                src={videoUrl || undefined}
-                className="w-full h-full"
-                onLoadedMetadata={handleVideoLoaded}
-                onLoadedData={handleVideoLoaded}
-                controls={false}
-                crossOrigin="anonymous"
-              />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 h-[80vh] overflow-hidden">
+          {/* Left side - Video player */}
+          <div className="md:col-span-2 flex flex-col h-full overflow-hidden">
+            <div className="relative bg-black aspect-video flex items-center justify-center flex-1 overflow-hidden">
+              {isLoading ? (
+                <div className="text-white flex flex-col items-center justify-center">
+                  <RefreshCw className="h-8 w-8 animate-spin mb-2" />
+                  <p>Loading video...</p>
+                </div>
+              ) : error ? (
+                <div className="text-white flex flex-col items-center justify-center p-4 text-center">
+                  <AlertCircle className="h-8 w-8 text-red-500 mb-2" />
+                  <p className="text-red-400 font-medium">Failed to load video</p>
+                  <p className="text-sm text-gray-400 mt-1">{error}</p>
+                </div>
+              ) : (
+                <>
+                  <video
+                    ref={videoRef}
+                    src={videoUrl || undefined}
+                    className="w-full h-full"
+                    controls={false}
+                    onLoadedData={handleVideoLoaded}
+                    crossOrigin="anonymous"
+                  />
+                  
+                  {/* Canvas for frame extraction (hidden) */}
+                  <canvas
+                    ref={canvasRef}
+                    className="hidden"
+                  />
+                </>
+              )}
               
-              {/* Hidden canvas for frame capture */}
-              <canvas ref={canvasRef} className="hidden" />
+              {/* Timestamp overlay */}
+              {!isLoading && !error && (
+                <div className="absolute bottom-4 left-4 bg-black/70 text-white px-2 py-1 rounded text-sm">
+                  {formatDuration(currentTime)} / {formatDuration(videoDuration)}
+                </div>
+              )}
             </div>
             
             {/* Video controls */}
-            <div className="space-y-2">
-              {/* Time display */}
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>{formatDuration(currentTime)}</span>
-                <span>{formatDuration(videoDuration)}</span>
+            <div className="flex flex-col space-y-4 py-4">
+              <div className="px-4">
+                {videoDuration > 0 && (
+                  <Slider
+                    value={[currentTime]}
+                    min={0}
+                    max={videoDuration}
+                    step={0.1}
+                    onValueChange={handleTimeChange}
+                    disabled={isLoading || !!error}
+                  />
+                )}
               </div>
               
-              {/* Scrubbing slider */}
-              <Slider 
-                value={[currentTime]}
-                min={0}
-                max={videoDuration || 100}
-                step={0.01}
-                onValueChange={handleTimeChange}
-                className="w-full"
-              />
-              
-              {/* Control buttons */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
+              <div className="flex justify-between px-4">
+                <div className="flex space-x-2">
+                  <Button
+                    size="icon"
+                    variant="outline"
                     onClick={seekBack}
-                    disabled={isLoading}
+                    disabled={isLoading || !!error}
                   >
                     <SkipBack className="h-4 w-4" />
                   </Button>
                   
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
+                  <Button
+                    size="icon"
+                    variant="outline"
                     onClick={togglePlayPause}
-                    disabled={isLoading}
+                    disabled={isLoading || !!error}
                   >
                     {isPlaying ? (
                       <Pause className="h-4 w-4" />
@@ -582,99 +719,106 @@ export const FramePickerModal = ({
                     )}
                   </Button>
                   
-                  <Button 
-                    variant="outline" 
-                    size="icon" 
+                  <Button
+                    size="icon"
+                    variant="outline"
                     onClick={seekForward}
-                    disabled={isLoading}
+                    disabled={isLoading || !!error}
                   >
                     <SkipForward className="h-4 w-4" />
                   </Button>
                 </div>
                 
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button 
-                        variant="default" 
-                        onClick={captureFrame}
-                        disabled={isLoading || isCaptureLoading}
-                        className="gap-2"
-                      >
-                        {isCaptureLoading ? (
-                          <>
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                            Capturing...
-                          </>
-                        ) : (
-                          <>
-                            <Camera className="h-4 w-4" />
-                            Capture Frame
-                          </>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Capture the current video frame</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Button
+                  onClick={captureFrame}
+                  disabled={isLoading || !!error || isCaptureLoading}
+                >
+                  {isCaptureLoading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Capturing...
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-4 w-4 mr-2" />
+                      Capture Frame {isUsingSeverSide ? "(Server-side)" : ""}
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
+          </div>
+          
+          {/* Right side - Captured frames */}
+          <div className="flex flex-col h-full overflow-hidden border rounded-md">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="font-medium">Captured Frames</h3>
+              <Badge variant="outline">{capturedFrames.length}</Badge>
+            </div>
             
-            <Separator />
-            
-            {/* Captured frames section */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-medium">Captured Frames</h3>
-                <Badge variant="secondary">{capturedFrames.length}</Badge>
-              </div>
-              
+            <div className="flex-1 overflow-y-auto p-2">
               {capturedFrames.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>No frames captured yet.</p>
-                  <p className="text-sm mt-1">Use the video controls above and click "Capture Frame" to extract images.</p>
+                <div className="flex flex-col items-center justify-center h-full text-center p-4 text-muted-foreground">
+                  <Camera className="h-8 w-8 mb-2" />
+                  <p>No frames captured yet</p>
+                  <p className="text-xs mt-1">Use the capture button to extract frames from the video</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {capturedFrames.map((frame) => (
-                    <div key={frame.timestamp} className="relative border rounded-md overflow-hidden bg-muted/20">
-                      <img 
-                        src={frame.imageUrl} 
-                        alt={`Frame at ${frame.timestamp}`} 
-                        className="w-full aspect-video object-cover"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-background/80 backdrop-blur-sm p-2 flex justify-between items-center">
-                        <span className="text-xs font-mono">{frame.timestamp}</span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6 text-destructive"
-                          onClick={() => deleteFrame(frame.timestamp)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                <div className="space-y-2">
+                  {[...capturedFrames]
+                    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+                    .map((frame) => (
+                      <div
+                        key={frame.id || frame.timestamp}
+                        className="relative group border rounded-md overflow-hidden"
+                      >
+                        <img
+                          src={frame.imageUrl}
+                          alt={`Frame at ${frame.timestamp}`}
+                          className="w-full h-auto aspect-video object-cover"
+                        />
+                        
+                        <div className="absolute top-0 left-0 right-0 flex justify-between items-center p-2 bg-black/70 text-white text-sm">
+                          <span>{frame.timestamp}</span>
+                          
+                          <div className="flex items-center gap-1">
+                            {frame.isPlaceholder && (
+                              <Badge variant="outline" className="bg-amber-600/70 text-white border-none text-[10px] h-4 px-1">
+                                Placeholder
+                              </Badge>
+                            )}
+                            <Button
+                              size="icon"
+                              variant="destructive"
+                              className="h-6 w-6"
+                              onClick={() => deleteFrame(frame.timestamp)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               )}
             </div>
             
-            {/* Footer actions */}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={handleClose}>
-                <X className="h-4 w-4 mr-2" /> 
+            <div className="p-4 border-t flex justify-between">
+              <Button variant="outline" size="sm" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button onClick={handleComplete} disabled={capturedFrames.length === 0}>
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                Use Selected Frames
+              
+              <Button
+                onClick={handleComplete}
+                size="sm"
+                disabled={capturedFrames.length === 0}
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1" />
+                Apply Selected Frames
               </Button>
             </div>
           </div>
-        )}
+        </div>
       </SafeDialogContent>
     </SafeDialog>
   );
