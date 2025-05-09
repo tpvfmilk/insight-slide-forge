@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Folder } from "@/services/folderService";
@@ -8,6 +7,7 @@ import { ProjectRow } from "@/components/projects/ProjectRow";
 import { Folder as FolderIcon, MoreVertical, Trash } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface FolderListProps {
   folders: Folder[];
@@ -32,6 +32,13 @@ export function FolderList({
 }: FolderListProps) {
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
 
+  // Initialize with "unassigned" already in the expanded folders
+  useEffect(() => {
+    if (!expandedFolders.includes("unassigned")) {
+      setExpandedFolders(prev => [...prev, "unassigned"]);
+    }
+  }, [expandedFolders]);
+
   // Group projects by folder
   const projectsByFolder = projects.reduce((acc: Record<string, Project[]>, project) => {
     const folderId = project.folder_id || "unassigned";
@@ -42,15 +49,28 @@ export function FolderList({
     return acc;
   }, {});
 
-  // Handle expanding/collapsing all folders
+  // Handle expanding/collapsing all folders (except "unassigned" which should always stay expanded)
   const toggleAllFolders = () => {
     if (expandedFolders.length === folders.length + 1) {
       // +1 for "unassigned"
-      setExpandedFolders([]);
+      // Keep only "unassigned" expanded
+      setExpandedFolders(["unassigned"]);
     } else {
+      // Expand all folders including "unassigned"
       setExpandedFolders([...folders.map(folder => folder.id), "unassigned"]);
     }
   };
+
+  // Custom handler for accordion value change to ensure unassigned stays expanded
+  const handleValueChange = (values: string[]) => {
+    // Always include "unassigned" in the expanded folders
+    if (!values.includes("unassigned")) {
+      setExpandedFolders([...values, "unassigned"]);
+    } else {
+      setExpandedFolders(values);
+    }
+  };
+
   return <div className="space-y-4">
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={toggleAllFolders}>
@@ -58,7 +78,7 @@ export function FolderList({
         </Button>
       </div>
     
-      <Accordion type="multiple" value={expandedFolders} onValueChange={setExpandedFolders} className="w-full">
+      <Accordion type="multiple" value={expandedFolders} onValueChange={handleValueChange} className="w-full">
         {/* Render folders */}
         {folders.map(folder => {
         const folderProjects = projectsByFolder[folder.id] || [];
@@ -136,18 +156,16 @@ export function FolderList({
             </AccordionItem>;
       })}
         
-        {/* Unfiled Projects */}
-        <AccordionItem value="unassigned" className="border rounded-md mb-4">
-          <AccordionTrigger className="px-4 hover:no-underline">
-            <div className="flex items-center gap-2">
-              <FolderIcon className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <div className="font-medium px-[9px]">Unfiled Projects</div>
-                
-              </div>
+        {/* Unfiled Projects - Using Collapsible instead of AccordionItem to make it always open */}
+        <div className="border rounded-md mb-4">
+          <div className="flex items-center gap-2 px-4 py-4">
+            <FolderIcon className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <div className="font-medium px-[9px]">Unfiled Projects</div>
             </div>
-          </AccordionTrigger>
-          <AccordionContent className="overflow-hidden">
+          </div>
+          
+          <div className="overflow-hidden">
             {projectsByFolder["unassigned"] && projectsByFolder["unassigned"].length > 0 ? <div className="border rounded-md">
                 <table className="w-full">
                   <thead className="bg-muted/50">
@@ -166,8 +184,8 @@ export function FolderList({
               </div> : <div className="py-6 text-center text-muted-foreground">
                 No unfiled projects
               </div>}
-          </AccordionContent>
-        </AccordionItem>
+          </div>
+        </div>
       </Accordion>
     </div>;
 }
