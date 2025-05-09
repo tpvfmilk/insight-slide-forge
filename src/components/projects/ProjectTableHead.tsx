@@ -10,7 +10,7 @@ export function ProjectTableHead() {
         <TableHead className="w-[15%]">Created</TableHead>
         <TableHead className="hidden lg:table-cell">Duration</TableHead>
         <TableHead>Size</TableHead>
-        <TableHead className="text-right">Actions</TableHead>
+        <TableHead className="text-right"></TableHead>
       </TableRow>
     </TableHeader>
   );

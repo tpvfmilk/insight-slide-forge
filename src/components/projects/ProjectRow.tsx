@@ -99,7 +99,7 @@ export function ProjectRow({
   return (
     <TableRow key={project.id}>
       <TableCell>
-        <div className="flex items-center gap-3">
+        <Link to={`/projects/${project.id}`} className="flex items-center gap-3 hover:underline">
           <div className="p-2 bg-primary/10 rounded">
             <FileText className="h-5 w-5 text-primary" />
           </div>
@@ -109,7 +109,7 @@ export function ProjectRow({
               {originalFileName}
             </div>
           </div>
-        </div>
+        </Link>
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">
         {formatDate(project.created_at)}
@@ -121,110 +121,101 @@ export function ProjectRow({
         <FileSizeBadge fileSize={project.video_metadata?.file_size} projectId={project.id} />
       </TableCell>
       <TableCell className="text-right">
-        <div className="flex justify-end items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="h-8">
-            <Link to={`/projects/${project.id}`}>
-              <FileText className="h-4 w-4 mr-1" />
-              <span>View</span>
-            </Link>
-          </Button>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-                <span className="sr-only">More options</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleEditTitle(project)}>
-                Rename Project
-              </DropdownMenuItem>
-              
-              <DropdownMenuSeparator />
-              
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  Move to Folder
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuRadioGroup 
-                    value={project.folder_id || ""}
-                    onValueChange={(value) => {
-                      if (!movingToFolder) {
-                        handleMoveToFolder(value || null);
-                      }
-                    }}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal className="h-4 w-4" />
+              <span className="sr-only">More options</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => handleEditTitle(project)}>
+              Rename Project
+            </DropdownMenuItem>
+            
+            <DropdownMenuSeparator />
+            
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                Move to Folder
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup 
+                  value={project.folder_id || ""}
+                  onValueChange={(value) => {
+                    if (!movingToFolder) {
+                      handleMoveToFolder(value || null);
+                    }
+                  }}
+                >
+                  <DropdownMenuRadioItem value="">
+                    Unfiled Projects
+                  </DropdownMenuRadioItem>
+                  
+                  {loadingFolders ? (
+                    <DropdownMenuItem disabled>
+                      Loading folders...
+                    </DropdownMenuItem>
+                  ) : folders.length > 0 ? (
+                    folders.map((folder) => (
+                      <DropdownMenuRadioItem key={folder.id} value={folder.id}>
+                        {folder.name}
+                      </DropdownMenuRadioItem>
+                    ))
+                  ) : (
+                    <DropdownMenuItem disabled>
+                      No folders available
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                Export Project
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem onClick={() => handleExport(project.id, "pdf")}>
+                  Export as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport(project.id, "pptx")}>
+                  Export as PowerPoint
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport(project.id, "images")}>
+                  Export as Images
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            
+            <DropdownMenuSeparator />
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive">
+                  Delete Project
+                </DropdownMenuItem>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Project?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete "{project.title}"? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={() => handleDeleteProject(project.id)}
+                    className="bg-destructive hover:bg-destructive/90"
                   >
-                    <DropdownMenuRadioItem value="">
-                      Unfiled Projects
-                    </DropdownMenuRadioItem>
-                    
-                    {loadingFolders ? (
-                      <DropdownMenuItem disabled>
-                        Loading folders...
-                      </DropdownMenuItem>
-                    ) : folders.length > 0 ? (
-                      folders.map((folder) => (
-                        <DropdownMenuRadioItem key={folder.id} value={folder.id}>
-                          {folder.name}
-                        </DropdownMenuRadioItem>
-                      ))
-                    ) : (
-                      <DropdownMenuItem disabled>
-                        No folders available
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  Export Project
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuItem onClick={() => handleExport(project.id, "pdf")}>
-                    Export as PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport(project.id, "pptx")}>
-                    Export as PowerPoint
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport(project.id, "images")}>
-                    Export as Images
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              
-              <DropdownMenuSeparator />
-              
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive">
-                    Delete Project
-                  </DropdownMenuItem>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Project?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Are you sure you want to delete "{project.title}"? This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction 
-                      onClick={() => handleDeleteProject(project.id)}
-                      className="bg-destructive hover:bg-destructive/90"
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </TableCell>
     </TableRow>
   );
