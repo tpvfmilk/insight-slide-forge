@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Link } from "react-router-dom";
 import { FileText, MoreHorizontal } from "lucide-react";
@@ -172,7 +173,7 @@ export function ProjectRow({
                   ) : (
                     <DropdownMenuItem disabled>
                       No folders available
-                    </DropdownMenuRadioItem>
+                    </DropdownMenuItem>
                   )}
                 </DropdownMenuRadioGroup>
               </DropdownMenuSubContent>
