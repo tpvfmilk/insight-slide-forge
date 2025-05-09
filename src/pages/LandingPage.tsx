@@ -1,14 +1,12 @@
-
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Droplet, CheckCircle, FileVideo, FileText, PenTool, Share } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-
 const LandingPage = () => {
-  const { user } = useAuth();
-  
-  return (
-    <div className="flex flex-col min-h-screen">
+  const {
+    user
+  } = useAuth();
+  return <div className="flex flex-col min-h-screen">
       {/* Navigation */}
       <header className="border-b">
         <div className="container flex h-16 items-center justify-between">
@@ -26,20 +24,16 @@ const LandingPage = () => {
           </nav>
           
           <div className="flex items-center gap-4">
-            {user ? (
-              <Button asChild size="sm">
+            {user ? <Button asChild size="sm">
                 <Link to="/dashboard">Dashboard</Link>
-              </Button>
-            ) : (
-              <>
+              </Button> : <>
                 <Button asChild variant="ghost" size="sm">
                   <Link to="/login">Login</Link>
                 </Button>
                 <Button asChild size="sm">
                   <Link to="/register">Get Started</Link>
                 </Button>
-              </>
-            )}
+              </>}
           </div>
         </div>
       </header>
@@ -71,11 +65,7 @@ const LandingPage = () => {
             </div>
             
             <div className="relative aspect-video rounded-xl overflow-hidden shadow-xl border">
-              <img
-                src="/lovable-uploads/eabb2f69-00a5-4556-860a-ac4b00284a5d.png"
-                alt="Distill Interface"
-                className="w-full h-full object-cover"
-              />
+              <img alt="Distill Interface" className="w-full h-full object-contain" src="/lovable-uploads/bfb92377-3db4-4cca-80b0-63f5c92d6ae7.png" />
             </div>
           </div>
         </div>
@@ -92,26 +82,10 @@ const LandingPage = () => {
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            <FeatureCard
-              icon={<FileVideo className="h-8 w-8" />}
-              title="Instant AI Slides From Video"
-              description="Convert long videos and dense texts into sharp, summarized slides instantly."
-            />
-            <FeatureCard
-              icon={<FileText className="h-8 w-8" />}
-              title="Dynamic Content Extraction"
-              description="Extract crucial points from your materials automatically and accurately."
-            />
-            <FeatureCard
-              icon={<PenTool className="h-8 w-8" />}
-              title="Flexible Customization"
-              description="Easily modify slides to align with your teaching or studying style."
-            />
-            <FeatureCard
-              icon={<Share className="h-8 w-8" />}
-              title="Export and Share Effortlessly"
-              description="Quick and secure sharing for collaboration with colleagues, peers, or students."
-            />
+            <FeatureCard icon={<FileVideo className="h-8 w-8" />} title="Instant AI Slides From Video" description="Convert long videos and dense texts into sharp, summarized slides instantly." />
+            <FeatureCard icon={<FileText className="h-8 w-8" />} title="Dynamic Content Extraction" description="Extract crucial points from your materials automatically and accurately." />
+            <FeatureCard icon={<PenTool className="h-8 w-8" />} title="Flexible Customization" description="Easily modify slides to align with your teaching or studying style." />
+            <FeatureCard icon={<Share className="h-8 w-8" />} title="Export and Share Effortlessly" description="Quick and secure sharing for collaboration with colleagues, peers, or students." />
           </div>
         </div>
       </section>
@@ -127,21 +101,9 @@ const LandingPage = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <StepCard
-              number="1"
-              title="Upload Content"
-              description="Select a video file, YouTube link, or paste a transcript into Distill."
-            />
-            <StepCard
-              number="2"
-              title="Process with AI"
-              description="Our system analyses the content and extracts key concepts, organized hierarchically."
-            />
-            <StepCard
-              number="3"
-              title="Edit & Export"
-              description="Refine the generated slides as needed, then export to PDF, CSV, or Anki formats."
-            />
+            <StepCard number="1" title="Upload Content" description="Select a video file, YouTube link, or paste a transcript into Distill." />
+            <StepCard number="2" title="Process with AI" description="Our system analyses the content and extracts key concepts, organized hierarchically." />
+            <StepCard number="3" title="Edit & Export" description="Refine the generated slides as needed, then export to PDF, CSV, or Anki formats." />
           </div>
         </div>
       </section>
@@ -157,24 +119,9 @@ const LandingPage = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <TestimonialCard
-              quote="I've been able to convert hours of lecture recordings into concise, well-structured study materials in a fraction of the time it would take manually."
-              name="Dr. Sarah Chen"
-              role="Associate Professor, Computer Science"
-              imageUrl="/lovable-uploads/f64e6eb6-5666-4075-84a0-048e723d7236.png"
-            />
-            <TestimonialCard
-              quote="Distill has transformed how I prepare for my seminars. It extracts exactly what I need from research presentations and organizes them logically."
-              name="Michael Rodriguez"
-              role="PhD Candidate, Neuroscience"
-              imageUrl="/lovable-uploads/9993c960-3884-4f8d-b27e-fd13822400c4.png"
-            />
-            <TestimonialCard
-              quote="As an online course creator, this tool saves me hours of work distilling video content into downloadable resources for my students."
-              name="Emma Thompson"
-              role="Educational Content Creator"
-              imageUrl="/lovable-uploads/f3ca8d01-d2c5-487d-ac22-5be0fa30450d.png"
-            />
+            <TestimonialCard quote="I've been able to convert hours of lecture recordings into concise, well-structured study materials in a fraction of the time it would take manually." name="Dr. Sarah Chen" role="Associate Professor, Computer Science" imageUrl="/lovable-uploads/f64e6eb6-5666-4075-84a0-048e723d7236.png" />
+            <TestimonialCard quote="Distill has transformed how I prepare for my seminars. It extracts exactly what I need from research presentations and organizes them logically." name="Michael Rodriguez" role="PhD Candidate, Neuroscience" imageUrl="/lovable-uploads/9993c960-3884-4f8d-b27e-fd13822400c4.png" />
+            <TestimonialCard quote="As an online course creator, this tool saves me hours of work distilling video content into downloadable resources for my students." name="Emma Thompson" role="Educational Content Creator" imageUrl="/lovable-uploads/f3ca8d01-d2c5-487d-ac22-5be0fa30450d.png" />
           </div>
         </div>
       </section>
@@ -254,37 +201,54 @@ const LandingPage = () => {
           </div>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 };
-
-const FeatureCard = ({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) => {
-  return (
-    <div className="flex flex-col p-6 bg-card border rounded-lg shadow-sm hover:shadow-md transition-shadow">
+const FeatureCard = ({
+  icon,
+  title,
+  description
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) => {
+  return <div className="flex flex-col p-6 bg-card border rounded-lg shadow-sm hover:shadow-md transition-shadow">
       <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4">
         {icon}
       </div>
       <h3 className="text-xl font-medium mb-2">{title}</h3>
       <p className="text-muted-foreground">{description}</p>
-    </div>
-  );
+    </div>;
 };
-
-const StepCard = ({ number, title, description }: { number: string; title: string; description: string }) => {
-  return (
-    <div className="flex flex-col items-center text-center p-6">
+const StepCard = ({
+  number,
+  title,
+  description
+}: {
+  number: string;
+  title: string;
+  description: string;
+}) => {
+  return <div className="flex flex-col items-center text-center p-6">
       <div className="h-16 w-16 rounded-full bg-primary/15 text-primary flex items-center justify-center text-2xl font-bold mb-4">
         {number}
       </div>
       <h3 className="text-xl font-medium mb-2">{title}</h3>
       <p className="text-muted-foreground">{description}</p>
-    </div>
-  );
+    </div>;
 };
-
-const TestimonialCard = ({ quote, name, role, imageUrl }: { quote: string; name: string; role: string; imageUrl: string }) => {
-  return (
-    <div className="flex flex-col p-6 bg-card border rounded-lg shadow-sm">
+const TestimonialCard = ({
+  quote,
+  name,
+  role,
+  imageUrl
+}: {
+  quote: string;
+  name: string;
+  role: string;
+  imageUrl: string;
+}) => {
+  return <div className="flex flex-col p-6 bg-card border rounded-lg shadow-sm">
       <div className="mb-4 text-primary">
         <CheckCircle className="h-6 w-6" />
       </div>
@@ -298,8 +262,6 @@ const TestimonialCard = ({ quote, name, role, imageUrl }: { quote: string; name:
           <div className="text-sm text-muted-foreground">{role}</div>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default LandingPage;
