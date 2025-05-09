@@ -1,12 +1,14 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { 
   Play, Pause, SkipBack, SkipForward, Camera, AlertCircle,
-  RefreshCw, CheckCircle2, X, Trash2
+  RefreshCw, CheckCircle2, X, Trash2, Zap, ArrowRight
 } from "lucide-react";
 import { formatDuration, timestampToSeconds } from "@/utils/formatUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +17,7 @@ import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { useUIReset } from "@/context/UIResetContext";
 import { TimestampSlider } from "./TimestampSlider";
+import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 
 interface FramePickerModalProps {
   open: boolean;
@@ -48,8 +51,14 @@ export const FramePickerModal = ({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
   const [isCaptureLoading, setIsCaptureLoading] = useState<boolean>(false);
+  const [showAutoCapture, setShowAutoCapture] = useState<boolean>(true);
+  const [isAutoExtracting, setIsAutoExtracting] = useState<boolean>(false);
+  const [extractionProgress, setExtractionProgress] = useState<number>(0);
   const { registerUIElement, unregisterUIElement } = useUIReset();
   const elementId = useRef(`frame-picker-${Math.random().toString(36).substring(2, 9)}`);
+  
+  // Timestamps from existing frames or props
+  const [projectTimestamps, setProjectTimestamps] = useState<string[]>([]);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,25 +136,6 @@ export const FramePickerModal = ({
       // Use the video's duration or fall back to the metadata
       setVideoDuration(video.duration || videoMetadata?.duration || 0);
       console.log("Video ready. Dimensions:", video.videoWidth, "x", video.videoHeight, ", Duration:", video.duration + "s");
-      
-      // Verify any timestamps that exceed duration
-      if (videoMetadata?.duration) {
-        const exceededTimestamps = [];
-        for (let i = 0; i < 10; i++) {
-          // Check some common timestamps
-          const minutes = String(i).padStart(2, '0');
-          for (let j = 0; j < 60; j += 15) {
-            const seconds = String(j).padStart(2, '0');
-            const timestamp = `00:${minutes}:${seconds}`;
-            if (formatDuration(video.duration) < timestamp) {
-              exceededTimestamps.push(timestamp);
-            }
-          }
-        }
-        if (exceededTimestamps.length > 0) {
-          console.warn("Found", exceededTimestamps.length, "timestamps that exceed video duration:", exceededTimestamps);
-        }
-      }
     }, 1000);
   };
   
@@ -291,6 +281,104 @@ export const FramePickerModal = ({
     } finally {
       setIsCaptureLoading(false);
     }
+  };
+  
+  const startAutoExtraction = async () => {
+    if (!videoUrl || !projectTimestamps.length) {
+      toast.error("Cannot extract frames: No video or timestamps available");
+      return;
+    }
+    
+    setIsAutoExtracting(true);
+    setExtractionProgress(0);
+    
+    try {
+      const updateProgress = (completed: number, total: number) => {
+        // Cap at 100% to avoid UI issues
+        const percentage = Math.min(100, (completed / total) * 100);
+        setExtractionProgress(percentage);
+      };
+      
+      // Extract frames from video
+      const frames = await extractFramesFromVideoUrl(
+        videoUrl,
+        projectTimestamps,
+        updateProgress,
+        videoDuration
+      );
+      
+      // Convert to ExtractedFrame format
+      const extractedFrames: ExtractedFrame[] = [];
+      
+      // Process each extracted frame
+      for (const frame of frames) {
+        try {
+          // Create a file from the blob
+          const file = new File([frame.frame], `frame-${frame.timestamp.replace(/:/g, "-")}.jpg`, { type: 'image/jpeg' });
+          
+          // Upload to storage
+          const uploadResult = await uploadSlideImage(file);
+          
+          if (uploadResult && uploadResult.url) {
+            extractedFrames.push({
+              timestamp: frame.timestamp,
+              imageUrl: uploadResult.url
+            });
+          }
+        } catch (err) {
+          console.error(`Error processing frame at ${frame.timestamp}:`, err);
+        }
+      }
+      
+      // Add extracted frames to captured frames
+      setCapturedFrames(prev => {
+        const newFrames = [...prev];
+        for (const frame of extractedFrames) {
+          const existingIndex = newFrames.findIndex(f => f.timestamp === frame.timestamp);
+          if (existingIndex >= 0) {
+            newFrames[existingIndex] = frame;
+          } else {
+            newFrames.push(frame);
+          }
+        }
+        return newFrames;
+      });
+      
+      toast.success(`Successfully extracted ${extractedFrames.length} frames`);
+    } catch (err) {
+      console.error("Error in auto frame extraction:", err);
+      toast.error(`Failed to extract frames: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setIsAutoExtracting(false);
+      setExtractionProgress(100); // Ensure progress bar shows complete
+    }
+  };
+  
+  const prepareAutoCapture = () => {
+    // When user clicks Auto-Capture button, collect timestamps from props/state
+    // and prepare for extraction
+    
+    // Reset any previous extraction state
+    setExtractionProgress(0);
+    
+    // Get timestamps from props or existing frames
+    let timestamps: string[] = [];
+    
+    // Add timestamps from existing frames
+    if (existingFrames && existingFrames.length > 0) {
+      timestamps = existingFrames.map(frame => frame.timestamp);
+    }
+    
+    // Filter out any duplicates and sort
+    timestamps = [...new Set(timestamps)].sort((a, b) => 
+      timestampToSeconds(a) - timestampToSeconds(b)
+    );
+    
+    // Update state
+    setProjectTimestamps(timestamps);
+    
+    // Switch the UI to show extraction button
+    setShowAutoCapture(false);
   };
   
   const deleteFrame = (timestamp: string) => {
@@ -440,6 +528,17 @@ export const FramePickerModal = ({
               <canvas ref={canvasRef} className="hidden" />
             </div>
             
+            {/* Progress bar for auto extraction */}
+            {isAutoExtracting && (
+              <div className="px-4 space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span>Extracting frames...</span>
+                  <span>{Math.round(extractionProgress)}%</span>
+                </div>
+                <Progress value={extractionProgress} className="h-2" />
+              </div>
+            )}
+            
             {/* Enhanced timestamp slider with validation */}
             {videoDuration > 0 && (
               <TimestampSlider
@@ -458,46 +557,69 @@ export const FramePickerModal = ({
             )}
             
             {/* Video controls */}
-            <div className="flex items-center justify-center space-x-4 px-4">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={seekBack}
-                title="Back 5 seconds"
-              >
-                <SkipBack className="h-4 w-4" />
-              </Button>
+            <div className="flex items-center justify-center space-x-4 px-4 flex-wrap">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={seekBack}
+                  title="Back 5 seconds"
+                >
+                  <SkipBack className="h-4 w-4" />
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={togglePlayPause}
+                  title={isPlaying ? "Pause" : "Play"}
+                >
+                  {isPlaying ? (
+                    <Pause className="h-4 w-4" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={seekForward}
+                  title="Forward 5 seconds"
+                >
+                  <SkipForward className="h-4 w-4" />
+                </Button>
+              </div>
               
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={togglePlayPause}
-                title={isPlaying ? "Pause" : "Play"}
-              >
-                {isPlaying ? (
-                  <Pause className="h-4 w-4" />
+              <div className="flex items-center space-x-2 ml-4">
+                <Button
+                  onClick={captureFrame}
+                  disabled={isCaptureLoading || isAutoExtracting}
+                >
+                  <Camera className="mr-2 h-4 w-4" />
+                  {isCaptureLoading ? "Capturing..." : "Capture Frame"}
+                </Button>
+                
+                {showAutoCapture ? (
+                  <Button
+                    onClick={prepareAutoCapture}
+                    disabled={isAutoExtracting}
+                    variant="secondary"
+                  >
+                    <Zap className="mr-2 h-4 w-4" />
+                    Auto-Capture
+                  </Button>
                 ) : (
-                  <Play className="h-4 w-4" />
+                  <Button
+                    onClick={startAutoExtraction}
+                    disabled={isAutoExtracting || projectTimestamps.length === 0}
+                    variant="secondary"
+                  >
+                    <ArrowRight className="mr-2 h-4 w-4" />
+                    Start Frame Extraction
+                  </Button>
                 )}
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={seekForward}
-                title="Forward 5 seconds"
-              >
-                <SkipForward className="h-4 w-4" />
-              </Button>
-              
-              <Button
-                onClick={captureFrame}
-                disabled={isCaptureLoading}
-                className="ml-4"
-              >
-                <Camera className="mr-2 h-4 w-4" />
-                {isCaptureLoading ? "Capturing..." : "Capture Frame"}
-              </Button>
+              </div>
             </div>
             
             <Separator />
