@@ -6,17 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Clock } from "lucide-react";
 import { VideoUpload } from "./VideoUpload";
 import { YoutubeUpload } from "./YoutubeUpload";
-import { CombinedUpload } from "./CombinedUpload";
+import { TranscriptExtractor } from "./TranscriptExtractor";
 
 export const UploadForm = () => {
-  const [uploadMethod, setUploadMethod] = useState<string>("combined");
+  const [uploadMethod, setUploadMethod] = useState<string>("video");
   
   return (
     <Card className="max-w-3xl mx-auto">
       <CardHeader>
         <CardTitle>Upload Video Content</CardTitle>
         <CardDescription>
-          Upload video content or provide a transcript for slide generation
+          Upload video content or extract transcripts for slide generation
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -24,7 +24,7 @@ export const UploadForm = () => {
           <TabsList className="grid grid-cols-3 mb-8">
             <TabsTrigger value="video">Video Upload</TabsTrigger>
             <TabsTrigger value="youtube">YouTube/Vimeo</TabsTrigger>
-            <TabsTrigger value="combined">Combined Upload</TabsTrigger>
+            <TabsTrigger value="extract">Extract Transcript</TabsTrigger>
           </TabsList>
           
           <TabsContent value="video">
@@ -35,8 +35,8 @@ export const UploadForm = () => {
             <YoutubeUpload />
           </TabsContent>
           
-          <TabsContent value="combined">
-            <CombinedUpload />
+          <TabsContent value="extract">
+            <TranscriptExtractor />
           </TabsContent>
         </Tabs>
       </CardContent>

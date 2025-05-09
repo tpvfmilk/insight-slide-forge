@@ -143,7 +143,10 @@ const ProjectPage = () => {
         }
         // If has transcript but no slides, generate slides
         else if (projectData.transcript && !hasValidSlides(projectData)) {
-          handleGenerateSlides();
+          // For transcript-only projects, don't auto-generate slides
+          if (projectData.source_type !== 'transcript-only') {
+            handleGenerateSlides();
+          }
         }
       }
     } catch (error) {
@@ -437,6 +440,8 @@ const ProjectPage = () => {
   
   const needsTranscription = project?.source_type === 'video' && !project?.transcript;
   
+  const isTranscriptOnlyProject = project?.source_type === 'transcript-only';
+  
   return (
     <InsightLayout>
       <div className="h-full flex flex-col">
@@ -466,8 +471,9 @@ const ProjectPage = () => {
               <div className="flex items-center gap-2">
                 <p className="text-sm text-muted-foreground">
                   {project?.source_type === 'video' ? 'From video upload' : 
-                  project?.source_type === 'url' ? 'From URL' : 
-                  project?.source_type === 'transcript' ? 'From transcript' : 'Unknown source'}
+                   project?.source_type === 'url' ? 'From URL' : 
+                   project?.source_type === 'transcript-only' ? 'Extracted transcript' :
+                   project?.source_type === 'transcript' ? 'From transcript' : 'Unknown source'}
                 </p>
                 {videoFileName && (
                   <Badge variant="outline" className="text-xs font-normal">
@@ -534,7 +540,8 @@ const ProjectPage = () => {
                     value={transcript}
                     onChange={(e) => setTranscript(e.target.value)}
                     placeholder="Enter or edit the transcript here..."
-                    className="min-h-[400px]"
+                    className="min-h-[400px] font-mono text-sm"
+                    wrap="off"
                   />
                   
                   <div className="flex justify-end mt-4 space-x-2">
@@ -724,25 +731,49 @@ const ProjectPage = () => {
               </Button>
             )}
             
-            {/* Generate Slides Button */}
-            <Button 
-              variant={needsTranscription ? "outline" : "default"} 
-              size="sm" 
-              onClick={handleGenerateSlides} 
-              disabled={isGenerating || (project?.source_type === 'video' && !project?.transcript)}
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-1" />
-                  Generate Slides
-                </>
-              )}
-            </Button>
+            {/* Generate Slides Button (for non-transcript-only projects) */}
+            {!isTranscriptOnlyProject && (
+              <Button 
+                variant={needsTranscription ? "outline" : "default"} 
+                size="sm" 
+                onClick={handleGenerateSlides} 
+                disabled={isGenerating || (project?.source_type === 'video' && !project?.transcript)}
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Generate Slides
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {/* Generate Slides Button for transcript-only projects */}
+            {isTranscriptOnlyProject && project?.transcript && !hasValidSlides(project) && (
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={handleGenerateSlides} 
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Generate Slides
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
         
@@ -752,6 +783,52 @@ const ProjectPage = () => {
               <div className="text-center">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
                 <p className="text-sm text-muted-foreground">Loading project...</p>
+              </div>
+            </div>
+          ) : isTranscriptOnlyProject && !hasValidSlides(project) ? (
+            <div className="h-full flex items-center justify-center p-4">
+              <div className="max-w-2xl w-full">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <FileText className="h-5 w-5 mr-2" />
+                      Extracted Transcript
+                    </CardTitle>
+                    <CardDescription>
+                      This is the transcript extracted from your video
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="border rounded-md p-4 bg-muted/20 max-h-[60vh] overflow-y-auto">
+                      <pre className="whitespace-pre-wrap font-mono text-sm">{project?.transcript}</pre>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="flex justify-between">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsTranscriptDialogOpen(true)}
+                    >
+                      <Edit2 className="h-4 w-4 mr-2" />
+                      Edit Transcript
+                    </Button>
+                    <Button 
+                      onClick={handleGenerateSlides}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Generating Slides...
+                        </>
+                      ) : (
+                        <>
+                          <SlidersIcon className="h-4 w-4 mr-2" />
+                          Generate Slides
+                        </>
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
               </div>
             </div>
           ) : (

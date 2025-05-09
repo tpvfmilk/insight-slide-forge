@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, Project } from "@/services/projectService";
 import { v4 as uuidv4 } from "uuid";
@@ -291,5 +290,86 @@ export const transcribeVideo = async (projectId: string): Promise<{ success: boo
     console.error('Error transcribing video:', error);
     toast.error(`Failed to transcribe video: ${error.message}`, { id: 'transcribe-video' });
     return { success: false };
+  }
+};
+
+/**
+ * Extracts a transcription from a video without storing the video
+ * @param audioBlob The audio blob extracted from the video
+ * @param title Project title
+ * @param useSpeakerDetection Whether to use speaker detection
+ * @param contextPrompt Optional context prompt for future slide generation
+ * @param slidesPerMinute Optional number of slides per minute for future slide generation
+ * @returns The created project
+ */
+export const extractTranscriptionFromVideo = async (
+  audioBlob: Blob, 
+  title: string = 'New Transcript',
+  useSpeakerDetection: boolean = true,
+  contextPrompt: string = '',
+  slidesPerMinute: number = 6
+): Promise<Project | null> => {
+  try {
+    // Convert the blob to base64
+    const reader = new FileReader();
+    const base64Audio = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(audioBlob);
+    });
+    
+    // Create a project for the transcript
+    const projectData = {
+      title: title,
+      source_type: 'transcript-only',
+      context_prompt: contextPrompt,
+      slides_per_minute: slidesPerMinute,
+      user_id: (await supabase.auth.getUser()).data.user?.id as string
+    };
+    
+    const project = await createProject(projectData as any);
+    
+    if (!project || !project.id) {
+      throw new Error('Failed to create project');
+    }
+    
+    toast.loading('Processing transcript...', { id: 'process-transcript' });
+    
+    // Call the edge function to process the audio and generate a transcript
+    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/transcribe-video', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+      },
+      body: JSON.stringify({
+        projectId: project.id,
+        audioData: base64Audio,
+        useSpeakerDetection,
+        isTranscriptOnly: true
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to process transcript');
+    }
+    
+    const { transcript } = await response.json();
+    
+    // Update the project with the transcript
+    await updateProject(project.id, {
+      transcript
+    });
+    
+    toast.success('Transcript extracted successfully!', { id: 'process-transcript' });
+    return project;
+  } catch (error) {
+    console.error('Error extracting transcription:', error);
+    toast.error(`Failed to extract transcription: ${error.message}`, { id: 'process-transcript' });
+    return null;
   }
 };
