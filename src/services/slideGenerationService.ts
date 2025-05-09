@@ -27,7 +27,7 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
     // Fetch the project to get context_prompt and slides_per_minute if available
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('context_prompt, transcript, source_type, slides_per_minute, source_file_path')
+      .select('context_prompt, transcript, source_type, slides_per_minute, source_file_path, video_metadata')
       .eq('id', projectId)
       .single();
       
@@ -42,6 +42,20 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       return { success: false };
     }
     
+    // Get video duration from metadata if it's a video project
+    let videoDuration: number | undefined;
+    if (project.source_type === 'video' && project.video_metadata) {
+      try {
+        const metadata = project.video_metadata as { duration?: number };
+        if (metadata.duration) {
+          videoDuration = metadata.duration;
+          console.log(`Video duration for slide generation: ${videoDuration}s`);
+        }
+      } catch (error) {
+        console.warn('Could not extract video duration from metadata:', error);
+      }
+    }
+
     console.log("Calling generate-slides edge function");
     const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/generate-slides`, {
       method: "POST",
@@ -52,7 +66,8 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       body: JSON.stringify({
         projectId,
         contextPrompt: project?.context_prompt || '',
-        slidesPerMinute: project?.slides_per_minute || 6
+        slidesPerMinute: project?.slides_per_minute || 6,
+        videoDuration: videoDuration // Pass video duration to the edge function
       })
     });
     

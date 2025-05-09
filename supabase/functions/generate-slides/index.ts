@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -30,7 +29,7 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId, contextPrompt } = await req.json();
+    const { projectId, contextPrompt, videoDuration } = await req.json();
 
     if (!projectId) {
       return new Response(
@@ -95,7 +94,8 @@ serve(async (req) => {
       finalContextPrompt,
       targetSlideCount,
       project.user_id,
-      projectId
+      projectId,
+      videoDuration // Pass video duration to generateSlidesWithAI function
     );
     
     // Insert usage data into openai_usage table
@@ -163,7 +163,8 @@ async function generateSlidesWithAI(
   contextPrompt: string = '', 
   targetSlideCount: number = 0,
   userId: string,
-  projectId: string
+  projectId: string,
+  videoDuration?: number // Add video duration parameter
 ): Promise<{ slideDeck: Slide[], usageData: UsageData }> {
   if (!openAIKey) {
     throw new Error("OpenAI API key not configured");
@@ -181,6 +182,31 @@ async function generateSlidesWithAI(
     const optimalSlideInstructions = targetSlideCount > 0 
       ? `The user wants approximately ${targetSlideCount} slides in total. Adjust your content grouping accordingly.`
       : `Generate the optimal number of slides for effective studying. Segment the video into logical ideas, transitions, and key points. Avoid creating slides for filler content or repetitive information. Ensure the final slideset is concise, focused, and ideal for exam preparation or deep learning.`;
+
+    // Add specific timestamp instructions based on video duration
+    let timestampInstructions = `
+    IMPORTANT INSTRUCTIONS FOR TIMESTAMPS:
+    - For each slide, identify 1-4 key moments from the transcript that the slide content references
+    - Include timestamps for these moments in the "transcriptTimestamps" array
+    - For longer, content-rich slides, include more timestamps (up to 4)
+    - For simpler slides, 1-2 timestamps is sufficient
+    - If timestamps are explicitly mentioned in the transcript (like "at 00:05:32"), use those exact timestamps
+    - Otherwise, make your best estimation of where in the transcript the content appears
+    - The goal is to extract frames from these timestamps to provide visual context for each slide
+    `;
+    
+    // Add video duration constraint if available
+    if (videoDuration) {
+      const formattedDuration = formatDuration(videoDuration);
+      timestampInstructions += `
+    CRITICAL VIDEO DURATION CONSTRAINT:
+    - This video is exactly ${videoDuration} seconds long (${formattedDuration})
+    - All timestamps MUST be within the range 00:00:00 to ${formattedDuration}
+    - DO NOT generate any timestamps beyond ${formattedDuration}
+    - If you're unsure about a timestamp's position, choose an earlier one within the video's duration
+    - Double check all timestamps to ensure they are valid and within the video length
+    `;
+    }
 
     const prompt = `
     You are a professional presentation creator. Create a well-structured slide deck based on the following content.
@@ -203,14 +229,7 @@ async function generateSlidesWithAI(
     ${content}
     ${contextInfo}
     
-    IMPORTANT INSTRUCTIONS FOR TIMESTAMPS:
-    - For each slide, identify 1-4 key moments from the transcript that the slide content references
-    - Include timestamps for these moments in the "transcriptTimestamps" array
-    - For longer, content-rich slides, include more timestamps (up to 4)
-    - For simpler slides, 1-2 timestamps is sufficient
-    - If timestamps are explicitly mentioned in the transcript (like "at 00:05:32"), use those exact timestamps
-    - Otherwise, make your best estimation of where in the transcript the content appears
-    - The goal is to extract frames from these timestamps to provide visual context for each slide
+    ${timestampInstructions}
     `;
 
     const model = "gpt-4o-mini"; // Using the faster model for cost and speed
@@ -277,15 +296,29 @@ async function generateSlidesWithAI(
     try {
       const slides: Slide[] = JSON.parse(slidesContent);
       
-      // Process each slide to ensure it has the expected format
+      // Process each slide to ensure it has the expected format and validate timestamps
       const processedSlides = slides.map((slide, index) => {
         // Ensure transcriptTimestamps is an array
         const transcriptTimestamps = Array.isArray(slide.transcriptTimestamps) 
           ? slide.transcriptTimestamps 
           : (slide.timestamp ? [slide.timestamp] : []);
           
+        // Validate timestamps against video duration if available
+        let validatedTimestamps = transcriptTimestamps;
+        if (videoDuration) {
+          validatedTimestamps = transcriptTimestamps
+            .filter(timestamp => {
+              const seconds = timestampToSeconds(timestamp);
+              const isValid = seconds <= videoDuration;
+              if (!isValid) {
+                console.log(`Filtering out invalid timestamp: ${timestamp} (${seconds}s) exceeds video duration of ${videoDuration}s`);
+              }
+              return isValid;
+            });
+        }
+        
         // Limit to max 4 timestamps to keep things manageable
-        const limitedTimestamps = transcriptTimestamps.slice(0, 4);
+        const limitedTimestamps = validatedTimestamps.slice(0, 4);
         
         return {
           ...slide,
@@ -314,5 +347,32 @@ async function generateSlidesWithAI(
   } catch (error) {
     console.error("Error generating slides with AI:", error);
     throw new Error(`Failed to generate slides: ${error.message}`);
+  }
+}
+
+// Helper function to convert timestamp string (e.g., "00:05:32") to seconds
+function timestampToSeconds(timestamp: string): number {
+  const parts = timestamp.split(':').map(Number);
+  if (parts.length === 3) {
+    // Format: HH:MM:SS
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  } else if (parts.length === 2) {
+    // Format: MM:SS
+    return parts[0] * 60 + parts[1];
+  } else {
+    return 0;
+  }
+}
+
+// Helper function to format seconds to timestamp string (e.g., "00:05:32")
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  } else {
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 }

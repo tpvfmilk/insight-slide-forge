@@ -151,8 +151,6 @@ const ProjectPage = () => {
             existingFrames={extractedFrames}
           />
         )}
-
-        {/* Remove the duplicate FrameSelector that was causing the issue */}
       </div>
     </InsightLayout>
   );
