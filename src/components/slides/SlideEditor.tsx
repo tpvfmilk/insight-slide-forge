@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, Plus, X, Undo } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, FrameIcon, Plus, X, Undo, Film } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -62,6 +62,7 @@ export const SlideEditor = () => {
   const [lastDeletedSlide, setLastDeletedSlide] = useState<Slide | null>(null);
   const [showUndoButton, setShowUndoButton] = useState<boolean>(false);
   const [projectSize, setProjectSize] = useState<number>(0);
+  const [isFramePickerModalOpen, setIsFramePickerModalOpen] = useState<boolean>(false);
   
   const currentSlide = slides[currentSlideIndex];
   
@@ -638,6 +639,16 @@ export const SlideEditor = () => {
     toast.success("Slide restored");
   };
   
+  // Add a function to open the frame picker modal
+  const handleOpenManualFramePicker = () => {
+    if (!videoPath) {
+      toast.error("No video source available");
+      return;
+    }
+    
+    setIsFramePickerModalOpen(true);
+  };
+  
   if (isLoading) {
     return <div className="h-full w-full flex items-center justify-center">
         <div className="text-center">
@@ -715,12 +726,24 @@ export const SlideEditor = () => {
         <div className="flex-1 min-w-0 flex flex-col border-b md:border-b-0 md:border-r">
           <div className="p-4 border-b flex justify-between items-center">
             <h3 className="font-medium">Slide Visual</h3>
-            {/* Separate buttons for frame tools */}
+            {/* Frame tools - Now include Select Video Frames button next to Extract Frames */}
             <div className="flex gap-2">
               {videoPath && timestamps.length > 0 && <Button variant="outline" size="sm" onClick={handleExtractFrames} disabled={isExtractingFrames}>
                   {isExtractingFrames ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <FrameIcon className="h-4 w-4 mr-1" />}
                   Extract Frames
                 </Button>}
+              
+              {/* Add Select Video Frames button here */}
+              {videoPath && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleOpenManualFramePicker}
+                >
+                  <Film className="h-4 w-4 mr-1" />
+                  Select Video Frames
+                </Button>
+              )}
               
               {allExtractedFrames.length > 0 && <Button variant="outline" size="sm" onClick={handleSelectFrames}>
                   <ImageIcon className="h-4 w-4 mr-1" />
@@ -905,6 +928,24 @@ export const SlideEditor = () => {
         projectId={projectId}
         onRefresh={loadProject}
       />
+      
+      {/* Frame Picker Modal */}
+      {videoPath && (
+        <FramePickerModal
+          open={isFramePickerModalOpen}
+          onClose={() => setIsFramePickerModalOpen(false)}
+          videoPath={videoPath}
+          projectId={projectId || ""}
+          onComplete={(frames) => {
+            // When frames are selected in the frame picker, close the modal
+            setIsFramePickerModalOpen(false);
+            // Handle the selected frames
+            handleManualFrameSelectionComplete(frames);
+          }}
+          videoMetadata={videoMetadata || undefined}
+          existingFrames={allExtractedFrames}
+        />
+      )}
       
       {/* Frame Extraction Modal */}
       {videoPath && <FrameExtractionModal open={isFrameExtractionModalOpen} onClose={() => setIsFrameExtractionModalOpen(false)} videoPath={videoPath} projectId={projectId || ""} timestamps={timestamps} onComplete={handleFrameExtractionComplete} />}

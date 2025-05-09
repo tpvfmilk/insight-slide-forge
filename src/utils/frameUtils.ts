@@ -136,3 +136,50 @@ export async function purgeUnusedFrames(
     return false;
   }
 }
+
+// Add a helper function to handle the frame selection from the manual frame picker
+export async function handleManualFrameSelectionComplete(
+  projectId: string,
+  selectedFrames: ExtractedFrame[],
+  currentSlideIndex: number, 
+  slides: Slide[],
+  setSlides: (slides: Slide[]) => void,
+  updateSlidesInDatabase?: (slides: Slide[]) => Promise<void>
+) {
+  if (!selectedFrames.length || !projectId) return;
+
+  try {
+    // Update current slide with selected frames
+    const updatedSlides = [...slides];
+    
+    if (!updatedSlides[currentSlideIndex]) {
+      console.error("No slide found at index", currentSlideIndex);
+      return;
+    }
+    
+    updatedSlides[currentSlideIndex] = {
+      ...updatedSlides[currentSlideIndex],
+      imageUrls: selectedFrames.map(frame => frame.imageUrl)
+    };
+    
+    // Update slides state
+    setSlides(updatedSlides);
+
+    // Update in database if function is provided
+    if (updateSlidesInDatabase) {
+      await updateSlidesInDatabase(updatedSlides);
+    }
+
+    if (selectedFrames.length > 1) {
+      toast.success(`${selectedFrames.length} frames applied to slide`);
+    } else {
+      toast.success(`Frame applied to slide`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error handling manual frame selection:", error);
+    toast.error("Failed to apply selected frames to slide");
+    return false;
+  }
+}

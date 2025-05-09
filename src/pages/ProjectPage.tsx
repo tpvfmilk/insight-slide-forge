@@ -12,9 +12,6 @@ import { TranscriptView } from "@/components/project/TranscriptView";
 import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
-import { FrameSelector } from "@/components/slides/FrameSelector";
-import { ExtractedFrame } from "@/services/clientFrameExtractionService";
-import { Slide } from "@/utils/frameUtils";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -155,19 +152,7 @@ const ProjectPage = () => {
           />
         )}
 
-        {/* Frame Selector for selecting frames */}
-        {project && (
-          <FrameSelector
-            open={modals.isFramePickerModalOpen} 
-            onClose={() => modals.closeFramePickerModal()}
-            availableFrames={extractedFrames}
-            selectedFrames={extractedFrames}
-            onSelect={(frames: ExtractedFrame[]) => handleManualFrameSelectionComplete(frames)}
-            projectId={projectId}
-            onRefresh={loadProject}
-            slides={project.slides as Slide[]}
-          />
-        )}
+        {/* Remove the duplicate FrameSelector that was causing the issue */}
       </div>
     </InsightLayout>
   );

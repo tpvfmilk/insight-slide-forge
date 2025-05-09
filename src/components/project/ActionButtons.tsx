@@ -41,17 +41,7 @@ export const ActionButtons = ({
 }: ActionButtonsProps) => {
   return (
     <div className="flex items-center space-x-2">
-      {/* Frame Selection Button */}
-      {project?.source_type === 'video' && project?.source_file_path && (
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleOpenManualFramePicker}
-        >
-          <Film className="h-4 w-4 mr-2" />
-          Select Video Frames
-        </Button>
-      )}
+      {/* Removing the "Select Video Frames" button from here as it will be moved to SlideEditor */}
       
       {/* Frame Management Section */}
       {needsFrameExtraction && (
