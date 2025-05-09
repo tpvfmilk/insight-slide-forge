@@ -881,6 +881,7 @@ export const SlideEditor = () => {
         <Dialog open={isFrameSelectorOpen} onOpenChange={setIsFrameSelectorOpen}>
           <DialogContent className="sm:max-w-[900px]">
             <FrameSelector
+              open={isFrameSelectorOpen}
               availableFrames={allExtractedFrames}
               selectedFrames={[]}
               onSelect={handleFrameSelection}
