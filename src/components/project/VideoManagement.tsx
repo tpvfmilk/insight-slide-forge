@@ -205,51 +205,55 @@ export const VideoManagement = ({
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              style={{
-                                ...provided.draggableProps.style,
-                                // Fixed styles for consistent dragging experience
-                                transform: snapshot.isDragging ? provided.draggableProps.style?.transform : "none"
-                              }}
-                              className={`flex items-center p-3 border rounded-lg bg-background transition-shadow ${
-                                snapshot.isDragging ? "shadow-md border-primary/50" : ""
+                              className={`border rounded-lg p-3 bg-background ${
+                                snapshot.isDragging ? "shadow-lg border-primary/50" : ""
                               }`}
+                              style={
+                                snapshot.isDragging
+                                  ? { ...provided.draggableProps.style }
+                                  : {}
+                              }
                             >
-                              {/* Drag handle with proper styling */}
-                              <div
-                                {...provided.dragHandleProps}
-                                className="flex items-center justify-center w-10 cursor-grab active:cursor-grabbing"
-                              >
-                                <GripVertical className="h-5 w-5 text-muted-foreground" />
-                              </div>
-                              
-                              <div className="flex-1 min-w-0 pl-2">
-                                <div className="flex flex-col">
-                                  <h3 className="font-medium truncate">
-                                    {video.title || video.video_metadata?.original_file_name || "Untitled Video"}
-                                  </h3>
-                                  <div className="flex gap-2 text-xs text-muted-foreground">
-                                    <span>
-                                      {video.video_metadata?.duration ? 
-                                        formatDuration(video.video_metadata.duration) : ""}
-                                    </span>
-                                    {video.video_metadata?.file_size && (
-                                      <>
-                                        <span>•</span>
-                                        <span>{getFileSize(video.video_metadata.file_size)}</span>
-                                      </>
-                                    )}
+                              <div className="flex items-start gap-3">
+                                {/* Drag handle */}
+                                <div
+                                  {...provided.dragHandleProps}
+                                  className="flex items-center justify-center mt-2 text-muted-foreground cursor-grab active:cursor-grabbing"
+                                >
+                                  <GripVertical className="h-5 w-5" />
+                                </div>
+                                
+                                {/* Video details */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-col">
+                                    <h3 className="font-medium truncate">
+                                      {video.title || video.video_metadata?.original_file_name || "Untitled Video"}
+                                    </h3>
+                                    <div className="flex gap-2 text-xs text-muted-foreground">
+                                      <span>
+                                        {video.video_metadata?.duration ? 
+                                          formatDuration(video.video_metadata.duration) : ""}
+                                      </span>
+                                      {video.video_metadata?.file_size && (
+                                        <>
+                                          <span>•</span>
+                                          <span>{getFileSize(video.video_metadata.file_size)}</span>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
+                                
+                                {/* Delete button */}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteVideo(video.id)}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
-                              
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="ml-2"
-                                onClick={() => handleDeleteVideo(video.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
                             </div>
                           )}
                         </Draggable>
