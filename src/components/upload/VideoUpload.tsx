@@ -77,6 +77,8 @@ export const VideoUpload = () => {
     }, 300);
     
     try {
+      console.log("Creating project from video file:", selectedFile.name);
+      
       // Perform the actual upload with slides per minute
       const project = await createProjectFromVideo(
         selectedFile, 
@@ -93,6 +95,7 @@ export const VideoUpload = () => {
         setIsUploading(false);
         
         if (project) {
+          console.log("Project created successfully:", project.id);
           toast.success("Upload complete! Redirecting to slide editor...");
           navigate(`/projects/${project.id}`);
         }

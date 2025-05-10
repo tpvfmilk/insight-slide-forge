@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
@@ -21,6 +20,8 @@ export type ProjectVideo = Database["public"]["Tables"]["project_videos"]["Row"]
  * @param projectId Project ID
  */
 export const fetchProjectVideos = async (projectId: string): Promise<ProjectVideo[]> => {
+  console.log(`Fetching videos for project ${projectId}`);
+  
   const { data, error } = await supabase
     .from('project_videos')
     .select('*')
@@ -31,6 +32,8 @@ export const fetchProjectVideos = async (projectId: string): Promise<ProjectVide
     console.error(`Error fetching videos for project ${projectId}:`, error);
     throw error;
   }
+
+  console.log(`Found ${data?.length || 0} videos for project ${projectId}`, data);
 
   // Cast data to ProjectVideo[] with proper handling of JSON fields
   return (data || []).map(video => {
@@ -80,6 +83,8 @@ export const fetchProjectVideoById = async (id: string): Promise<ProjectVideo | 
  * @param videoData Project video data
  */
 export const createProjectVideo = async (videoData: Omit<ProjectVideo, 'id' | 'created_at' | 'updated_at'>): Promise<ProjectVideo> => {
+  console.log("Creating project video:", videoData);
+  
   const { data, error } = await supabase
     .from('project_videos')
     .insert(videoData)
@@ -90,6 +95,8 @@ export const createProjectVideo = async (videoData: Omit<ProjectVideo, 'id' | 'c
     console.error('Error creating project video:', error);
     throw error;
   }
+
+  console.log("Project video created successfully:", data);
 
   // Cast data to ProjectVideo with proper handling of JSON fields
   const typedVideo: ProjectVideo = {
@@ -166,6 +173,8 @@ export const updateVideosOrder = async (videos: Array<{ id: string, display_orde
  * @param projectId Project ID
  */
 export const getNextDisplayOrder = async (projectId: string): Promise<number> => {
+  console.log(`Getting next display order for project ${projectId}`);
+  
   const { data, error } = await supabase
     .from('project_videos')
     .select('display_order')
@@ -178,5 +187,8 @@ export const getNextDisplayOrder = async (projectId: string): Promise<number> =>
     return 0;
   }
   
-  return data.length > 0 ? (data[0].display_order + 1) : 0;
+  const nextOrder = data.length > 0 ? (data[0].display_order + 1) : 0;
+  console.log(`Next display order for project ${projectId} is ${nextOrder}`);
+  
+  return nextOrder;
 };

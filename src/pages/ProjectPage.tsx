@@ -42,12 +42,8 @@ const ProjectPage = () => {
     handleManualFrameSelectionComplete,
   } = useProjectState(projectId);
   
-  const handleOpenManualFramePicker = () => {
-    if (!project?.source_file_path) {
-      toast.error("No video source available");
-      return;
-    }
-  };
+  // Empty placeholder method that's not used since the button is removed
+  const handleOpenManualFramePicker = () => {};
 
   // Process frames using client-side extraction only
   const processFrameExtraction = async () => {

@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { RefreshCw, FileText, Film } from "lucide-react";
+import { RefreshCw, FileText } from "lucide-react";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { Project } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -28,21 +28,10 @@ export const ActionButtons = ({
   handleTranscribeVideo,
   isGenerating,
   handleGenerateSlides,
-  handleOpenManualFramePicker,
   isTranscriptOnlyProject
 }: ActionButtonsProps) => {
   return <div className="flex items-center space-x-2">
-      {/* Show frame picker button for video projects */}
-      {project?.source_type === 'video' && (
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleOpenManualFramePicker}
-        >
-          <Film className="h-4 w-4 mr-1" />
-          Select Video Frames
-        </Button>
-      )}
+      {/* "Select Video Frames" button removed as it's redundant with one in the slide editor */}
       
       {/* Transcribe Button */}
       {needsTranscription && <Button variant="outline" size="sm" onClick={handleTranscribeVideo} disabled={isTranscribing}>

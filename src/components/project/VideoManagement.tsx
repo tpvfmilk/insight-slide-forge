@@ -31,6 +31,7 @@ export const VideoManagement = ({
 
   useEffect(() => {
     if (isOpen && project?.id) {
+      console.log("VideoManagement opened - Loading videos for project:", project.id);
       loadProjectVideos();
     }
   }, [isOpen, project]);
@@ -40,8 +41,19 @@ export const VideoManagement = ({
     
     try {
       setLoading(true);
+      console.log("Fetching videos for project:", project.id);
+      
       const projectVideos = await fetchProjectVideos(project.id);
+      console.log("Fetched videos:", projectVideos);
+      
       setVideos(projectVideos);
+      
+      // Log the project.videos property to see if it exists and has data
+      if (project.videos) {
+        console.log("Project videos from project object:", project.videos);
+      } else {
+        console.log("Project doesn't have videos property or it's empty");
+      }
     } catch (error) {
       console.error("Error loading project videos:", error);
       toast.error("Failed to load project videos");
@@ -106,8 +118,12 @@ export const VideoManagement = ({
 
   const handleVideoAdded = () => {
     setIsAddingVideo(false);
+    console.log("Video added, reloading videos list");
     loadProjectVideos();
-    if (onVideoAdded) onVideoAdded();
+    if (onVideoAdded) {
+      console.log("Calling parent onVideoAdded callback");
+      onVideoAdded();
+    }
   };
 
   const handleEditSave = async (video: ProjectVideo) => {
