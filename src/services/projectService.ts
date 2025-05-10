@@ -51,7 +51,19 @@ export const fetchRecentProjects = async (limit: number = 3): Promise<Project[]>
     throw error;
   }
 
-  const projects = await enhanceProjectsWithVideos(data || []);
+  // Process the data to ensure it matches the Project type
+  const typedProjects = (data || []).map(project => {
+    const typedProject: Project = {
+      ...project,
+      // Cast JSON fields to their proper types
+      video_metadata: project.video_metadata as Project['video_metadata'],
+      extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | null,
+      slides: project.slides as any,
+    };
+    return typedProject;
+  });
+
+  const projects = await enhanceProjectsWithVideos(typedProjects);
   return projects;
 };
 
@@ -73,8 +85,17 @@ export const fetchProjectById = async (id: string): Promise<Project | null> => {
 
   if (!data) return null;
 
+  // Process the data to ensure it matches the Project type
+  const typedProject: Project = {
+    ...data,
+    // Cast JSON fields to their proper types
+    video_metadata: data.video_metadata as Project['video_metadata'],
+    extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | null,
+    slides: data.slides as any,
+  };
+
   // Enhance with videos information
-  const projects = await enhanceProjectsWithVideos([data]);
+  const projects = await enhanceProjectsWithVideos([typedProject]);
   return projects[0];
 };
 
@@ -182,17 +203,10 @@ const enhanceProjectsWithVideos = async (projects: Project[]): Promise<Project[]
 
     // Enhance each project with its videos
     return projects.map(project => {
-      // Cast data to Project with proper handling of JSON fields
-      const typedProject: Project = {
+      return {
         ...project,
-        // Cast video_metadata JSON to the correct type if present
-        video_metadata: project.video_metadata as Project['video_metadata'],
-        // Cast extracted_frames JSON to the correct type if present
-        extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | null,
-        // Add videos
         videos: videosByProject[project.id] || [],
       };
-      return typedProject;
     });
   } catch (e) {
     console.error("Error enhancing projects with videos:", e);

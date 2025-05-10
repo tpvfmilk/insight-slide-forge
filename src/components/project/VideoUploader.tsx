@@ -53,16 +53,50 @@ export const VideoUploader = ({
       // 1. Upload the file to storage
       const filePath = `project_videos/${project.id}/${Date.now()}_${file.name}`;
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('video_uploads')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-          onUploadProgress: (progress) => {
-            const percent = (progress.loaded / progress.total) * 100;
+      // Create an XMLHttpRequest to track progress manually since Supabase doesn't support onUploadProgress
+      const xhr = new XMLHttpRequest();
+      
+      // Create a Promise to handle the upload
+      const uploadPromise = new Promise<{ path: string; error: Error | null }>((resolve, reject) => {
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percent = (event.loaded / event.total) * 100;
             setUploadProgress(Math.round(percent));
-          },
+          }
         });
+        
+        xhr.addEventListener('error', () => {
+          reject(new Error('Upload failed'));
+        });
+        
+        xhr.addEventListener('abort', () => {
+          reject(new Error('Upload aborted'));
+        });
+        
+        // Perform the actual upload using Supabase
+        // This will set up the upload but won't use the XHR progress
+        const uploadTask = async () => {
+          const { data, error } = await supabase.storage
+            .from('video_uploads')
+            .upload(filePath, file, {
+              cacheControl: '3600',
+              upsert: false,
+            });
+            
+          if (error) {
+            reject(error);
+          } else {
+            resolve({ path: filePath, error: null });
+            // Set progress to 100% when complete
+            setUploadProgress(100);
+          }
+        };
+        
+        uploadTask();
+      });
+
+      // Wait for upload to complete
+      const { error: uploadError } = await uploadPromise;
 
       if (uploadError) {
         throw uploadError;
@@ -86,6 +120,7 @@ export const VideoUploader = ({
         source_file_path: filePath,
         video_metadata: videoMetadata,
         display_order: nextDisplayOrder,
+        extracted_frames: null, // Add the missing property
       });
       
       toast.success("Video uploaded successfully");
