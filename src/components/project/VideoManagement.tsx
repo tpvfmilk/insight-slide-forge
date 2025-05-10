@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ProjectVideo, deleteProjectVideo, fetchProjectVideos, updateVideosOrder } from "@/services/projectVideoService";
@@ -8,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Project } from "@/services/projectService";
-import { Plus, Trash2, GripVertical, Edit, Clock, Video } from "lucide-react";
+import { Plus, Trash2, GripVertical, Edit, Clock, Video, ArrowUp, ArrowDown } from "lucide-react";
 import { VideoUploader } from "@/components/project/VideoUploader";
 import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
@@ -64,29 +63,67 @@ export const VideoManagement = ({
     }
   };
 
-  const handleOnDragEnd = async (result: any) => {
-    if (!result.destination) return;
-    
-    if (result.destination.index === result.source.index) return;
+  const moveUp = async (index: number) => {
+    if (index <= 0) return; // Can't move the first item up
     
     const items = Array.from(videos);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+    const itemToMove = items[index];
+    const itemAbove = items[index - 1];
     
-    // Update the display_order in each item
-    const updatedItems = items.map((item, index) => ({
-      ...item,
-      display_order: index
-    }));
+    // Swap the display_order values
+    const newOrder = itemAbove.display_order;
+    const prevOrder = itemToMove.display_order;
     
-    setVideos(updatedItems);
+    // Update the items array
+    items[index] = { ...itemToMove, display_order: newOrder };
+    items[index - 1] = { ...itemAbove, display_order: prevOrder };
+    
+    // Sort the array by display_order
+    items.sort((a, b) => a.display_order - b.display_order);
+    
+    setVideos(items);
     
     try {
       // Send the update to the server
-      await updateVideosOrder(updatedItems.map(video => ({
-        id: video.id,
-        display_order: video.display_order
-      })));
+      await updateVideosOrder([
+        { id: itemToMove.id, display_order: newOrder },
+        { id: itemAbove.id, display_order: prevOrder }
+      ]);
+      
+      toast.success("Video order updated");
+    } catch (error) {
+      console.error("Error updating video order:", error);
+      toast.error("Failed to update video order");
+      loadProjectVideos(); // Reload to get current order
+    }
+  };
+  
+  const moveDown = async (index: number) => {
+    if (index >= videos.length - 1) return; // Can't move the last item down
+    
+    const items = Array.from(videos);
+    const itemToMove = items[index];
+    const itemBelow = items[index + 1];
+    
+    // Swap the display_order values
+    const newOrder = itemBelow.display_order;
+    const prevOrder = itemToMove.display_order;
+    
+    // Update the items array
+    items[index] = { ...itemToMove, display_order: newOrder };
+    items[index + 1] = { ...itemBelow, display_order: prevOrder };
+    
+    // Sort the array by display_order
+    items.sort((a, b) => a.display_order - b.display_order);
+    
+    setVideos(items);
+    
+    try {
+      // Send the update to the server
+      await updateVideosOrder([
+        { id: itemToMove.id, display_order: newOrder },
+        { id: itemBelow.id, display_order: prevOrder }
+      ]);
       
       toast.success("Video order updated");
     } catch (error) {
@@ -187,83 +224,77 @@ export const VideoManagement = ({
             <div className="border rounded-lg p-2">
               <div className="flex justify-between items-center mb-2 px-2">
                 <p className="text-sm font-medium">Video order ({videos.length})</p>
-                <p className="text-xs text-muted-foreground">Drag to reorder</p>
+                <p className="text-xs text-muted-foreground">Use arrows to reorder videos</p>
               </div>
-              <DragDropContext onDragEnd={handleOnDragEnd}>
-                <Droppable droppableId="videos">
-                  {(provided) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className="space-y-1 max-h-[300px] overflow-y-auto px-1 py-1"
-                    >
-                      {videos.map((video, index) => (
-                        <Draggable
-                          key={video.id}
-                          draggableId={video.id}
-                          index={index}
+              <div className="space-y-1 max-h-[300px] overflow-y-auto px-1 py-1">
+                {videos.map((video, index) => (
+                  <div
+                    key={video.id}
+                    className="border rounded-md p-2 bg-background"
+                  >
+                    <div className="flex items-center gap-2">
+                      {/* Order number badge */}
+                      <div className="flex items-center justify-center bg-muted w-6 h-6 rounded-full text-xs font-medium">
+                        {index + 1}
+                      </div>
+                      
+                      {/* Video details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-col">
+                          <h3 className="font-medium text-sm truncate">
+                            {video.title || video.video_metadata?.original_file_name || "Untitled Video"}
+                          </h3>
+                          <div className="flex gap-2 text-xs text-muted-foreground">
+                            {video.video_metadata?.duration && (
+                              <span className="flex items-center">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatDuration(video.video_metadata.duration)}
+                              </span>
+                            )}
+                            {video.video_metadata?.file_size && (
+                              <span>
+                                {getFileSize(video.video_metadata.file_size)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Reordering buttons */}
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => moveUp(index)}
+                          disabled={index === 0}
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
                         >
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className={`border rounded-md p-2 bg-background ${
-                                snapshot.isDragging ? "shadow-lg border-primary/50" : ""
-                              }`}
-                              style={{
-                                ...provided.draggableProps.style
-                              }}
-                            >
-                              <div className="flex items-center gap-2">
-                                {/* Drag handle */}
-                                <div
-                                  {...provided.dragHandleProps}
-                                  className="flex items-center justify-center text-muted-foreground cursor-grab active:cursor-grabbing"
-                                >
-                                  <GripVertical className="h-4 w-4" />
-                                </div>
-                                
-                                {/* Video details */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex flex-col">
-                                    <h3 className="font-medium text-sm truncate">
-                                      {video.title || video.video_metadata?.original_file_name || "Untitled Video"}
-                                    </h3>
-                                    <div className="flex gap-2 text-xs text-muted-foreground">
-                                      {video.video_metadata?.duration && (
-                                        <span className="flex items-center">
-                                          <Clock className="h-3 w-3 mr-1" />
-                                          {formatDuration(video.video_metadata.duration)}
-                                        </span>
-                                      )}
-                                      {video.video_metadata?.file_size && (
-                                        <span>
-                                          {getFileSize(video.video_metadata.file_size)}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {/* Delete button */}
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeleteVideo(video.id)}
-                                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => moveDown(index)}
+                          disabled={index === videos.length - 1}
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      
+                      {/* Delete button */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteVideo(video.id)}
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
