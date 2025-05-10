@@ -137,6 +137,53 @@ export type Database = {
         }
         Relationships: []
       }
+      project_videos: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_order: number
+          extracted_frames: Json | null
+          id: string
+          project_id: string
+          source_file_path: string | null
+          title: string | null
+          updated_at: string
+          video_metadata: Json | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_order: number
+          extracted_frames?: Json | null
+          id?: string
+          project_id: string
+          source_file_path?: string | null
+          title?: string | null
+          updated_at?: string
+          video_metadata?: Json | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          extracted_frames?: Json | null
+          id?: string
+          project_id?: string
+          source_file_path?: string | null
+          title?: string | null
+          updated_at?: string
+          video_metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_videos_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           context_prompt: string | null

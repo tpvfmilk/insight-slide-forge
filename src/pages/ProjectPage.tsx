@@ -47,10 +47,6 @@ const ProjectPage = () => {
       toast.error("No video source available");
       return;
     }
-    
-    // Just trigger the frame picker in SlideEditor by navigating to it
-    // We no longer need the modal here since it will be handled in SlideEditor
-    // We'll rely on the button in ActionButtons to handle the modal opening
   };
 
   // Process frames using client-side extraction only
@@ -80,6 +76,10 @@ const ProjectPage = () => {
       toast.error("Failed to extract frames");
     }
   };
+
+  const handleVideoAdded = () => {
+    loadProject(); // Reload the project to get updated video list
+  };
   
   return (
     <InsightLayout>
@@ -89,6 +89,7 @@ const ProjectPage = () => {
             project={project} 
             isLoading={isLoading}
             videoFileName={videoFileName}
+            onVideoAdded={handleVideoAdded}
           />
           
           <div className="flex items-center space-x-2">

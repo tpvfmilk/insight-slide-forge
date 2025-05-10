@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit2 } from "lucide-react";
+import { ArrowLeft, Edit2, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -10,16 +10,19 @@ import { RefreshCw } from "lucide-react";
 import { Project } from "@/services/projectService";
 import { updateProject } from "@/services/uploadService";
 import { toast } from "sonner";
+import { VideoManagement } from "@/components/project/VideoManagement";
 
 interface ProjectPageHeaderProps {
   project: Project | null;
   isLoading: boolean;
   videoFileName: string;
+  onVideoAdded?: () => void;
 }
 
-export const ProjectPageHeader = ({ project, isLoading, videoFileName }: ProjectPageHeaderProps) => {
+export const ProjectPageHeader = ({ project, isLoading, videoFileName, onVideoAdded }: ProjectPageHeaderProps) => {
   const navigate = useNavigate();
   const [isEditTitleDialogOpen, setIsEditTitleDialogOpen] = useState<boolean>(false);
+  const [isVideoManagementOpen, setIsVideoManagementOpen] = useState<boolean>(false);
   const [title, setTitle] = useState<string>(project?.title || "Untitled Project");
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
@@ -41,6 +44,11 @@ export const ProjectPageHeader = ({ project, isLoading, videoFileName }: Project
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const getVideoCount = () => {
+    if (!project?.videos) return 0;
+    return project.videos.length;
   };
 
   return (
@@ -74,9 +82,25 @@ export const ProjectPageHeader = ({ project, isLoading, videoFileName }: Project
                project?.source_type === 'transcript-only' ? 'Extracted transcript' :
                project?.source_type === 'transcript' ? 'From transcript' : 'Unknown source'}
             </p>
-            {/* Filename badge has been hidden as requested */}
+            {/* Video count badge */}
+            {(project?.source_type === 'video' || getVideoCount() > 0) && (
+              <Badge variant="outline" className="text-xs">
+                {getVideoCount()} video{getVideoCount() !== 1 ? 's' : ''}
+              </Badge>
+            )}
           </div>
         </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => setIsVideoManagementOpen(true)}
+        >
+          <Video className="h-4 w-4 mr-2" />
+          Manage Videos
+        </Button>
       </div>
 
       {/* Edit Title Dialog */}
@@ -116,6 +140,16 @@ export const ProjectPageHeader = ({ project, isLoading, videoFileName }: Project
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Video Management Dialog */}
+      <VideoManagement 
+        project={project}
+        isOpen={isVideoManagementOpen}
+        onClose={() => setIsVideoManagementOpen(false)}
+        onVideoAdded={() => {
+          if (onVideoAdded) onVideoAdded();
+        }}
+      />
     </div>
   );
 };

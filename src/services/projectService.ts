@@ -20,6 +20,19 @@ export type Project = Database["public"]["Tables"]["projects"]["Row"] & {
   };
   extracted_frames?: ExtractedFrame[] | null;
   folder_id?: string | null;
+  videos?: VideoSummary[] | null;
+};
+
+// Type for simplified video info to include in projects
+export type VideoSummary = {
+  id: string;
+  title: string | null;
+  source_file_path: string | null;
+  display_order: number;
+  video_metadata?: {
+    duration?: number;
+    original_file_name?: string;
+  };
 };
 
 /**
@@ -38,19 +51,8 @@ export const fetchRecentProjects = async (limit: number = 3): Promise<Project[]>
     throw error;
   }
 
-  // Cast data to Project[] with proper handling of JSON fields
-  return (data || []).map(project => {
-    const typedProject: Project = {
-      ...project,
-      // Cast video_metadata JSON to the correct type if present
-      video_metadata: project.video_metadata as Project['video_metadata'],
-      // Cast extracted_frames JSON to the correct type if present
-      extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | null,
-      // Add folder_id
-      folder_id: project.folder_id
-    };
-    return typedProject;
-  });
+  const projects = await enhanceProjectsWithVideos(data || []);
+  return projects;
 };
 
 /**
@@ -71,16 +73,9 @@ export const fetchProjectById = async (id: string): Promise<Project | null> => {
 
   if (!data) return null;
 
-  // Cast data to Project with proper handling of JSON fields
-  const typedProject: Project = {
-    ...data,
-    // Cast video_metadata JSON to the correct type if present
-    video_metadata: data.video_metadata as Project['video_metadata'],
-    // Cast extracted_frames JSON to the correct type if present
-    extracted_frames: data.extracted_frames as unknown as ExtractedFrame[] | null
-  };
-  
-  return typedProject;
+  // Enhance with videos information
+  const projects = await enhanceProjectsWithVideos([data]);
+  return projects[0];
 };
 
 /**
@@ -147,6 +142,65 @@ export const updateProject = async (id: string, projectData: Partial<Project>): 
 };
 
 /**
+ * Helper function to enhance projects with their videos information
+ * @param projects Array of projects
+ * @returns Enhanced projects with videos info
+ */
+const enhanceProjectsWithVideos = async (projects: Project[]): Promise<Project[]> => {
+  if (!projects.length) return [];
+
+  try {
+    // Get all project IDs
+    const projectIds = projects.map(project => project.id);
+
+    // Fetch videos for all projects in one query to avoid N+1 problem
+    const { data: videoData, error } = await supabase
+      .from('project_videos')
+      .select('id, title, source_file_path, display_order, video_metadata, project_id')
+      .in('project_id', projectIds)
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      console.error("Error fetching project videos:", error);
+      return projects;
+    }
+
+    // Group videos by project ID
+    const videosByProject: { [key: string]: VideoSummary[] } = {};
+    videoData?.forEach(video => {
+      if (!videosByProject[video.project_id]) {
+        videosByProject[video.project_id] = [];
+      }
+      videosByProject[video.project_id].push({
+        id: video.id,
+        title: video.title,
+        source_file_path: video.source_file_path,
+        display_order: video.display_order,
+        video_metadata: video.video_metadata as VideoSummary['video_metadata'],
+      });
+    });
+
+    // Enhance each project with its videos
+    return projects.map(project => {
+      // Cast data to Project with proper handling of JSON fields
+      const typedProject: Project = {
+        ...project,
+        // Cast video_metadata JSON to the correct type if present
+        video_metadata: project.video_metadata as Project['video_metadata'],
+        // Cast extracted_frames JSON to the correct type if present
+        extracted_frames: project.extracted_frames as unknown as ExtractedFrame[] | null,
+        // Add videos
+        videos: videosByProject[project.id] || [],
+      };
+      return typedProject;
+    });
+  } catch (e) {
+    console.error("Error enhancing projects with videos:", e);
+    return projects;
+  }
+};
+
+/**
  * Deletes all storage items associated with a project
  * @param project Project to delete storage for
  * @returns Promise resolving to true if successful
@@ -159,7 +213,8 @@ export const deleteProjectStorage = async (project: Project): Promise<boolean> =
     const deletionResults = {
       sourceVideo: false,
       extractedFrames: false,
-      projectBucket: false
+      projectBucket: false,
+      projectVideos: false
     };
 
     // 1. Delete source video file if it exists (from video_uploads bucket)
@@ -236,7 +291,43 @@ export const deleteProjectStorage = async (project: Project): Promise<boolean> =
       }
     }
     
-    // 3. Check if there's a project-specific bucket and delete everything in it
+    // 3. Delete all videos associated with the project
+    try {
+      // Fetch all videos for this project
+      const { data: projectVideos, error: videosError } = await supabase
+        .from('project_videos')
+        .select('source_file_path')
+        .eq('project_id', project.id);
+      
+      if (videosError) {
+        console.warn(`Error fetching project videos: ${videosError.message}`);
+      } else if (projectVideos && projectVideos.length > 0) {
+        console.log(`Deleting ${projectVideos.length} video files`);
+        
+        // Delete each video file from storage
+        for (const video of projectVideos) {
+          if (video.source_file_path) {
+            try {
+              const { error } = await supabase.storage
+                .from('video_uploads')
+                .remove([video.source_file_path]);
+                
+              if (error) {
+                console.warn(`Error deleting video file ${video.source_file_path}: ${error.message}`);
+              }
+            } catch (e) {
+              console.error(`Error processing video deletion: ${e}`);
+            }
+          }
+        }
+        
+        deletionResults.projectVideos = true;
+      }
+    } catch (e) {
+      console.error(`Error processing project videos deletion: ${e}`);
+    }
+    
+    // 4. Check if there's a project-specific bucket and delete everything in it
     try {
       const projectBucketName = `project_${project.id}`;
       
