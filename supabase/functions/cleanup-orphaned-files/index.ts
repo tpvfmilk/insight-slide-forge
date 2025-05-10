@@ -21,6 +21,15 @@ serve(async (req) => {
   }
 
   try {
+    // Get request body if any
+    let forceCleanup = false;
+    try {
+      const body = await req.json();
+      forceCleanup = !!body.forceCleanup;
+    } catch (e) {
+      // No body or invalid JSON, continue with default settings
+    }
+    
     // Get the current user from the request
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
@@ -41,7 +50,7 @@ serve(async (req) => {
       )
     }
 
-    console.log(`Starting cleanup for user: ${user.id}`)
+    console.log(`Starting cleanup for user: ${user.id}, forceCleanup: ${forceCleanup}`)
 
     // 1. Get all existing projects for the user
     const { data: projects, error: projectsError } = await supabaseAdmin
@@ -58,7 +67,10 @@ serve(async (req) => {
     const validSourcePaths = projects?.map(p => p.source_file_path).filter(Boolean) || []
     
     console.log(`Found ${validProjectIds.length} valid projects`)
-
+    
+    // In force cleanup mode for users with no projects, we'll delete all user files
+    const hasNoProjects = validProjectIds.length === 0;
+    
     // Storage buckets to check
     const buckets = ['video_uploads', 'slide_stills']
     
@@ -99,25 +111,33 @@ serve(async (req) => {
         // Skip if it's a folder
         if (file.id === null) continue
         
-        // Check if file belongs to user by naming convention and if it's orphaned
-        if (bucket === 'video_uploads') {
-          // Check if the file is a source for any project
-          if (file.name.startsWith(`${user.id}/`) && !validSourcePaths.includes(file.name)) {
-            shouldDelete = true
-          }
-        } else if (bucket === 'slide_stills') {
-          // Check if associated with any project
-          let isProjectFile = false
-          for (const projectId of validProjectIds) {
-            if (file.name.includes(`project_${projectId}/`)) {
-              isProjectFile = true
-              break
+        // In force cleanup mode for users with no projects, delete all files belonging to the user
+        if (forceCleanup && hasNoProjects && file.name.includes(`${user.id}/`)) {
+          console.log(`Force cleaning: ${file.name}`)
+          shouldDelete = true
+        }
+        // Normal cleanup mode
+        else {
+          // Check if file belongs to user by naming convention and if it's orphaned
+          if (bucket === 'video_uploads') {
+            // Check if the file is a source for any project
+            if (file.name.startsWith(`${user.id}/`) && !validSourcePaths.includes(file.name)) {
+              shouldDelete = true
             }
-          }
-          
-          // If it's user's file but not associated with any valid project
-          if (file.name.includes(`/${user.id}/`) && !isProjectFile) {
-            shouldDelete = true
+          } else if (bucket === 'slide_stills') {
+            // Check if associated with any project
+            let isProjectFile = false
+            for (const projectId of validProjectIds) {
+              if (file.name.includes(`project_${projectId}/`)) {
+                isProjectFile = true
+                break
+              }
+            }
+            
+            // If it's user's file but not associated with any valid project
+            if (file.name.includes(`/${user.id}/`) && !isProjectFile) {
+              shouldDelete = true
+            }
           }
         }
 
@@ -157,16 +177,12 @@ serve(async (req) => {
     // Sync storage usage to update the database
     try {
       // Use the existing sync storage usage function
-      const syncResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/sync-storage-usage`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const syncResponse = await supabaseAdmin.functions.invoke('sync-storage-usage', {
+        body: { userId: user.id }
       })
       
-      if (!syncResponse.ok) {
-        console.warn('Storage sync function call failed:', await syncResponse.text())
+      if (!syncResponse.data?.success) {
+        console.warn('Storage sync function call failed:', syncResponse.error || 'Unknown error')
       }
     } catch (syncError) {
       console.error('Error calling sync storage function:', syncError)

@@ -20,8 +20,11 @@ export function CleanupStorageButton() {
         return;
       }
       
+      // Call the cleanup function with force=true to aggressively clean up all files
+      // when the user has no projects
       const response = await supabase.functions.invoke("cleanup-orphaned-files", {
-        method: "POST"
+        method: "POST",
+        body: { forceCleanup: true }
       });
       
       if (response.error) {
