@@ -18,6 +18,7 @@ import { getProjectTotalSize } from "@/services/storageService";
 import { FileSizeBadge } from "@/components/projects/FileSizeBadge";
 import { handleManualFrameSelectionComplete, Slide as FrameUtilsSlide } from "@/utils/frameUtils";
 import { generateSlidesForProject } from "@/services/slideGenerationService";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Define a local interface that ensures id is required 
 // while still being compatible with the imported Slide type
@@ -590,7 +591,7 @@ export const SlideEditor = () => {
     toast.success("New slide added");
   };
   
-  // Render the component with the same structure but the updated frame selection functionality
+  // Render the component with the updated layout
   return (
     <div className="h-full flex flex-col">
       {/* Navigation and toolbar */}
@@ -655,80 +656,84 @@ export const SlideEditor = () => {
         </div>
       </div>
 
-      {/* Main slide editing area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Slides sidebar */}
-        <div className="w-60 border-r h-full overflow-y-auto bg-muted/20">
-          <div className="p-3 border-b flex justify-between items-center">
-            <h3 className="font-semibold text-sm">Slides ({slides.length})</h3>
-            <Button size="icon" variant="outline" className="h-7 w-7" onClick={addNewSlide}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          <div className="space-y-2 p-2">
-            {slides.map((slide, index) => (
-              <div 
-                key={slide.id}
-                onClick={() => goToSlide(index)}
-                className={`p-2 rounded cursor-pointer transition-colors ${
-                  currentSlideIndex === index ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                }`}
-              >
-                <p className="font-medium text-sm truncate">{slide.title}</p>
-                <p className="text-xs truncate opacity-80">
-                  {slide.content.substring(0, 30)}{slide.content.length > 30 ? "..." : ""}
-                </p>
+      {/* Main slide editing area - now with side-by-side layout */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-auto flex">
+          {/* Slide content area - now in a side-by-side layout */}
+          <div className="flex-1 p-4 flex">
+            {/* Left side - Slide content */}
+            <div className="w-1/2 pr-4 flex flex-col">
+              {/* Title */}
+              <div className="mb-4">
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    className="w-full text-xl font-semibold border-b border-primary/20 focus:border-primary outline-none pb-1 bg-transparent"
+                  />
+                ) : (
+                  <h2 
+                    className="text-xl font-semibold pb-1 border-b border-transparent cursor-pointer hover:border-muted-foreground" 
+                    onClick={startEditing}
+                  >
+                    {currentSlide?.title}
+                  </h2>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
-        
-        {/* Current slide content */}
-        <div className="flex-1 overflow-auto flex flex-col">
-          <div className="flex-1 p-4">
-            {/* Title */}
-            <div className="mb-4">
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  className="w-full text-xl font-semibold border-b border-primary/20 focus:border-primary outline-none pb-1 bg-transparent"
-                />
-              ) : (
-                <h2 
-                  className="text-xl font-semibold pb-1 border-b border-transparent cursor-pointer hover:border-muted-foreground" 
-                  onClick={startEditing}
-                >
-                  {currentSlide?.title}
-                </h2>
-              )}
-            </div>
 
-            {/* Content */}
-            <div className="mb-4 min-h-[200px]">
-              {isEditing ? (
-                <Textarea
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  className="min-h-[200px] resize-none"
-                />
-              ) : (
-                <div 
-                  className="prose max-w-none cursor-pointer"
-                  onClick={startEditing}
-                >
-                  {currentSlide?.content.split("\n").map((paragraph, i) => (
-                    <p key={i}>{paragraph}</p>
-                  ))}
+              {/* Content */}
+              <div className="mb-4 flex-1">
+                {isEditing ? (
+                  <Textarea
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    className="min-h-[200px] h-full resize-none"
+                  />
+                ) : (
+                  <div 
+                    className="prose max-w-none cursor-pointer"
+                    onClick={startEditing}
+                  >
+                    {currentSlide?.content.split("\n").map((paragraph, i) => (
+                      <p key={i}>{paragraph}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Slide action buttons */}
+              <div className="mt-auto pt-4 border-t flex justify-between items-center">
+                <div>
+                  {isEditing && (
+                    <Button onClick={saveChanges}>Save Changes</Button>
+                  )}
                 </div>
-              )}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={copyToClipboard}
+                  >
+                    Copy Content
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={deleteCurrentSlide}
+                    disabled={slides.length <= 1}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Delete Slide
+                  </Button>
+                </div>
+              </div>
             </div>
             
-            {/* Images section */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
+            {/* Right side - Images */}
+            <div className="w-1/2 pl-4 border-l flex flex-col">
+              {/* Images header */}
+              <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold">Images</h3>
                 <div className="flex items-center gap-2">
                   <Button 
@@ -772,114 +777,139 @@ export const SlideEditor = () => {
               </div>
               
               {/* Image gallery */}
-              {currentSlide && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {/* Show from imageUrl (legacy) */}
-                  {currentSlide.imageUrl && (
-                    <div className="relative group aspect-video rounded-md overflow-hidden border">
-                      <img 
-                        src={currentSlide.imageUrl} 
-                        alt="Slide image"
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          variant="destructive"
-                          size="sm"
-                          className="h-7"
-                          onClick={() => removeImage(currentSlide.imageUrl!)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-1" />
-                          Remove
-                        </Button>
+              <div className="flex-1 overflow-y-auto">
+                {currentSlide && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Show from imageUrl (legacy) */}
+                    {currentSlide.imageUrl && (
+                      <div className="relative group aspect-video rounded-md overflow-hidden border">
+                        <img 
+                          src={currentSlide.imageUrl} 
+                          alt="Slide image"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="destructive"
+                            size="sm"
+                            className="h-7"
+                            onClick={() => removeImage(currentSlide.imageUrl!)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            Remove
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  {/* Show from imageUrls (new approach) */}
-                  {currentSlide.imageUrls && currentSlide.imageUrls.map((url, i) => (
-                    <div key={i} className="relative group aspect-video rounded-md overflow-hidden border">
-                      <img 
-                        src={url} 
-                        alt={`Slide image ${i + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          variant="destructive"
-                          size="sm"
-                          className="h-7"
-                          onClick={() => removeImage(url)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-1" />
-                          Remove
-                        </Button>
+                    )}
+                    
+                    {/* Show from imageUrls (new approach) */}
+                    {currentSlide.imageUrls && currentSlide.imageUrls.map((url, i) => (
+                      <div key={i} className="relative group aspect-video rounded-md overflow-hidden border">
+                        <img 
+                          src={url} 
+                          alt={`Slide image ${i + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="destructive"
+                            size="sm"
+                            className="h-7"
+                            onClick={() => removeImage(url)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            Remove
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  
-                  {/* Empty state */}
-                  {(!currentSlide.imageUrl && (!currentSlide.imageUrls || currentSlide.imageUrls.length === 0)) && (
-                    <div className="col-span-full flex items-center justify-center h-32 border rounded-md bg-muted/20">
-                      <div className="text-center text-muted-foreground">
-                        <ImageIcon className="h-6 w-6 mx-auto mb-2" />
-                        <p className="text-sm">No images for this slide</p>
+                    ))}
+                    
+                    {/* Empty state */}
+                    {(!currentSlide.imageUrl && (!currentSlide.imageUrls || currentSlide.imageUrls.length === 0)) && (
+                      <div className="col-span-full flex items-center justify-center h-32 border rounded-md bg-muted/20">
+                        <div className="text-center text-muted-foreground">
+                          <ImageIcon className="h-6 w-6 mx-auto mb-2" />
+                          <p className="text-sm">No images for this slide</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Slide actions */}
-            <div className="flex items-center justify-between mt-4 pt-4 border-t">
-              <div>
-                {isEditing && (
-                  <Button onClick={saveChanges}>Save Changes</Button>
+                    )}
+                  </div>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={copyToClipboard}
-                >
-                  Copy Content
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={deleteCurrentSlide}
-                  disabled={slides.length <= 1}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Delete Slide
-                </Button>
-              </div>
             </div>
           </div>
+        </div>
+        
+        {/* Slide navigation */}
+        <div className="border-t p-2 px-4 flex items-center justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToPrevSlide}
+            disabled={currentSlideIndex === 0}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Previous
+          </Button>
           
-          {/* Slide navigation */}
-          <div className="border-t p-2 flex items-center justify-between">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToPrevSlide}
-              disabled={currentSlideIndex === 0}
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToNextSlide}
-              disabled={currentSlideIndex === slides.length - 1}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addNewSlide}
+            className="mx-2"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add Slide
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToNextSlide}
+            disabled={currentSlideIndex === slides.length - 1}
+          >
+            Next
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+        
+        {/* Film strip at the bottom */}
+        <div className="h-28 border-t overflow-hidden">
+          <ScrollArea orientation="horizontal" className="h-full">
+            <div className="flex gap-2 p-2 h-full">
+              {slides.map((slide, index) => (
+                <div 
+                  key={slide.id}
+                  onClick={() => goToSlide(index)}
+                  className={`h-full aspect-video flex-shrink-0 cursor-pointer rounded-md overflow-hidden border-2 flex flex-col ${
+                    currentSlideIndex === index ? "border-primary" : "border-transparent hover:border-muted-foreground/30"
+                  }`}
+                >
+                  {/* Thumbnail preview - use first image if available */}
+                  {(slide.imageUrl || (slide.imageUrls && slide.imageUrls.length > 0)) ? (
+                    <div className="w-full h-3/4 overflow-hidden bg-muted/10">
+                      <img 
+                        src={slide.imageUrl || slide.imageUrls![0]} 
+                        alt={`Slide ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full h-3/4 flex items-center justify-center bg-muted/10">
+                      <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                    </div>
+                  )}
+                  
+                  {/* Slide title/number */}
+                  <div className={`px-2 py-1 text-xs truncate flex-grow flex items-center ${
+                    currentSlideIndex === index ? "bg-primary text-primary-foreground" : "bg-muted/20"
+                  }`}>
+                    <span className="font-medium">{index + 1}.</span> {slide.title}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
         </div>
       </div>
       
