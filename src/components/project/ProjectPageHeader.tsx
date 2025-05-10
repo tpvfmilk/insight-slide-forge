@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Edit2, Video } from "lucide-react";
+import { ArrowLeft, Edit2, Video, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -17,9 +17,16 @@ interface ProjectPageHeaderProps {
   isLoading: boolean;
   videoFileName: string;
   onVideoAdded?: () => void;
+  totalVideoDuration?: number;
 }
 
-export const ProjectPageHeader = ({ project, isLoading, videoFileName, onVideoAdded }: ProjectPageHeaderProps) => {
+export const ProjectPageHeader = ({ 
+  project, 
+  isLoading, 
+  videoFileName, 
+  onVideoAdded,
+  totalVideoDuration = 0
+}: ProjectPageHeaderProps) => {
   const navigate = useNavigate();
   const [isEditTitleDialogOpen, setIsEditTitleDialogOpen] = useState<boolean>(false);
   const [isVideoManagementOpen, setIsVideoManagementOpen] = useState<boolean>(false);
@@ -49,6 +56,22 @@ export const ProjectPageHeader = ({ project, isLoading, videoFileName, onVideoAd
   const getVideoCount = () => {
     if (!project?.videos) return 0;
     return project.videos.length;
+  };
+  
+  // Format duration in a readable way
+  const formatDuration = (seconds: number) => {
+    if (!seconds) return null;
+    
+    if (seconds < 60) {
+      return `${Math.round(seconds)}s`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      return `${minutes}m ${Math.round(seconds % 60)}s`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return `${hours}h ${minutes}m`;
+    }
   };
 
   return (
@@ -84,9 +107,17 @@ export const ProjectPageHeader = ({ project, isLoading, videoFileName, onVideoAd
             </p>
             {/* Video count badge */}
             {(project?.source_type === 'video' || getVideoCount() > 0) && (
-              <Badge variant="outline" className="text-xs">
-                {getVideoCount()} video{getVideoCount() !== 1 ? 's' : ''}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  {getVideoCount() || (project?.source_type === 'video' ? 1 : 0)} video{(getVideoCount() || 1) !== 1 ? 's' : ''}
+                </Badge>
+                {totalVideoDuration > 0 && (
+                  <span className="flex items-center text-xs text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5 mr-1" />
+                    {formatDuration(totalVideoDuration)}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>

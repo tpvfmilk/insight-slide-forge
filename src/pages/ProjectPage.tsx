@@ -123,6 +123,7 @@ const ProjectPage = () => {
             isLoading={isLoading}
             videoFileName={videoFileName}
             onVideoAdded={handleVideoAdded}
+            totalVideoDuration={totalVideoDuration}
           />
           
           <div className="flex items-center space-x-2">

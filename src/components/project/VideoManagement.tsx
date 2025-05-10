@@ -1,5 +1,5 @@
+
 import { useState, useEffect } from "react";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ProjectVideo, deleteProjectVideo, fetchProjectVideos, updateVideosOrder } from "@/services/projectVideoService";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -29,6 +29,7 @@ export const VideoManagement = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [isAddingVideo, setIsAddingVideo] = useState<boolean>(false);
   const [editingVideo, setEditingVideo] = useState<ProjectVideo | null>(null);
+  const [totalDuration, setTotalDuration] = useState<number>(0);
 
   useEffect(() => {
     if (isOpen && project?.id) {
@@ -48,6 +49,13 @@ export const VideoManagement = ({
       console.log("Fetched videos:", projectVideos);
       
       setVideos(projectVideos);
+      
+      // Calculate total duration
+      const total = projectVideos.reduce((sum, video) => {
+        return sum + (video.video_metadata?.duration || 0);
+      }, 0);
+      setTotalDuration(total);
+      console.log("Total video duration:", total);
       
       // Log the project.videos property to see if it exists and has data
       if (project.videos) {
@@ -154,6 +162,21 @@ export const VideoManagement = ({
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
+  
+  // Function to format duration in a more readable way
+  const formatTotalDuration = (seconds: number) => {
+    if (seconds < 60) {
+      return `${Math.round(seconds)} seconds`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      const secs = Math.round(seconds % 60);
+      return `${minutes} min${minutes !== 1 ? 's' : ''} ${secs} sec${secs !== 1 ? 's' : ''}`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return `${hours} hr${hours !== 1 ? 's' : ''} ${minutes} min${minutes !== 1 ? 's' : ''}`;
+    }
+  };
 
   const handleVideoAdded = () => {
     setIsAddingVideo(false);
@@ -223,7 +246,15 @@ export const VideoManagement = ({
           ) : (
             <div className="border rounded-lg p-2">
               <div className="flex justify-between items-center mb-2 px-2">
-                <p className="text-sm font-medium">Video order ({videos.length})</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium">Video order ({videos.length})</p>
+                  {totalDuration > 0 && (
+                    <div className="flex items-center text-xs text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5 mr-1" />
+                      <span>Total: {formatTotalDuration(totalDuration)}</span>
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">Use arrows to reorder videos</p>
               </div>
               <div className="space-y-1 max-h-[300px] overflow-y-auto px-1 py-1">

@@ -243,36 +243,51 @@ export const SlideEditor = () => {
   };
   
   const handleSelectFrames = () => {
-    if (allExtractedFrames.length === 0) {
-      toast.warning("No frames available. Use the manual frame picker first.");
+    if (!projectId || !videoPath) {
+      toast.warning("No video available for frame selection");
       return;
     }
-    setIsFrameSelectorOpen(true);
+    
+    // Determine which frames are already used in the current slide
+    const existingFrames = currentSlide.imageUrls || [];
+    if (currentSlide.imageUrl && !existingFrames.includes(currentSlide.imageUrl)) {
+      existingFrames.push(currentSlide.imageUrl);
+    }
+    
+    // Filter allExtractedFrames to find the ExtractedFrame objects for these URLs
+    const currentSlideFrames = allExtractedFrames.filter(frame => 
+      existingFrames.includes(frame.imageUrl)
+    );
+    
+    setIsFramePickerModalOpen(true);
+    console.log(`Opening frame picker with ${currentSlideFrames.length} existing frames for this slide`, currentSlideFrames);
   };
   
-  // Updated to handle type conversion properly
+  // Updated to handle selected frames properly
   const handleFrameSelection = (selectedFrames: ExtractedFrame[]) => {
-    if (!selectedFrames.length) return;
+    if (!selectedFrames.length) {
+      toast.info("No frames were selected");
+      return;
+    }
 
-    // Convert ExtractedFrame to LocalExtractedFrame if needed
-    const processedFrames = selectedFrames.map(frame => ({
-      ...frame,
-      id: frame.id || `frame-${frame.timestamp.replace(/:/g, "-")}` // Ensure ID is present
-    })) as LocalExtractedFrame[];
+    console.log(`Applying ${selectedFrames.length} selected frames to slide #${currentSlideIndex + 1}`, selectedFrames);
 
     // Update current slide with selected frames
     const updatedSlides = [...slides];
     updatedSlides[currentSlideIndex] = {
       ...updatedSlides[currentSlideIndex],
-      imageUrls: processedFrames.map(frame => frame.imageUrl)
+      imageUrls: selectedFrames.map(frame => frame.imageUrl)
     };
     setSlides(updatedSlides);
 
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
-    // Reduced toast notification
-    if (processedFrames.length > 1) {
-      toast.success(`${processedFrames.length} frames applied to slide`);
+    
+    // Give feedback based on selection count
+    if (selectedFrames.length === 1) {
+      toast.success(`Applied 1 frame to slide`);
+    } else {
+      toast.success(`Applied ${selectedFrames.length} frames to slide`);
     }
     
     // Update project size
@@ -494,155 +509,102 @@ export const SlideEditor = () => {
     }
   };
   
-  const handleDeleteFrame = (frameIndex: number) => {
-    if (!currentSlide.imageUrls || currentSlide.imageUrls.length === 0) {
-      return;
-    }
-
-    // Create a copy of the slide's imageUrls array without the deleted frame
-    const updatedImageUrls = [...currentSlide.imageUrls];
-    updatedImageUrls.splice(frameIndex, 1);
-
-    // Update the current slide with the new imageUrls array
+  const removeImage = (imageUrl: string) => {
     const updatedSlides = [...slides];
-    updatedSlides[currentSlideIndex] = {
-      ...updatedSlides[currentSlideIndex],
-      imageUrls: updatedImageUrls.length > 0 ? updatedImageUrls : undefined
-    };
+    const currentImageUrls = updatedSlides[currentSlideIndex].imageUrls;
+    
+    if (currentImageUrls) {
+      // Remove from imageUrls array
+      updatedSlides[currentSlideIndex] = {
+        ...updatedSlides[currentSlideIndex],
+        imageUrls: currentImageUrls.filter(url => url !== imageUrl)
+      };
+    } else if (updatedSlides[currentSlideIndex].imageUrl === imageUrl) {
+      // Remove from single imageUrl
+      updatedSlides[currentSlideIndex] = {
+        ...updatedSlides[currentSlideIndex],
+        imageUrl: undefined
+      };
+    }
+    
     setSlides(updatedSlides);
-
-    // Also update in the database
     updateSlidesInDatabase(updatedSlides);
-    // Removed toast notification for routine operation
-    
-    // Update project size
-    fetchProjectSize();
-  };
-  
-  const addNewSlide = () => {
-    // Create a new slide with default content
-    const newSlide = {
-      id: `slide-${Date.now()}`,
-      title: "New Slide",
-      content: "Add your content here"
-    };
-    
-    // Insert it after the current slide
-    const newSlides = [...slides];
-    newSlides.splice(currentSlideIndex + 1, 0, newSlide);
-    
-    // Update the state
-    setSlides(newSlides);
-    
-    // Save to database
-    updateSlidesInDatabase(newSlides);
-    
-    // Navigate to the new slide
-    saveChanges();
-    setCurrentSlideIndex(currentSlideIndex + 1);
-    
-    // Removed toast notification for slide creation
+    toast.success("Image removed from slide");
   };
   
   const deleteCurrentSlide = () => {
-    // Don't allow deleting the last slide
     if (slides.length <= 1) {
-      toast.error("Cannot delete the last slide");
+      toast.error("Cannot delete the only slide");
       return;
     }
     
-    // Save the slide before deleting it
-    setLastDeletedSlide(slides[currentSlideIndex]);
-    setShowUndoButton(true);
+    const deletedSlide = slides[currentSlideIndex];
+    const updatedSlides = slides.filter((_, index) => index !== currentSlideIndex);
+    setSlides(updatedSlides);
     
-    // Create updated slides array without the current slide
-    const newSlides = [...slides];
-    newSlides.splice(currentSlideIndex, 1);
-    
-    // Update the state
-    setSlides(newSlides);
-    
-    // Save to database
-    updateSlidesInDatabase(newSlides);
-    
-    // Navigate to previous slide or stay at current index if it was the first slide
+    // Set current slide index to previous slide, or first slide if we deleted the first one
     const newIndex = currentSlideIndex > 0 ? currentSlideIndex - 1 : 0;
     setCurrentSlideIndex(newIndex);
     
-    // Removed toast notification for slide deletion
+    // Save the deleted slide in case we need to undo
+    setLastDeletedSlide(deletedSlide);
+    setShowUndoButton(true);
+    
+    // Update slides in database
+    updateSlidesInDatabase(updatedSlides);
+    
+    toast.success("Slide deleted", {
+      action: {
+        label: "Undo",
+        onClick: undoDeleteSlide
+      }
+    });
   };
   
   const undoDeleteSlide = () => {
     if (!lastDeletedSlide) return;
     
-    // Insert the deleted slide back at its original position or at the end
-    const insertIndex = Math.min(currentSlideIndex + 1, slides.length);
-    const newSlides = [...slides];
-    newSlides.splice(insertIndex, 0, lastDeletedSlide);
+    const updatedSlides = [...slides];
+    updatedSlides.splice(currentSlideIndex, 0, lastDeletedSlide);
+    setSlides(updatedSlides);
     
-    // Update the state
-    setSlides(newSlides);
-    updateSlidesInDatabase(newSlides);
+    // Update slides in database
+    updateSlidesInDatabase(updatedSlides);
     
-    // Navigate to the restored slide
-    setCurrentSlideIndex(insertIndex);
-    
-    // Reset undo state
     setLastDeletedSlide(null);
     setShowUndoButton(false);
     
     toast.success("Slide restored");
   };
   
-  // Add a function to open the frame picker modal
-  const handleOpenManualFramePicker = () => {
-    if (!videoPath) {
-      toast.error("No video source available");
-      return;
-    }
+  const addNewSlide = () => {
+    // Save current changes before adding a new slide
+    saveChanges();
     
-    setIsFramePickerModalOpen(true);
-  };
-
-  // Handler for when frame selection is complete in the manual frame picker
-  const onManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]) => {
-    if (!projectId || selectedFrames.length === 0) return;
+    const newSlide: Slide = {
+      id: `slide-${Date.now()}`,
+      title: "New Slide",
+      content: "Add your content here..."
+    };
     
-    try {
-      // Update current slide with selected frames
-      await handleManualFrameSelectionComplete(
-        projectId,
-        selectedFrames,
-        currentSlideIndex,
-        slides,
-        (updatedSlides: Slide[]) => setSlides(updatedSlides), // Wrap setSlides to match the expected function signature
-        updateSlidesInDatabase
-      );
-      
-      // Update project size
-      fetchProjectSize();
-      
-      // Add toast notification for user feedback
-      toast.success(`${selectedFrames.length} ${selectedFrames.length === 1 ? 'frame' : 'frames'} applied to slide`);
-    } catch (error) {
-      console.error("Error handling manual frame selection:", error);
-      toast.error("Failed to apply selected frames to slide");
-    }
+    // Insert new slide after current slide
+    const updatedSlides = [...slides];
+    updatedSlides.splice(currentSlideIndex + 1, 0, newSlide);
+    setSlides(updatedSlides);
+    
+    // Navigate to the new slide
+    setCurrentSlideIndex(currentSlideIndex + 1);
+    
+    // Update slides in database
+    updateSlidesInDatabase(updatedSlides);
+    
+    toast.success("New slide added");
   };
   
-  if (isLoading) {
-    return (
-      <div className="h-full w-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
-          <p className="text-sm text-muted-foreground">Loading slides...</p>
-        </div>
-      </div>
-    );
-  }
-  
+  // Render the component with the same structure but the updated frame selection functionality
   return (
-    <div className="flex flex-col h-full">
+    <div className="h-full flex flex-col">
+      {/* Navigation and toolbar */}
       <div className="flex justify-between items-center p-4 border-b">
         <div className="text-sm text-muted-foreground flex items-center">
           <Clock className="h-4 w-4 mr-1" />
@@ -703,228 +665,220 @@ export const SlideEditor = () => {
           </Dialog>
         </div>
       </div>
-      
-      {/* Changed from grid to flex for better responsiveness */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        {/* Left pane - Image */}
-        <div className="flex-1 min-w-0 flex flex-col border-b md:border-b-0 md:border-r">
-          <div className="p-4 border-b flex justify-between items-center">
-            <h3 className="font-medium">Slide Visual</h3>
-            {/* Frame tools */}
-            <div className="flex gap-2">
-              {/* Only include the manual frame picker button when videoPath exists */}
-              {videoPath && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleOpenManualFramePicker}
-                >
-                  <Film className="h-4 w-4 mr-1" />
-                  Select Video Frames
-                </Button>
-              )}
-              
-              {allExtractedFrames.length > 0 && (
-                <Button variant="outline" size="sm" onClick={handleSelectFrames}>
-                  <ImageIcon className="h-4 w-4 mr-1" />
-                  Insert
-                </Button>
-              )}
-            </div>
+
+      {/* Main slide editing area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Slides sidebar */}
+        <div className="w-60 border-r h-full overflow-y-auto bg-muted/20">
+          <div className="p-3 border-b flex justify-between items-center">
+            <h3 className="font-semibold text-sm">Slides ({slides.length})</h3>
+            <Button size="icon" variant="outline" className="h-7 w-7" onClick={addNewSlide}>
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
           
-          <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
-            {currentSlide?.imageUrls && currentSlide.imageUrls.length > 0 ? (
-              <div className="w-full h-full">
-                {/* Responsive grid that stacks vertically when space is limited */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-                  {/* First, render all existing images with delete buttons */}
-                  {currentSlide.imageUrls.map((url, index) => (
-                    <div key={`slide-image-${index}`} className="relative group aspect-video">
-                      <img src={url} alt={`Slide visual ${index + 1}`} className="w-full h-full object-cover rounded-md" />
-                      {/* Individual frame delete button - always visible */}
-                      <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8" onClick={() => handleDeleteFrame(index)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+          <div className="space-y-2 p-2">
+            {slides.map((slide, index) => (
+              <div 
+                key={slide.id}
+                onClick={() => goToSlide(index)}
+                className={`p-2 rounded cursor-pointer transition-colors ${
+                  currentSlideIndex === index ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                }`}
+              >
+                <p className="font-medium text-sm truncate">{slide.title}</p>
+                <p className="text-xs truncate opacity-80">
+                  {slide.content.substring(0, 30)}{slide.content.length > 30 ? "..." : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Current slide content */}
+        <div className="flex-1 overflow-auto flex flex-col">
+          <div className="flex-1 p-4">
+            {/* Title */}
+            <div className="mb-4">
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  className="w-full text-xl font-semibold border-b border-primary/20 focus:border-primary outline-none pb-1 bg-transparent"
+                />
+              ) : (
+                <h2 
+                  className="text-xl font-semibold pb-1 border-b border-transparent cursor-pointer hover:border-muted-foreground" 
+                  onClick={startEditing}
+                >
+                  {currentSlide?.title}
+                </h2>
+              )}
+            </div>
+
+            {/* Content */}
+            <div className="mb-4 min-h-[200px]">
+              {isEditing ? (
+                <Textarea
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  className="min-h-[200px] resize-none"
+                />
+              ) : (
+                <div 
+                  className="prose max-w-none cursor-pointer"
+                  onClick={startEditing}
+                >
+                  {currentSlide?.content.split("\n").map((paragraph, i) => (
+                    <p key={i}>{paragraph}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Images section */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold">Images</h3>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={handleSelectFrames}
+                  >
+                    <Film className="h-3.5 w-3.5 mr-1" />
+                    Select Frames
+                  </Button>
+                  <label>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      className="hidden" 
+                      onChange={handleImageUpload}
+                      disabled={isUploadingImage}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      disabled={isUploadingImage}
+                    >
+                      <span>
+                        {isUploadingImage ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-3.5 w-3.5 mr-1" />
+                            Upload
+                          </>
+                        )}
+                      </span>
+                    </Button>
+                  </label>
+                </div>
+              </div>
+              
+              {/* Image gallery */}
+              {currentSlide && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {/* Show from imageUrl (legacy) */}
+                  {currentSlide.imageUrl && (
+                    <div className="relative group aspect-video rounded-md overflow-hidden border">
+                      <img 
+                        src={currentSlide.imageUrl} 
+                        alt="Slide image"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button 
+                          variant="destructive"
+                          size="sm"
+                          className="h-7"
+                          onClick={() => removeImage(currentSlide.imageUrl!)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show from imageUrls (new approach) */}
+                  {currentSlide.imageUrls && currentSlide.imageUrls.map((url, i) => (
+                    <div key={i} className="relative group aspect-video rounded-md overflow-hidden border">
+                      <img 
+                        src={url} 
+                        alt={`Slide image ${i + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button 
+                          variant="destructive"
+                          size="sm"
+                          className="h-7"
+                          onClick={() => removeImage(url)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
                     </div>
                   ))}
                   
-                  {/* Add the "Add Image" button as the last item */}
-                  <label htmlFor="image-upload-grid" className="relative aspect-video flex items-center justify-center border-2 border-dashed rounded-md cursor-pointer hover:bg-muted/50 transition-colors">
-                    <div className="flex flex-col items-center justify-center text-muted-foreground">
-                      <Plus className="h-8 w-8 mb-2" />
-                      <span>Upload Image</span>
+                  {/* Empty state */}
+                  {(!currentSlide.imageUrl && (!currentSlide.imageUrls || currentSlide.imageUrls.length === 0)) && (
+                    <div className="col-span-full flex items-center justify-center h-32 border rounded-md bg-muted/20">
+                      <div className="text-center text-muted-foreground">
+                        <ImageIcon className="h-6 w-6 mx-auto mb-2" />
+                        <p className="text-sm">No images for this slide</p>
+                      </div>
                     </div>
-                    <input id="image-upload-grid" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploadingImage} />
-                  </label>
+                  )}
                 </div>
-              </div>
-            ) : currentSlide?.imageUrl ? (
-              <div className="relative w-full h-full group">
-                <img src={currentSlide.imageUrl} alt="Slide visual" className="w-full h-full object-contain" />
-                {/* Delete button for single imageUrl */}
-                <Button variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8" onClick={() => handleDeleteFrame(0)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-                
-                {/* Add upload button next to the single image */}
-                <label htmlFor="image-upload-single" className="absolute bottom-2 right-2">
-                  <Button variant="outline" size="sm" className="bg-background/80 backdrop-blur-sm">
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add More
-                  </Button>
-                  <input id="image-upload-single" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                </label>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center text-muted-foreground h-full">
-                <ImageIcon className="h-10 w-10 mb-2" />
-                <p>No image available</p>
-                <div className="flex flex-col gap-2 mt-4">
-                  {/* Buttons for when no images exist */}
-                  <div className="flex gap-2">
-                    {allExtractedFrames.length > 0 && (
-                      <Button variant="outline" size="sm" onClick={handleSelectFrames}>
-                        <ImageIcon className="h-4 w-4 mr-1" />
-                        Insert
-                      </Button>
-                    )}
-                  </div>
-                  
-                  <label htmlFor="image-upload-empty" className="w-full">
-                    <Button variant="outline" size="sm" className="cursor-pointer w-full">
-                      <Upload className="h-4 w-4 mr-1" />
-                      Upload Image
-                    </Button>
-                    <input id="image-upload-empty" type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* Right pane - Content */}
-        <div className="flex-1 min-w-0 flex flex-col">
-          <div className="p-4 border-b flex justify-between items-center">
-            <h3 className="font-medium">Slide Content</h3>
-            {isEditing ? (
-              <Button size="sm" onClick={saveChanges}>Save Changes</Button>
-            ) : (
-              <Button size="sm" variant="ghost" onClick={startEditing}>Edit</Button>
-            )}
-          </div>
-          <div className="flex-1 p-4 overflow-auto">
-            {isEditing ? (
-              <div className="space-y-4 h-full">
-                <div className="space-y-2">
-                  <label htmlFor="slide-title" className="text-sm font-medium">Title</label>
-                  <Textarea id="slide-title" value={editedTitle} onChange={e => setEditedTitle(e.target.value)} className="resize-none" />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="slide-content" className="text-sm font-medium">Content</label>
-                  <Textarea id="slide-content" value={editedContent} onChange={e => setEditedContent(e.target.value)} className="resize-none flex-1 min-h-[200px]" />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <h2 className="text-xl font-semibold">{currentSlide?.title}</h2>
-                <div className="whitespace-pre-line">{currentSlide?.content}</div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      
-      <Separator />
-      
-      {/* Individual slide buttons */}
-      <div className="px-6 pt-4 flex justify-center">
-        <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-2">
-          {slides.map((_, index) => (
-            <Button
-              key={`slide-button-${index}`}
-              variant={index === currentSlideIndex ? "default" : "outline"}
-              size="sm"
-              onClick={() => goToSlide(index)}
-              className={`min-w-[32px] w-8 h-8 p-0 rounded-full ${
-                index === currentSlideIndex 
-                  ? "bg-primary text-primary-foreground" 
-                  : "bg-background text-foreground border-input hover:bg-accent"
-              }`}
-            >
-              {index + 1}
-            </Button>
-          ))}
-        </div>
-      </div>
-      
-      {/* Bottom navigation with added new slide and delete slide buttons */}
-      <div className="flex justify-between items-center p-4">
-        <Button variant="outline" onClick={goToPrevSlide} disabled={currentSlideIndex === 0}>
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          Previous
-        </Button>
-        
-        <div className="flex gap-2">
-          {showUndoButton && (
-            <Button variant="outline" onClick={undoDeleteSlide} size="sm">
-              <Undo className="h-4 w-4 mr-1" />
-              Undo Delete
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={addNewSlide}>
-            <Plus className="h-4 w-4 mr-1" />
-            New Slide
-          </Button>
-          <Button variant="outline" size="sm" onClick={deleteCurrentSlide} disabled={slides.length <= 1}>
-            <Trash2 className="h-4 w-4 mr-1" />
-            Delete Slide
-          </Button>
-          <Button variant="outline" size="sm" onClick={copyToClipboard}>
-            Copy Text
-          </Button>
-        </div>
-        
-        <Button variant="outline" onClick={goToNextSlide} disabled={currentSlideIndex === slides.length - 1}>
-          Next
-          <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      </div>
-      
-      {/* Add FramePickerModal at the end of the component */}
-      {videoPath && (
-        <FramePickerModal
-          open={isFramePickerModalOpen}
-          onClose={() => setIsFramePickerModalOpen(false)}
-          videoPath={videoPath}
-          projectId={projectId || ""}
-          onComplete={onManualFrameSelectionComplete}
-          videoMetadata={videoMetadata || undefined}
-          existingFrames={allExtractedFrames}
-        />
-      )}
+              )}
+            </div>
 
-      {/* Add the FrameSelector modal for the existing functionality */}
-      {isFrameSelectorOpen && allExtractedFrames.length > 0 && (
-        <Dialog open={isFrameSelectorOpen} onOpenChange={setIsFrameSelectorOpen}>
-          <DialogContent className="sm:max-w-[900px]">
-            <FrameSelector
-              open={isFrameSelectorOpen}
-              availableFrames={allExtractedFrames}
-              selectedFrames={[]}
-              onSelect={handleFrameSelection}
-              onClose={() => {
-                setIsFrameSelectorOpen(false);
-                cleanupFrameSelectorDialog();
-              }}
-              projectId={projectId}
-              onRefresh={loadProject}
-              slides={slides as unknown as FrameUtilsSlide[]}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
-    </div>
-  );
-};
+            {/* Slide actions */}
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div>
+                {isEditing && (
+                  <Button onClick={saveChanges}>Save Changes</Button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copyToClipboard}
+                >
+                  Copy Content
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={deleteCurrentSlide}
+                  disabled={slides.length <= 1}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Delete Slide
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Slide navigation */}
+          <div className="border-t p-2 flex items-center justify-between">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToPrevSlide}
+              disabled={currentSlideIndex === 0}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <

@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { 
   Play, Pause, SkipBack, SkipForward, Camera, AlertCircle,
-  RefreshCw, CheckCircle2, X, Trash2, Film
+  RefreshCw, CheckCircle2, X, Trash2, Film, Check, Square, CheckSquare
 } from "lucide-react";
 import { formatDuration } from "@/utils/formatUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,10 +49,13 @@ export const FramePickerModal = ({
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
+  const [selectedFrames, setSelectedFrames] = useState<Record<string, boolean>>({});
   const [isCaptureLoading, setIsCaptureLoading] = useState<boolean>(false);
   const [projectVideos, setProjectVideos] = useState<ProjectVideo[]>([]);
   const [selectedVideoPath, setSelectedVideoPath] = useState<string>(videoPath);
   const [isLoadingVideos, setIsLoadingVideos] = useState<boolean>(false);
+  const [frameLibrary, setFrameLibrary] = useState<ExtractedFrame[]>([]);
+  const [isLoadingLibrary, setIsLoadingLibrary] = useState<boolean>(false);
   
   const { registerUIElement, unregisterUIElement } = useUIReset();
   const elementId = useRef(`frame-picker-${Math.random().toString(36).substring(2, 9)}`);
@@ -84,8 +87,69 @@ export const FramePickerModal = ({
         .finally(() => {
           setIsLoadingVideos(false);
         });
+      
+      // Load frame library - all existing frames for this project
+      loadFrameLibrary();
     }
   }, [open, projectId, videoPath]);
+  
+  // Load frame library - all existing extracted frames for the project
+  const loadFrameLibrary = async () => {
+    if (!projectId) return;
+    
+    setIsLoadingLibrary(true);
+    try {
+      // Fetch the project to get all extracted frames
+      const { data: project, error } = await supabase
+        .from('projects')
+        .select('extracted_frames')
+        .eq('id', projectId)
+        .single();
+        
+      if (error) {
+        console.error("Error fetching project frames:", error);
+        return;
+      }
+      
+      // Also fetch frames from all project videos
+      const projectVideos = await fetchProjectVideos(projectId);
+      const allFrames: ExtractedFrame[] = [];
+      
+      // Add frames from the main project
+      if (project?.extracted_frames && Array.isArray(project.extracted_frames)) {
+        allFrames.push(...(project.extracted_frames as ExtractedFrame[]));
+      }
+      
+      // Add frames from all videos
+      projectVideos.forEach(video => {
+        if (video.extracted_frames && Array.isArray(video.extracted_frames)) {
+          allFrames.push(...(video.extracted_frames as ExtractedFrame[]));
+        }
+      });
+      
+      // Filter out duplicates based on imageUrl
+      const uniqueFrames = allFrames.filter((frame, index, self) =>
+        index === self.findIndex((f) => f.imageUrl === frame.imageUrl)
+      );
+      
+      console.log(`Loaded ${uniqueFrames.length} frames for frame library`);
+      setFrameLibrary(uniqueFrames);
+      
+      // Initialize selected frames from existing frames passed to the component
+      if (existingFrames && existingFrames.length > 0) {
+        const selected: Record<string, boolean> = {};
+        existingFrames.forEach(frame => {
+          const key = frame.id || frame.timestamp;
+          selected[key] = true;
+        });
+        setSelectedFrames(selected);
+      }
+    } catch (error) {
+      console.error("Error loading frame library:", error);
+    } finally {
+      setIsLoadingLibrary(false);
+    }
+  };
   
   // Register with UIResetContext when dialog opens
   useEffect(() => {
@@ -190,8 +254,17 @@ export const FramePickerModal = ({
     
     fetchVideo();
     
+    // Reset selection state when the modal opens
+    setSelectedFrames({});
+    
     // Initialize with existing frames if provided
     if (existingFrames && existingFrames.length > 0) {
+      const selected: Record<string, boolean> = {};
+      existingFrames.forEach(frame => {
+        const key = frame.id || frame.timestamp;
+        selected[key] = true;
+      });
+      setSelectedFrames(selected);
       setCapturedFrames(existingFrames);
     }
   }, [open, selectedVideoPath, projectId, existingFrames]);
@@ -239,29 +312,25 @@ export const FramePickerModal = ({
     }
   }, [isPlaying]);
   
+  // Modified to prevent auto-play on load
   const handleVideoLoaded = () => {
     const video = videoRef.current;
     if (!video) return;
     
-    // Preload video more aggressively to avoid black frames issue
+    // Set to auto but don't auto-play
     video.preload = "auto";
     
-    // Attempt to play the video for a moment to ensure frames are loaded
-    video.play().catch(err => {
-      console.log("Video auto-play attempt failed (expected):", err);
-    });
+    // No longer automatically playing the video
+    video.pause();
+    setIsPlaying(false);
     
-    // Give more time for video to buffer and frames to load
-    setTimeout(() => {
-      video.pause();
-      // Use the video's duration or fall back to the metadata
-      setVideoDuration(video.duration || videoMetadata?.duration || 0);
-      console.log("Video ready. Dimensions:", video.videoWidth, "x", video.videoHeight, ", Duration:", video.duration + "s");
-      
-      // Pre-seek to multiple positions to help load frames throughout the video
-      // This helps prevent black frames when capturing later
-      preloadVideoFrames(video);
-    }, 1500); // Extended from 1000ms to 1500ms to give more time for video to load
+    // Use the video's duration or fall back to the metadata
+    setVideoDuration(video.duration || videoMetadata?.duration || 0);
+    console.log("Video ready. Dimensions:", video.videoWidth, "x", video.videoHeight, ", Duration:", video.duration + "s");
+    
+    // Pre-seek to multiple positions to help load frames throughout the video
+    // This helps prevent black frames when capturing later, without playing
+    preloadVideoFrames(video);
   };
   
   // Function to preload video frames by seeking to multiple positions
@@ -314,6 +383,15 @@ export const FramePickerModal = ({
       videoRef.current.currentTime = newTime;
       setCurrentTime(newTime);
     }
+  };
+  
+  // Toggle frame selection
+  const toggleFrameSelection = (frame: ExtractedFrame) => {
+    const key = frame.id || frame.timestamp;
+    setSelectedFrames(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
   };
   
   // Improved capture frame function with better preloading and retries
@@ -525,6 +603,12 @@ export const FramePickerModal = ({
         }
       });
       
+      // Automatically select the newly captured frame
+      setSelectedFrames(prev => ({
+        ...prev,
+        [newFrame.id]: true
+      }));
+      
       toast.success(`Frame at ${currentTimestamp} captured!`);
     } catch (err) {
       console.error("Error capturing frame:", err);
@@ -535,12 +619,36 @@ export const FramePickerModal = ({
   };
   
   const deleteFrame = (timestamp: string) => {
+    // Remove from captured frames
     setCapturedFrames(prev => prev.filter(frame => frame.timestamp !== timestamp));
+    
+    // Also remove from selected frames
+    const framesToRemove = capturedFrames.filter(frame => frame.timestamp === timestamp);
+    framesToRemove.forEach(frame => {
+      const key = frame.id || frame.timestamp;
+      setSelectedFrames(prev => {
+        const updated = { ...prev };
+        delete updated[key];
+        return updated;
+      });
+    });
+    
     toast.success(`Removed frame at ${timestamp}`);
   };
   
+  // Return only selected frames when completing
   const handleComplete = () => {
-    onComplete(capturedFrames);
+    const frames = [...capturedFrames, ...frameLibrary].filter(frame => {
+      const key = frame.id || frame.timestamp;
+      return selectedFrames[key] === true;
+    });
+    
+    if (frames.length === 0) {
+      toast.warning("No frames selected. Please select at least one frame.");
+      return;
+    }
+    
+    onComplete(frames);
     handleClose();
   };
   
@@ -568,6 +676,11 @@ export const FramePickerModal = ({
     return pathParts[pathParts.length - 1];
   };
   
+  // Get the count of selected frames
+  const getSelectedFramesCount = () => {
+    return Object.values(selectedFrames).filter(Boolean).length;
+  };
+  
   return (
     <SafeDialog 
       open={open} 
@@ -580,6 +693,7 @@ export const FramePickerModal = ({
         <DialogHeader className="px-6 py-4 border-b">
           <div className="flex justify-between items-center">
             <DialogTitle>Frame Picker</DialogTitle>
+            <Badge variant="outline">{getSelectedFramesCount()} selected</Badge>
           </div>
         </DialogHeader>
         
@@ -740,56 +854,138 @@ export const FramePickerModal = ({
             </div>
           </div>
           
-          {/* Right side - Captured frames */}
+          {/* Right side - Frame library */}
           <div className="flex flex-col h-full overflow-hidden border rounded-md">
             <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="font-medium">Captured Frames</h3>
-              <Badge variant="outline">{capturedFrames.length}</Badge>
+              <h3 className="font-medium">Frame Library</h3>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{capturedFrames.length} captured</Badge>
+                <Badge variant="primary" className="bg-primary text-white">
+                  {getSelectedFramesCount()} selected
+                </Badge>
+              </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-2">
-              {capturedFrames.length === 0 ? (
+              {capturedFrames.length === 0 && frameLibrary.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center p-4 text-muted-foreground">
                   <Camera className="h-8 w-8 mb-2" />
-                  <p>No frames captured yet</p>
+                  <p>No frames available</p>
                   <p className="text-xs mt-1">Use the capture button to extract frames from the video</p>
                 </div>
+              ) : isLoadingLibrary ? (
+                <div className="flex justify-center p-8">
+                  <RefreshCw className="h-8 w-8 animate-spin" />
+                </div>
               ) : (
-                <div className="space-y-2">
-                  {[...capturedFrames]
-                    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-                    .map((frame) => (
-                      <div
-                        key={frame.id || frame.timestamp}
-                        className="relative group border rounded-md overflow-hidden"
-                      >
-                        <img
-                          src={frame.imageUrl}
-                          alt={`Frame at ${frame.timestamp}`}
-                          className="w-full h-auto aspect-video object-cover"
-                        />
-                        
-                        <div className="absolute top-0 left-0 right-0 flex justify-between items-center p-2 bg-black/70 text-white text-sm">
-                          <span>{frame.timestamp}</span>
-                          
-                          <div className="flex items-center gap-1">
-                            {frame.isPlaceholder && (
-                              <Badge variant="outline" className="bg-amber-600/70 text-white border-none text-[10px] h-4 px-1">
-                                Placeholder
-                              </Badge>
-                            )}
-                            <Button
-                              size="icon"
-                              variant="destructive"
-                              className="h-6 w-6"
-                              onClick={() => deleteFrame(frame.timestamp)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
+                <div className="space-y-4">
+                  {/* Newly captured frames section */}
+                  {capturedFrames.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm mb-2 px-1">Newly Captured</h4>
+                      <div className="space-y-2">
+                        {capturedFrames
+                          .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+                          .map((frame) => {
+                            const frameKey = frame.id || frame.timestamp;
+                            const isSelected = selectedFrames[frameKey] === true;
+                            
+                            return (
+                              <div
+                                key={frameKey}
+                                className={`relative group border rounded-md overflow-hidden cursor-pointer ${
+                                  isSelected ? "ring-2 ring-primary" : ""
+                                }`}
+                                onClick={() => toggleFrameSelection(frame)}
+                              >
+                                <img
+                                  src={frame.imageUrl}
+                                  alt={`Frame at ${frame.timestamp}`}
+                                  className="w-full h-auto aspect-video object-cover"
+                                />
+                                
+                                <div className="absolute top-0 left-0 right-0 flex justify-between items-center p-2 bg-black/70 text-white text-sm">
+                                  <span>{frame.timestamp}</span>
+                                  
+                                  <div className="flex items-center gap-1">
+                                    {frame.isPlaceholder && (
+                                      <Badge variant="outline" className="bg-amber-600/70 text-white border-none text-[10px] h-4 px-1">
+                                        Placeholder
+                                      </Badge>
+                                    )}
+                                    
+                                    {isSelected ? (
+                                      <CheckSquare className="h-5 w-5 text-primary bg-white/20 rounded" />
+                                    ) : (
+                                      <Square className="h-5 w-5 text-white/70" />
+                                    )}
+                                    
+                                    <Button
+                                      size="icon"
+                                      variant="destructive"
+                                      className="h-6 w-6 ml-1"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteFrame(frame.timestamp);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                       </div>
-                    ))}
+                    </div>
+                  )}
+                  
+                  {/* Frame library section */}
+                  {frameLibrary.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm mb-2 px-1">Project Library</h4>
+                      <div className="space-y-2">
+                        {frameLibrary
+                          .filter(frame => 
+                            // Don't show frames that are already in the captured frames list
+                            !capturedFrames.some(captured => captured.imageUrl === frame.imageUrl)
+                          )
+                          .sort((a, b) => a.timestamp?.localeCompare(b.timestamp || '') || 0)
+                          .map((frame) => {
+                            const frameKey = frame.id || frame.timestamp;
+                            const isSelected = selectedFrames[frameKey] === true;
+                            
+                            return (
+                              <div
+                                key={frameKey}
+                                className={`relative group border rounded-md overflow-hidden cursor-pointer ${
+                                  isSelected ? "ring-2 ring-primary" : ""
+                                }`}
+                                onClick={() => toggleFrameSelection(frame)}
+                              >
+                                <img
+                                  src={frame.imageUrl}
+                                  alt={`Frame at ${frame.timestamp}`}
+                                  className="w-full h-auto aspect-video object-cover"
+                                />
+                                
+                                <div className="absolute top-0 left-0 right-0 flex justify-between items-center p-2 bg-black/70 text-white text-sm">
+                                  <span>{frame.timestamp}</span>
+                                  
+                                  <div className="flex items-center gap-1">
+                                    {isSelected ? (
+                                      <CheckSquare className="h-5 w-5 text-primary bg-white/20 rounded" />
+                                    ) : (
+                                      <Square className="h-5 w-5 text-white/70" />
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -802,10 +998,10 @@ export const FramePickerModal = ({
               <Button
                 onClick={handleComplete}
                 size="sm"
-                disabled={capturedFrames.length === 0}
+                disabled={getSelectedFramesCount() === 0}
               >
                 <CheckCircle2 className="h-4 w-4 mr-1" />
-                Apply Selected Frames
+                Apply Selected Frames ({getSelectedFramesCount()})
               </Button>
             </div>
           </div>

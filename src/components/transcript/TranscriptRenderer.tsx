@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { hasMultipleVideoSections } from "@/utils/transcriptUtils";
+import { Badge } from "@/components/ui/badge";
 
 interface Props {
   transcript: string;
@@ -16,6 +17,7 @@ export const TranscriptRenderer: React.FC<Props> = ({
   showVideoSeparators = true 
 }) => {
   const [formattedText, setFormattedText] = useState<React.ReactNode[]>([]);
+  const [videoCount, setVideoCount] = useState<number>(0);
   
   useEffect(() => {
     if (!transcript) {
@@ -30,6 +32,7 @@ export const TranscriptRenderer: React.FC<Props> = ({
     const result: React.ReactNode[] = [];
     
     let currentVideoSection: string | null = null;
+    let videoSectionCount = 0;
     
     // Process each line
     for (let i = 0; i < lines.length; i++) {
@@ -40,6 +43,7 @@ export const TranscriptRenderer: React.FC<Props> = ({
       const isVideoHeader = /^\s*#{2}\s+.+/.test(line);
       
       if (isVideoHeader) {
+        videoSectionCount++;
         currentVideoSection = line.replace(/^#+\s+/, '').trim();
         
         if (showVideoSeparators) {
@@ -49,7 +53,12 @@ export const TranscriptRenderer: React.FC<Props> = ({
               key={`video-${i}`}
               className="my-6 py-3 px-4 bg-primary/10 border-l-4 border-primary rounded font-medium text-primary-foreground"
             >
-              {currentVideoSection}
+              <div className="flex justify-between items-center">
+                <span>{currentVideoSection}</span>
+                <Badge variant="outline" className="text-xs">
+                  Video {videoSectionCount}
+                </Badge>
+              </div>
             </div>
           );
         }
@@ -97,10 +106,18 @@ export const TranscriptRenderer: React.FC<Props> = ({
     }
     
     setFormattedText(result);
+    setVideoCount(videoSectionCount);
   }, [transcript, showTimestamps, highlightSpeakers, showVideoSeparators]);
   
   return (
     <div className="transcript-renderer text-sm">
+      {videoCount > 1 && (
+        <div className="mb-4">
+          <Badge className="bg-primary text-primary-foreground">
+            {videoCount} Videos Transcribed
+          </Badge>
+        </div>
+      )}
       {formattedText}
     </div>
   );

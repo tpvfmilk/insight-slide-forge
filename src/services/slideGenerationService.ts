@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Project } from "@/services/projectService";
@@ -67,7 +68,13 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       }
     }
 
-    console.log("Calling generate-slides edge function");
+    console.log("Calling generate-slides edge function with params:", {
+      projectId,
+      contextPrompt: project?.context_prompt || '',
+      slidesPerMinute: project?.slides_per_minute || 6, 
+      videoDuration: totalVideoDuration
+    });
+    
     const response = await supabase.functions.invoke('generate-slides', {
       body: {
         projectId,
