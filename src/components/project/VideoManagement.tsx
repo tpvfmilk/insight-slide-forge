@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ProjectVideo, deleteProjectVideo, fetchProjectVideos, updateVideosOrder } from "@/services/projectVideoService";
@@ -169,88 +168,74 @@ export const VideoManagement = ({
               </Button>
             </div>
           ) : (
-            <DragDropContext onDragEnd={handleOnDragEnd}>
-              <Droppable droppableId="videos">
-                {(provided) => (
-                  <div
-                    {...provided.droppableProps}
-                    ref={provided.innerRef}
-                    className="space-y-2"
-                  >
-                    {videos.map((video, index) => (
-                      <Draggable
-                        key={video.id}
-                        draggableId={video.id}
-                        index={index}
-                      >
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            style={{
-                              ...provided.draggableProps.style,
-                              // Remove the direct height access and maintain smooth transitions
-                              // using the class-based approach instead
-                            }}
-                            className={`flex items-center p-4 border rounded-lg transition-colors ${
-                              snapshot.isDragging 
-                                ? "bg-accent shadow-md" 
-                                : "hover:bg-accent/20"
-                            }`}
-                          >
-                            {/* Fixed-width drag handle with proper cursor styling */}
+            <div className="border rounded-lg p-4">
+              <div className="flex justify-between items-center mb-3">
+                <p className="text-sm font-medium">Selected Videos ({videos.length})</p>
+                <p className="text-sm text-muted-foreground">Drag to reorder</p>
+              </div>
+              <DragDropContext onDragEnd={handleOnDragEnd}>
+                <Droppable droppableId="videos">
+                  {(provided) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className="space-y-2 max-h-[400px] overflow-y-auto"
+                    >
+                      {videos.map((video, index) => (
+                        <Draggable
+                          key={video.id}
+                          draggableId={video.id}
+                          index={index}
+                        >
+                          {(provided, snapshot) => (
                             <div
-                              {...provided.dragHandleProps}
-                              className="mr-3 text-muted-foreground cursor-grab active:cursor-grabbing flex items-center justify-center w-6 flex-shrink-0"
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              style={{
+                                ...provided.draggableProps.style
+                              }}
+                              className={`flex items-center p-3 border rounded-lg bg-background ${
+                                snapshot.isDragging ? "shadow-md" : ""
+                              }`}
                             >
-                              <GripVertical className="h-5 w-5" />
-                            </div>
-                            
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium truncate">
-                                {video.title || video.video_metadata?.original_file_name || "Untitled Video"}
-                              </h3>
-                              {video.description && (
-                                <p className="text-sm text-muted-foreground line-clamp-1">
-                                  {video.description}
-                                </p>
-                              )}
-                              <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                                {video.video_metadata?.duration && (
-                                  <div className="flex items-center">
-                                    <Clock className="h-3.5 w-3.5 mr-1.5" />
-                                    {formatDuration(video.video_metadata.duration)}
-                                  </div>
-                                )}
-                                <div>Video {index + 1} of {videos.length}</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex gap-2 shrink-0 ml-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setEditingVideo(video)}
+                              <div
+                                {...provided.dragHandleProps}
+                                className="flex items-center mr-3 text-muted-foreground cursor-grab active:cursor-grabbing"
                               >
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                                <GripVertical className="h-5 w-5" />
+                              </div>
+                              
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-col">
+                                  <h3 className="font-medium truncate">
+                                    {video.title || video.video_metadata?.original_file_name || "Untitled Video"}
+                                  </h3>
+                                  <p className="text-sm text-muted-foreground">
+                                    {video.video_metadata?.file_size ? 
+                                      `${(video.video_metadata.file_size / (1024 * 1024)).toFixed(2)} MB` : 
+                                      ""}
+                                  </p>
+                                </div>
+                              </div>
+                              
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="ml-2"
                                 onClick={() => handleDeleteVideo(video.id)}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+            </div>
           )}
         </div>
       </DialogContent>
