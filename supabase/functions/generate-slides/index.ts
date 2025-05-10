@@ -19,7 +19,7 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId, contextPrompt = '', slidesPerMinute = 6, videoDuration = 0 } = await req.json();
+    const { projectId, contextPrompt = '', slidesPerMinute = 6, videoDuration = 0, presentationTitle = 'Presentation' } = await req.json();
     
     if (!projectId) {
       return new Response(
@@ -79,12 +79,16 @@ serve(async (req) => {
     
     console.log(`Using transcript from project: ${project.transcript.substring(0, 100)}...`);
     
+    // Use the provided presentation title or fall back to project title
+    const finalPresentationTitle = presentationTitle || project.title || "Presentation";
+    console.log(`Using presentation title: ${finalPresentationTitle}`);
+    
     // Generate the slides using OpenAI
     const slides = await generateSlidesFromTranscript(
       project.transcript, 
       targetNumSlides, 
       contextPrompt,
-      project.title || "Presentation"
+      finalPresentationTitle
     );
     
     if (!slides) {

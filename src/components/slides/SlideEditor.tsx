@@ -901,7 +901,7 @@ export const SlideEditor = () => {
           onClose={() => setIsFramePickerModalOpen(false)} 
           videoPath={videoPath}
           projectId={projectId}
-          onFramesSelected={handleFrameSelection}
+          onSelectFrames={handleFrameSelection}
           allExtractedFrames={allExtractedFrames}
           // Convert string URLs to ExtractedFrame objects for compatibility
           existingFrames={currentSlide?.imageUrls?.map(url => {
