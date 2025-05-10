@@ -328,8 +328,8 @@ export const VideoUploader = ({
                             snapshot.isDragging ? "shadow-lg" : ""
                           } ${video.error ? "border-red-300" : ""}`}
                           style={{
-                            ...provided.draggableProps.style,
-                            height: snapshot.isDragging ? provided.draggableProps.style?.height : 'auto'
+                            ...provided.draggableProps.style
+                            // Remove the direct height access and rely on the class height
                           }}
                         >
                           <div className="flex items-start gap-3">

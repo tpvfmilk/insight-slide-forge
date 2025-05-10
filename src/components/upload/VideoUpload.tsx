@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { FileVideo, Upload, RefreshCw } from "lucide-react";
@@ -13,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { createProjectVideo } from "@/services/projectVideoService";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { supabase } from "@/integrations/supabase/client";
 
 interface VideoFileWithDetails {
   file: File;
@@ -283,8 +283,7 @@ export const VideoUpload = () => {
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 style={{
-                                  ...provided.draggableProps.style,
-                                  height: snapshot.isDragging ? provided.draggableProps.style?.height : 'auto'
+                                  ...provided.draggableProps.style
                                 }}
                                 className={`flex items-center gap-2 p-2 rounded-md ${
                                   snapshot.isDragging ? "bg-accent shadow-md" : "bg-background"

@@ -189,7 +189,8 @@ export const VideoManagement = ({
                             {...provided.draggableProps}
                             style={{
                               ...provided.draggableProps.style,
-                              height: snapshot.isDragging ? provided.draggableProps.style?.height : 'auto'
+                              // Remove the direct height access and maintain smooth transitions
+                              // using the class-based approach instead
                             }}
                             className={`flex items-center p-4 border rounded-lg transition-colors ${
                               snapshot.isDragging 
