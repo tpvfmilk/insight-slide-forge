@@ -713,13 +713,12 @@ export const SlideEditor = () => {
         </div>
       </div>
 
-      {/* Main slide editing area - now with side-by-side layout */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-auto">
-          {/* Slide content area - now in a side-by-side layout with constrained width */}
-          <div className="w-full p-4 flex max-w-full overflow-x-hidden">
+      {/* Main slide editing area with responsive layout and max width */}
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-screen-xl mx-auto p-4">
+          <div className="flex flex-col lg:flex-row gap-6">
             {/* Left side - Images */}
-            <div className="w-1/2 pr-4 flex flex-col">
+            <div className="w-full lg:w-1/2 flex flex-col">
               {/* Images header */}
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold">Images</h3>
@@ -764,8 +763,8 @@ export const SlideEditor = () => {
                 </div>
               </div>
               
-              {/* Image gallery with max-width */}
-              <div className="flex-1 overflow-y-auto max-w-xl mx-auto w-full">
+              {/* Image gallery */}
+              <div className="flex-1 overflow-y-auto">
                 {currentSlide && (
                   <div className="grid grid-cols-2 gap-2">
                     {/* Show from imageUrl (legacy) */}
@@ -827,9 +826,9 @@ export const SlideEditor = () => {
             </div>
             
             {/* Right side - Slide content */}
-            <div className="w-1/2 pl-4 border-l flex flex-col">
+            <div className="w-full lg:w-1/2 flex flex-col">
               {/* Title */}
-              <div className="mb-4 max-w-xl mx-auto w-full">
+              <div className="mb-4">
                 {isEditing ? (
                   <input
                     type="text"
@@ -847,8 +846,8 @@ export const SlideEditor = () => {
                 )}
               </div>
 
-              {/* Content with max-width */}
-              <div className="mb-4 flex-1 max-w-xl mx-auto w-full">
+              {/* Content */}
+              <div className="mb-4 flex-1">
                 {isEditing ? (
                   <Textarea
                     value={editedContent}
@@ -868,7 +867,7 @@ export const SlideEditor = () => {
               </div>
 
               {/* Slide action buttons */}
-              <div className="mt-auto pt-4 border-t flex justify-between items-center max-w-xl mx-auto w-full">
+              <div className="mt-auto pt-4 border-t flex justify-between items-center">
                 <div>
                   {isEditing && (
                     <Button onClick={saveChanges}>Save Changes</Button>
@@ -896,82 +895,78 @@ export const SlideEditor = () => {
             </div>
           </div>
         </div>
+      </div>
         
-        {/* Slide navigation */}
-        <div className="border-t p-2 px-4 flex items-center justify-between">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={goToPrevSlide}
-            disabled={currentSlideIndex === 0}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Previous
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={addNewSlide}
-            className="mx-2"
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Add Slide
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={goToNextSlide}
-            disabled={currentSlideIndex === slides.length - 1}
-          >
-            Next
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
+      {/* Slide navigation */}
+      <div className="border-t p-2 px-4 flex items-center justify-between">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={goToPrevSlide}
+          disabled={currentSlideIndex === 0}
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Previous
+        </Button>
         
-        {/* Film strip at the bottom - with improved horizontal scroll */}
-        <div className="h-28 border-t w-full">
-          <div 
-            ref={filmstripRef} 
-            className="overflow-x-auto h-full w-full" 
-            style={{ overscrollBehaviorX: 'contain' }}
-          >
-            <div className="flex gap-2 p-2 h-full min-w-max">
-              {slides.map((slide, index) => (
-                <div 
-                  key={slide.id}
-                  onClick={() => goToSlide(index)}
-                  className={`h-full aspect-video flex-shrink-0 cursor-pointer rounded-md overflow-hidden border-2 flex flex-col ${
-                    currentSlideIndex === index ? "border-primary" : "border-transparent hover:border-muted-foreground/30"
-                  }`}
-                >
-                  {/* Thumbnail preview - use first image if available */}
-                  {(slide.imageUrl || (slide.imageUrls && slide.imageUrls.length > 0)) ? (
-                    <div className="w-full h-3/4 overflow-hidden bg-muted/10">
-                      <img 
-                        src={slide.imageUrl || slide.imageUrls![0]} 
-                        alt={`Slide ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-full h-3/4 flex items-center justify-center bg-muted/10">
-                      <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
-                    </div>
-                  )}
-                  
-                  {/* Slide title/number */}
-                  <div className={`px-2 py-1 text-xs truncate flex-grow flex items-center ${
-                    currentSlideIndex === index ? "bg-primary text-primary-foreground" : "bg-muted/20"
-                  }`}>
-                    <span className="font-medium">{index + 1}.</span> {slide.title}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={addNewSlide}
+          className="mx-2"
+        >
+          <Plus className="h-4 w-4 mr-1" />
+          Add Slide
+        </Button>
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={goToNextSlide}
+          disabled={currentSlideIndex === slides.length - 1}
+        >
+          Next
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+      </div>
+      
+      {/* Film strip at the bottom - with improved scroll behavior */}
+      <div className="h-28 border-t w-full">
+        <ScrollArea orientation="horizontal" className="h-full w-full">
+          <div className="flex gap-2 p-2 h-full min-w-max">
+            {slides.map((slide, index) => (
+              <div 
+                key={slide.id}
+                onClick={() => goToSlide(index)}
+                className={`h-full aspect-video flex-shrink-0 cursor-pointer rounded-md overflow-hidden border-2 flex flex-col ${
+                  currentSlideIndex === index ? "border-primary" : "border-transparent hover:border-muted-foreground/30"
+                }`}
+              >
+                {/* Thumbnail preview - use first image if available */}
+                {(slide.imageUrl || (slide.imageUrls && slide.imageUrls.length > 0)) ? (
+                  <div className="w-full h-3/4 overflow-hidden bg-muted/10">
+                    <img 
+                      src={slide.imageUrl || slide.imageUrls![0]} 
+                      alt={`Slide ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
+                ) : (
+                  <div className="w-full h-3/4 flex items-center justify-center bg-muted/10">
+                    <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+                  </div>
+                )}
+                
+                {/* Slide title/number */}
+                <div className={`px-2 py-1 text-xs truncate flex-grow flex items-center ${
+                  currentSlideIndex === index ? "bg-primary text-primary-foreground" : "bg-muted/20"
+                }`}>
+                  <span className="font-medium">{index + 1}.</span> {slide.title}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </ScrollArea>
       </div>
       
       {/* Frame Picker Modal */}
