@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ProjectVideo, deleteProjectVideo, fetchProjectVideos, updateVideosOrder } from "@/services/projectVideoService";
@@ -156,7 +157,10 @@ export const VideoManagement = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-4xl" style={{ transform: 'none' }}>
+      <DialogContent 
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:max-w-4xl max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto" 
+        style={{ transform: 'none' }}
+      >
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">
             Manage Project Videos
@@ -269,7 +273,10 @@ export const VideoManagement = ({
       
       {/* Add Video Dialog */}
       <Dialog open={isAddingVideo} onOpenChange={(open) => !open && setIsAddingVideo(false)}>
-        <DialogContent className="sm:max-w-3xl" style={{ transform: 'none' }}>
+        <DialogContent 
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:max-w-3xl max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto" 
+          style={{ transform: 'none' }}
+        >
           <DialogHeader>
             <DialogTitle>Add Video to Project</DialogTitle>
           </DialogHeader>
@@ -287,7 +294,10 @@ export const VideoManagement = ({
       {/* Edit Video Dialog */}
       {editingVideo && (
         <Dialog open={!!editingVideo} onOpenChange={() => setEditingVideo(null)}>
-          <DialogContent className="sm:max-w-lg" style={{ transform: 'none' }}>
+          <DialogContent 
+            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:max-w-lg max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto" 
+            style={{ transform: 'none' }}
+          >
             <DialogHeader>
               <DialogTitle>Edit Video Details</DialogTitle>
             </DialogHeader>
