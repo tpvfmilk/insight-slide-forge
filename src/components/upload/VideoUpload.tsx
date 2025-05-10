@@ -11,6 +11,7 @@ import { SliderControl } from "./SliderControl";
 import { FileUploader } from "@/components/ui/file-uploader";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { createProjectVideo } from "@/services/projectVideoService";
 
 export const VideoUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -87,6 +88,25 @@ export const VideoUpload = () => {
         "", // No transcript
         slidesPerMinute
       );
+      
+      // Now also add the video to project_videos table
+      if (project && project.source_file_path) {
+        try {
+          // Add the main video to the project_videos table with display order 0
+          await createProjectVideo({
+            project_id: project.id,
+            source_file_path: project.source_file_path,
+            title: title || "Main Video",
+            description: "Original project video",
+            display_order: 0,
+            video_metadata: project.video_metadata
+          });
+          console.log("Added main video to project_videos table");
+        } catch (error) {
+          console.error("Error adding main video to project_videos:", error);
+          // Don't throw here, we'll still proceed with the project
+        }
+      }
       
       clearInterval(interval);
       setUploadProgress(100);
