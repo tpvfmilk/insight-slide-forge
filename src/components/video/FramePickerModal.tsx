@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -104,9 +105,13 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl">
-        <h2 className="text-lg font-semibold mb-4">Select Frames</h2>
+        <DialogTitle>Select Frames</DialogTitle>
         
-        <Tabs value={selectedTab} onValueChange={setSelectedTab} className="mb-4">
+        <Tabs 
+          value={selectedTab} 
+          onValueChange={(value: "existing" | "all" | "extract") => setSelectedTab(value)} 
+          className="mb-4"
+        >
           <TabsList>
             <TabsTrigger value="existing">Existing Frames</TabsTrigger>
             <TabsTrigger value="all">All Frames</TabsTrigger>
@@ -214,7 +219,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         </Tabs>
         
         <div className="flex justify-end">
-          <Button variant="primary" onClick={handleApplyFrames}>
+          <Button onClick={handleApplyFrames}>
             Apply Frames
           </Button>
         </div>

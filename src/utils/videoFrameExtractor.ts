@@ -1,3 +1,4 @@
+
 import { timestampToSeconds } from "./formatUtils";
 
 /**
@@ -17,6 +18,19 @@ export async function extractFramesFromVideoUrl(
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
     video.crossOrigin = "anonymous"; // Enable CORS for the video
+    video.playsInline = true;
+    video.muted = true;
+    video.preload = "auto";
+    
+    // Prevent video from showing in the DOM and causing UI shifts
+    video.style.position = "absolute";
+    video.style.opacity = "0";
+    video.style.pointerEvents = "none";
+    video.style.height = "1px";
+    video.style.width = "1px";
+    
+    // Temporarily add to DOM but hidden
+    document.body.appendChild(video);
     
     // Array to store extracted frames
     const frames: Array<{ timestamp: string; frame: Blob }> = [];
@@ -35,68 +49,59 @@ export async function extractFramesFromVideoUrl(
     video.onloadeddata = function() {
       console.log(`Video loaded successfully. Dimensions: ${video.videoWidth}x${video.videoHeight}`);
       
-      // Attempt to play the video for a moment to ensure frames are loaded
-      // This can help with some browsers/formats that need playback to properly load content
-      video.play().catch(err => {
-        console.log("Video auto-play attempt failed (expected):", err);
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx = canvas.getContext("2d");
+      
+      if (!ctx) {
+        cleanupAndReject("Failed to get canvas context");
+        return;
+      }
+      
+      // Get actual video duration from the loaded video
+      const actualVideoDuration = video.duration;
+      console.log(`Actual video duration: ${actualVideoDuration}s`);
+      
+      // Filter timestamps that exceed video duration
+      // Use the provided videoDuration parameter if available, otherwise use the actual duration from the video
+      const maxDuration = videoDuration || actualVideoDuration;
+      const validTimestamps = timestamps.filter(ts => {
+        const seconds = timestampToSeconds(ts);
+        const isValid = seconds <= maxDuration;
+        if (!isValid) {
+          console.log(`Timestamp ${ts} (${seconds}s) exceeds video duration (${maxDuration}s) and will be skipped`);
+        }
+        return isValid;
       });
       
-      // Wait a bit for video to potentially buffer frames
-      setTimeout(() => {
-        // Pause video after brief playing
-        video.pause();
-        
-        // Set canvas dimensions to match video
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx = canvas.getContext("2d");
-        
-        if (!ctx) {
-          reject(new Error("Failed to get canvas context"));
-          return;
-        }
-        
-        // Get actual video duration from the loaded video
-        const actualVideoDuration = video.duration;
-        console.log(`Actual video duration: ${actualVideoDuration}s`);
-        
-        // Filter timestamps that exceed video duration
-        // Use the provided videoDuration parameter if available, otherwise use the actual duration from the video
-        const maxDuration = videoDuration || actualVideoDuration;
-        const validTimestamps = timestamps.filter(ts => {
-          const seconds = timestampToSeconds(ts);
-          const isValid = seconds <= maxDuration;
-          if (!isValid) {
-            console.log(`Timestamp ${ts} (${seconds}s) exceeds video duration (${maxDuration}s) and will be skipped`);
-          }
-          return isValid;
-        });
-        
-        console.log(`Processing ${validTimestamps.length} valid timestamps out of ${timestamps.length} provided`);
-        
-        if (validTimestamps.length === 0) {
-          console.warn("No valid timestamps found within video duration");
-          resolve([]); // Return empty array if no valid timestamps
-          return;
-        }
-        
-        // Sort timestamps and deduplicate them
-        const uniqueTimestamps = Array.from(new Set(validTimestamps)).sort((a, b) => 
-          timestampToSeconds(a) - timestampToSeconds(b)
-        );
-        
-        // Log the timestamps we'll be processing
-        console.log(`Processing ${uniqueTimestamps.length} timestamps: ${uniqueTimestamps.join(", ")}`);
-        
-        // Process timestamps sequentially
-        processNextTimestamp(uniqueTimestamps, 0);
-      }, 1000); // Give the video a second to load frames
+      console.log(`Processing ${validTimestamps.length} valid timestamps out of ${timestamps.length} provided`);
+      
+      if (validTimestamps.length === 0) {
+        console.warn("No valid timestamps found within video duration");
+        cleanupAndResolve([]); // Return empty array if no valid timestamps
+        return;
+      }
+      
+      // Sort timestamps and deduplicate them
+      const uniqueTimestamps = Array.from(new Set(validTimestamps)).sort((a, b) => 
+        timestampToSeconds(a) - timestampToSeconds(b)
+      );
+      
+      // Log the timestamps we'll be processing
+      console.log(`Processing ${uniqueTimestamps.length} timestamps: ${uniqueTimestamps.join(", ")}`);
+      
+      // Pause video to prepare for seeking
+      video.pause();
+      
+      // Process timestamps sequentially
+      processNextTimestamp(uniqueTimestamps, 0);
     };
     
     video.onerror = function(e) {
       // Fixed TypeScript error by properly checking event type
       if (typeof e === 'string') {
-        reject(new Error(`Failed to load video: ${e}`));
+        cleanupAndReject(`Failed to load video: ${e}`);
         return;
       }
       
@@ -113,7 +118,7 @@ export async function extractFramesFromVideoUrl(
       }
       
       console.error(`Video error: ${errorMessage}`, videoEl.error);
-      reject(new Error(`Failed to load video: ${errorMessage}`));
+      cleanupAndReject(`Failed to load video: ${errorMessage}`);
     };
     
     // Process timestamps one by one to avoid race conditions
@@ -127,7 +132,7 @@ export async function extractFramesFromVideoUrl(
           console.log(`Retrying ${failedExtractions.length} failed extractions with different approach...`);
           retryFailedExtractions(failedExtractions, 0);
         } else {
-          resolve(frames);
+          cleanupAndResolve(frames);
         }
         return;
       }
@@ -154,7 +159,7 @@ export async function extractFramesFromVideoUrl(
     function retryFailedExtractions(failedTimestamps: string[], index: number) {
       if (index >= failedTimestamps.length) {
         console.log(`Retry complete. Total frames extracted: ${frames.length}`);
-        resolve(frames);
+        cleanupAndResolve(frames);
         return;
       }
       
@@ -192,8 +197,11 @@ export async function extractFramesFromVideoUrl(
       video.currentTime = seconds;
       
       // Handle the 'seeked' event
-      video.onseeked = function() {
+      const handleSeeked = function() {
         console.log(`Seeked to ${video.currentTime}s for timestamp ${timestamp}`);
+        
+        // Remove event listener to avoid multiple callbacks
+        video.removeEventListener('seeked', handleSeeked);
         
         // Make sure video is fully ready before capturing frames
         // This is the key fix for black frames - we ensure the video frame is fully loaded
@@ -297,6 +305,9 @@ export async function extractFramesFromVideoUrl(
           }
         }, 500); // Longer delay to ensure frame is loaded
       };
+      
+      // Add seeked event listener
+      video.addEventListener('seeked', handleSeeked);
     }
     
     // Create a placeholder frame with text when all extraction attempts fail
@@ -337,11 +348,23 @@ export async function extractFramesFromVideoUrl(
       }
     }
     
+    // Cleanup function to remove video element
+    function cleanupAndReject(message: string) {
+      if (document.body.contains(video)) {
+        document.body.removeChild(video);
+      }
+      reject(new Error(message));
+    }
+    
+    function cleanupAndResolve(result: Array<{ timestamp: string; frame: Blob }>) {
+      if (document.body.contains(video)) {
+        document.body.removeChild(video);
+      }
+      resolve(result);
+    }
+    
     // Start loading the video
     console.log(`Loading video from URL: ${videoUrl}`);
-    video.muted = true;  // Mute to avoid any audio playback
-    video.playsInline = true; // Better mobile compatibility
-    video.preload = "auto";
     video.src = videoUrl;
     
     // Force the video to load its metadata
