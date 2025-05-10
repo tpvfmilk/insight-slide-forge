@@ -860,7 +860,7 @@ export const FramePickerModal = ({
               <h3 className="font-medium">Frame Library</h3>
               <div className="flex items-center gap-2">
                 <Badge variant="outline">{capturedFrames.length} captured</Badge>
-                <Badge variant="primary" className="bg-primary text-white">
+                <Badge variant="outline" className="bg-primary text-white">
                   {getSelectedFramesCount()} selected
                 </Badge>
               </div>

@@ -903,7 +903,21 @@ export const SlideEditor = () => {
           projectId={projectId}
           onFramesSelected={handleFrameSelection}
           allExtractedFrames={allExtractedFrames}
-          existingFrames={currentSlide?.imageUrls || []}
+          // Convert string URLs to ExtractedFrame objects for compatibility
+          existingFrames={currentSlide?.imageUrls?.map(url => {
+            // Try to find the matching extracted frame by URL
+            const matchingFrame = allExtractedFrames.find(frame => frame.imageUrl === url);
+            if (matchingFrame) {
+              return matchingFrame;
+            }
+            // Create a placeholder frame object if no match is found
+            return {
+              imageUrl: url,
+              timestamp: "unknown",
+              id: `url-${url.split('/').pop()}`,
+              isPlaceholder: true
+            };
+          }) || []}
         />
       )}
     </div>
