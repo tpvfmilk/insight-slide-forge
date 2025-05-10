@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Folder as FolderIcon, MoreVertical, Trash } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FolderListProps {
   folders: Folder[];
@@ -20,6 +22,9 @@ interface FolderListProps {
   loading: boolean;
 }
 
+// Key for localStorage
+const EXPANDED_FOLDERS_KEY = "expanded_folders";
+
 export function FolderList({
   folders,
   projects,
@@ -30,9 +35,39 @@ export function FolderList({
   handleExport,
   loading
 }: FolderListProps) {
-  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  // Initialize state from localStorage if available
+  const [expandedFolders, setExpandedFolders] = useState<string[]>(() => {
+    try {
+      // Get user ID to create a user-specific storage key
+      const session = supabase.auth.getSession();
+      const userSpecificKey = `${EXPANDED_FOLDERS_KEY}`;
+      
+      const savedExpandedFolders = localStorage.getItem(userSpecificKey);
+      if (savedExpandedFolders) {
+        const parsed = JSON.parse(savedExpandedFolders);
+        // Always include "unassigned" in the parsed result
+        return Array.isArray(parsed) ? 
+          parsed.includes("unassigned") ? parsed : [...parsed, "unassigned"] : 
+          ["unassigned"];
+      }
+      return ["unassigned"];
+    } catch (error) {
+      console.error("Error loading folder state from localStorage:", error);
+      return ["unassigned"];
+    }
+  });
 
-  // Initialize with "unassigned" already in the expanded folders
+  // Save expanded folders state to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      const userSpecificKey = `${EXPANDED_FOLDERS_KEY}`;
+      localStorage.setItem(userSpecificKey, JSON.stringify(expandedFolders));
+    } catch (error) {
+      console.error("Error saving folder state to localStorage:", error);
+    }
+  }, [expandedFolders]);
+
+  // Ensure "unassigned" is always in the expanded folders list
   useEffect(() => {
     if (!expandedFolders.includes("unassigned")) {
       setExpandedFolders(prev => [...prev, "unassigned"]);
