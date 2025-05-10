@@ -196,7 +196,7 @@ export const FramePickerModal = ({
     }
   }, [open, selectedVideoPath, projectId, existingFrames]);
   
-  // Handle video selection change
+  // Function to handle video selection change
   const handleVideoChange = (value: string) => {
     setSelectedVideoPath(value);
     
@@ -243,36 +243,48 @@ export const FramePickerModal = ({
     const video = videoRef.current;
     if (!video) return;
     
+    // Preload video more aggressively to avoid black frames issue
+    video.preload = "auto";
+    
     // Attempt to play the video for a moment to ensure frames are loaded
     video.play().catch(err => {
       console.log("Video auto-play attempt failed (expected):", err);
     });
     
+    // Give more time for video to buffer and frames to load
     setTimeout(() => {
       video.pause();
       // Use the video's duration or fall back to the metadata
       setVideoDuration(video.duration || videoMetadata?.duration || 0);
       console.log("Video ready. Dimensions:", video.videoWidth, "x", video.videoHeight, ", Duration:", video.duration + "s");
       
-      // Verify any timestamps that exceed duration
-      if (videoMetadata?.duration) {
-        const exceededTimestamps = [];
-        for (let i = 0; i < 10; i++) {
-          // Check some common timestamps
-          const minutes = String(i).padStart(2, '0');
-          for (let j = 0; j < 60; j += 15) {
-            const seconds = String(j).padStart(2, '0');
-            const timestamp = `00:${minutes}:${seconds}`;
-            if (formatDuration(video.duration) < timestamp) {
-              exceededTimestamps.push(timestamp);
-            }
-          }
-        }
-        if (exceededTimestamps.length > 0) {
-          console.warn("Found", exceededTimestamps.length, "timestamps that exceed video duration:", exceededTimestamps);
-        }
-      }
-    }, 1000);
+      // Pre-seek to multiple positions to help load frames throughout the video
+      // This helps prevent black frames when capturing later
+      preloadVideoFrames(video);
+    }, 1500); // Extended from 1000ms to 1500ms to give more time for video to load
+  };
+  
+  // Function to preload video frames by seeking to multiple positions
+  const preloadVideoFrames = async (video: HTMLVideoElement) => {
+    const duration = video.duration;
+    if (!duration) return;
+    
+    // Store the original position to restore later
+    const originalTime = video.currentTime;
+    
+    // Seek to a few key positions and wait briefly to load those frames
+    const positions = [0, duration * 0.25, duration * 0.5, duration * 0.75, duration - 1];
+    console.log("Preloading frames at positions:", positions.map(p => formatDuration(p)));
+    
+    for (const position of positions) {
+      video.currentTime = position;
+      // Wait a moment for the frame to load
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    // Return to original position
+    video.currentTime = originalTime;
+    console.log("Video frame preloading complete");
   };
   
   const handleTimeChange = (value: number[]) => {
@@ -304,7 +316,7 @@ export const FramePickerModal = ({
     }
   };
   
-  // Capture frame function - no changes needed here
+  // Improved capture frame function with better preloading and retries
   const captureFrame = async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -334,142 +346,142 @@ export const FramePickerModal = ({
       console.log(`Canvas dimensions: ${canvas.width}x${canvas.height}`);
       console.log(`Video dimensions: ${video.videoWidth}x${video.videoHeight}`);
       
-      const captureWithRetries = async () => {
+      // Enhanced capture function with improved preloading
+      const enhancedCapture = async (): Promise<boolean> => {
+        // First, prepare the video to ensure the frame is properly loaded
+        // This is the key improvement to fix the first-time capture issue
+        const currentTime = video.currentTime;
+        
+        // Pre-seek approach: move slightly away and back to force frame loading
+        // Seek a bit behind current position if possible
+        const seekBackTime = Math.max(0, currentTime - 0.5);
+        video.currentTime = seekBackTime;
+        
+        // Wait for seeking to complete
+        await new Promise<void>((resolve) => {
+          const onSeeked = () => {
+            video.removeEventListener('seeked', onSeeked);
+            resolve();
+          };
+          video.addEventListener('seeked', onSeeked);
+        });
+        
+        // Now seek back to desired position
+        video.currentTime = currentTime;
+        
+        // Wait for seeking to complete again
+        await new Promise<void>((resolve) => {
+          const onSeeked = () => {
+            video.removeEventListener('seeked', onSeeked);
+            resolve();
+          };
+          video.addEventListener('seeked', onSeeked);
+        });
+        
+        // Give extra time for the frame to fully render
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Get the canvas context
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           throw new Error("Could not get canvas context");
         }
         
-        // Function to check if a frame has content (not black)
-        const hasContent = (imageData: ImageData): boolean => {
+        // Clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw the video frame
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Check if the frame has content
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Function to check if image has content (not black/empty)
+        const hasValidContent = (): boolean => {
+          // Sample more pixels for better detection
+          const samples = 1000;
           let nonBlackPixels = 0;
-          const totalPixels = imageData.width * imageData.height;
-          const sampleSize = Math.min(totalPixels, 1000); // Sample up to 1000 pixels
           
-          // Sample pixels throughout the image
-          for (let i = 0; i < sampleSize; i++) {
-            const pixelIndex = Math.floor(Math.random() * totalPixels) * 4;
+          for (let i = 0; i < samples; i++) {
+            // Get random pixel positions throughout the image
+            const x = Math.floor(Math.random() * canvas.width);
+            const y = Math.floor(Math.random() * canvas.height);
+            
+            // Get pixel data at this position
+            const pixelIndex = (y * canvas.width + x) * 4;
             const r = imageData.data[pixelIndex];
             const g = imageData.data[pixelIndex + 1];
             const b = imageData.data[pixelIndex + 2];
             
-            // Consider anything not very dark as content (more lenient threshold)
-            if (r > 15 || g > 15 || b > 15) {
+            // More permissive threshold to detect content
+            if (r > 10 || g > 10 || b > 10) {
               nonBlackPixels++;
             }
           }
           
-          // If at least 5% of sampled pixels have content, consider it valid
-          return (nonBlackPixels / sampleSize) > 0.05;
+          // Consider frame valid if at least 5% of sampled pixels have content
+          const percentWithContent = (nonBlackPixels / samples) * 100;
+          console.log(`Frame analysis: ${percentWithContent.toFixed(2)}% of pixels have content`);
+          return percentWithContent >= 5;
         };
         
-        // Function to draw frame and check content
-        const drawAndCheck = (): boolean => {
-          // Clear canvas
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
-          // Draw the video frame
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          
-          // Check a sample of pixels to see if we have content
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          return hasContent(imageData);
-        };
-        
-        // Initial frame capture attempt with longer preloading time
-        console.log(`Attempting to capture frame at ${currentTimestamp} (${video.currentTime}s)...`);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second for frame to fully load
-        
-        let hasValidContent = drawAndCheck();
-        console.log(`First attempt result: ${hasValidContent ? 'Valid content' : 'Black/empty frame'}`);
-        
-        // If first attempt failed, try with multiple techniques
-        if (!hasValidContent) {
-          console.log("First attempt produced black frame, trying alternative methods...");
-          
-          // Try multiple techniques in sequence
-          const techniques = [
-            {
-              name: "Seek forward and back",
-              action: async () => {
-                const originalTime = video.currentTime;
-                // Seek forward slightly
-                video.currentTime = originalTime + 0.5;
-                await new Promise(resolve => setTimeout(resolve, 500));
-                // Seek back to original position
-                video.currentTime = originalTime;
-                await new Promise(resolve => setTimeout(resolve, 500));
-                return drawAndCheck();
-              }
-            },
-            {
-              name: "Try different offsets",
-              action: async () => {
-                const originalTime = video.currentTime;
-                // Try different time offsets
-                for (const offset of [0.1, 0.2, 0.3, -0.1, -0.2]) {
-                  video.currentTime = originalTime + offset;
-                  await new Promise(resolve => setTimeout(resolve, 500));
-                  if (drawAndCheck()) return true;
-                }
-                // Reset to original time
-                video.currentTime = originalTime;
-                await new Promise(resolve => setTimeout(resolve, 500));
-                return drawAndCheck();
-              }
-            },
-            {
-              name: "Play briefly and pause",
-              action: async () => {
-                const originalTime = video.currentTime;
-                // Try playing for a moment
-                try {
-                  await video.play();
-                  await new Promise(resolve => setTimeout(resolve, 200));
-                  video.pause();
-                } catch (err) {
-                  console.log("Couldn't play video briefly:", err);
-                }
-                // Move back to original time
-                video.currentTime = originalTime;
-                await new Promise(resolve => setTimeout(resolve, 500));
-                return drawAndCheck();
-              }
-            }
-          ];
-          
-          // Try each technique until one works
-          for (const technique of techniques) {
-            console.log(`Trying technique: ${technique.name}`);
-            hasValidContent = await technique.action();
-            if (hasValidContent) {
-              console.log(`Success with technique: ${technique.name}`);
-              break;
-            }
-          }
+        // If we have valid content, add timestamp and return success
+        if (hasValidContent()) {
+          // Add timestamp overlay
+          ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+          ctx.fillRect(10, 10, 250, 30);
+          ctx.fillStyle = "white";
+          ctx.font = "16px Arial";
+          ctx.textAlign = "left";
+          ctx.fillText(`Timestamp: ${currentTimestamp}`, 15, 30);
+          return true;
         }
         
-        // If we still couldn't get content, show an error
-        if (!hasValidContent) {
-          toast.error("Could not capture a valid frame. Please try again or try at a different timestamp.");
-          setIsCaptureLoading(false);
-          return false;
-        }
-        
-        // Add timestamp overlay
-        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-        ctx.fillRect(10, 10, 250, 30);
-        ctx.fillStyle = "white";
-        ctx.font = "16px Arial";
-        ctx.textAlign = "left";
-        ctx.fillText(`Timestamp: ${currentTimestamp}`, 15, 30);
-        
-        return true;
+        return false;
       };
       
-      // Execute capture with retries
-      const success = await captureWithRetries();
+      // Try the enhanced capture approach with multiple attempts
+      let success = false;
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (!success && attempts < maxAttempts) {
+        attempts++;
+        console.log(`Capture attempt ${attempts}/${maxAttempts}`);
+        success = await enhancedCapture();
+        
+        if (success) {
+          console.log(`Successful capture on attempt ${attempts}`);
+          break;
+        } else if (attempts < maxAttempts) {
+          console.log(`Attempt ${attempts} failed, trying again with different technique`);
+          // Try different techniques on subsequent attempts
+          switch (attempts) {
+            case 1:
+              // Seek forward slightly for second attempt
+              if (video.currentTime + 0.2 < video.duration) {
+                video.currentTime += 0.2;
+                await new Promise(resolve => setTimeout(resolve, 300));
+              }
+              break;
+            case 2:
+              // Try with brief play/pause for third attempt
+              try {
+                await video.play();
+                await new Promise(resolve => setTimeout(resolve, 200));
+                video.pause();
+                await new Promise(resolve => setTimeout(resolve, 300));
+              } catch (e) {
+                console.log("Could not play video briefly:", e);
+              }
+              break;
+          }
+        }
+      }
+      
       if (!success) {
+        toast.error("Could not capture a valid frame. Please try again or try at a different timestamp.");
+        setIsCaptureLoading(false);
         return;
       }
       

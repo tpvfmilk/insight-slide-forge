@@ -41,13 +41,11 @@ const ProjectPage = () => {
     handleManualFrameSelectionComplete,
   } = useProjectState(projectId);
   
-  // Empty placeholder method that's not used since the button is removed
+  // Empty placeholder method - this is only for manual frame selection now
   const handleOpenManualFramePicker = () => {};
 
-  // Process frames using client-side extraction only when manually triggered
+  // This function is now only used for manual frame extraction, never auto-triggered
   const processFrameExtraction = async () => {
-    // We keep this method as it may be used from other parts of the code
-    // but we won't call it automatically
     if (!project?.source_file_path || !projectId || !allTimestamps || allTimestamps.length === 0) {
       toast.error("Unable to extract frames: missing video or timestamps");
       return;
