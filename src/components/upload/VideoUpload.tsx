@@ -1,6 +1,7 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { FileVideo, Upload, RefreshCw } from "lucide-react";
+import { FileVideo, Upload, RefreshCw, ArrowUp, ArrowDown } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +12,6 @@ import { FileUploader } from "@/components/ui/file-uploader";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { createProjectVideo } from "@/services/projectVideoService";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { supabase } from "@/integrations/supabase/client";
 
 interface VideoFileWithDetails {
@@ -87,15 +87,30 @@ export const VideoUpload = () => {
     });
   };
   
-  // Handle reordering videos
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
+  // Move a video up in the list (decrease index)
+  const moveUp = (index: number) => {
+    if (index <= 0) return; // Can't move the first item up
     
-    const items = Array.from(videoFiles);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+    setVideoFiles(prev => {
+      const updated = [...prev];
+      const temp = updated[index];
+      updated[index] = updated[index - 1];
+      updated[index - 1] = temp;
+      return updated;
+    });
+  };
+  
+  // Move a video down in the list (increase index)
+  const moveDown = (index: number) => {
+    if (index >= videoFiles.length - 1) return; // Can't move the last item down
     
-    setVideoFiles(items);
+    setVideoFiles(prev => {
+      const updated = [...prev];
+      const temp = updated[index];
+      updated[index] = updated[index + 1];
+      updated[index + 1] = temp;
+      return updated;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -260,75 +275,71 @@ export const VideoUpload = () => {
               <div className="w-full mt-4">
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="text-sm font-medium">Selected Videos ({videoFiles.length})</h4>
-                  <p className="text-xs text-muted-foreground">Drag to reorder</p>
+                  <p className="text-xs text-muted-foreground">Use arrows to reorder</p>
                 </div>
                 
-                <DragDropContext onDragEnd={handleDragEnd}>
-                  <Droppable droppableId="video-files">
-                    {(provided) => (
-                      <div
-                        {...provided.droppableProps}
-                        ref={provided.innerRef}
-                        className="space-y-2 max-h-[240px] overflow-y-auto rounded-md border p-2"
-                      >
-                        {videoFiles.map((videoFile, index) => (
-                          <Draggable
-                            key={`${videoFile.file.name}-${index}`}
-                            draggableId={`${videoFile.file.name}-${index}`}
-                            index={index}
-                            isDragDisabled={isUploading}
-                          >
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                style={{
-                                  ...provided.draggableProps.style
-                                }}
-                                className={`flex items-center gap-2 p-2 rounded-md ${
-                                  snapshot.isDragging ? "bg-accent shadow-md" : "bg-background"
-                                }`}
-                              >
-                                <div
-                                  {...provided.dragHandleProps}
-                                  className="text-muted-foreground cursor-grab active:cursor-grabbing"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-move"><path d="m5 9-3 3 3 3"/><path d="m19 9 3 3-3 3"/><path d="M2 12h20"/><path d="m9 5-3 3 3 3"/><path d="m15 5 3 3-3 3"/><path d="M12 2v20"/></svg>
-                                </div>
-                                
-                                <div className="flex-1 min-w-0">
-                                  <input
-                                    type="text"
-                                    value={videoFile.title}
-                                    onChange={(e) => updateVideoTitle(index, e.target.value)}
-                                    className="w-full text-sm border-none bg-transparent p-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                                    placeholder="Video title"
-                                    disabled={isUploading}
-                                  />
-                                  <p className="text-xs text-muted-foreground">
-                                    {(videoFile.file.size / (1024 * 1024)).toFixed(2)} MB
-                                  </p>
-                                </div>
-                                
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 rounded-full"
-                                  onClick={() => handleRemoveFile(index)}
-                                  disabled={isUploading}
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                </Button>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
+                <div className="space-y-2 max-h-[240px] overflow-y-auto rounded-md border p-2">
+                  {videoFiles.map((videoFile, index) => (
+                    <div
+                      key={`${videoFile.file.name}-${index}`}
+                      className="flex items-center gap-2 p-2 rounded-md bg-background"
+                    >
+                      {/* Order number badge */}
+                      <div className="flex items-center justify-center bg-muted w-6 h-6 rounded-full text-xs font-medium">
+                        {index + 1}
                       </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
+                      
+                      <div className="flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={videoFile.title}
+                          onChange={(e) => updateVideoTitle(index, e.target.value)}
+                          className="w-full text-sm border-none bg-transparent p-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                          placeholder="Video title"
+                          disabled={isUploading}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {(videoFile.file.size / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      </div>
+                      
+                      {/* Reordering buttons */}
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => moveUp(index)}
+                          disabled={isUploading || index === 0}
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => moveDown(index)}
+                          disabled={isUploading || index === videoFiles.length - 1}
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 rounded-full"
+                        onClick={() => handleRemoveFile(index)}
+                        disabled={isUploading}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
