@@ -661,77 +661,8 @@ export const SlideEditor = () => {
         <div className="flex-1 overflow-auto flex">
           {/* Slide content area - now in a side-by-side layout */}
           <div className="flex-1 p-4 flex">
-            {/* Left side - Slide content */}
+            {/* Left side - Images */}
             <div className="w-1/2 pr-4 flex flex-col">
-              {/* Title */}
-              <div className="mb-4">
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editedTitle}
-                    onChange={(e) => setEditedTitle(e.target.value)}
-                    className="w-full text-xl font-semibold border-b border-primary/20 focus:border-primary outline-none pb-1 bg-transparent"
-                  />
-                ) : (
-                  <h2 
-                    className="text-xl font-semibold pb-1 border-b border-transparent cursor-pointer hover:border-muted-foreground" 
-                    onClick={startEditing}
-                  >
-                    {currentSlide?.title}
-                  </h2>
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="mb-4 flex-1">
-                {isEditing ? (
-                  <Textarea
-                    value={editedContent}
-                    onChange={(e) => setEditedContent(e.target.value)}
-                    className="min-h-[200px] h-full resize-none"
-                  />
-                ) : (
-                  <div 
-                    className="prose max-w-none cursor-pointer"
-                    onClick={startEditing}
-                  >
-                    {currentSlide?.content.split("\n").map((paragraph, i) => (
-                      <p key={i}>{paragraph}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Slide action buttons */}
-              <div className="mt-auto pt-4 border-t flex justify-between items-center">
-                <div>
-                  {isEditing && (
-                    <Button onClick={saveChanges}>Save Changes</Button>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={copyToClipboard}
-                  >
-                    Copy Content
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={deleteCurrentSlide}
-                    disabled={slides.length <= 1}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Delete Slide
-                  </Button>
-                </div>
-              </div>
-            </div>
-            
-            {/* Right side - Images */}
-            <div className="w-1/2 pl-4 border-l flex flex-col">
               {/* Images header */}
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold">Images</h3>
@@ -837,6 +768,75 @@ export const SlideEditor = () => {
                 )}
               </div>
             </div>
+            
+            {/* Right side - Slide content */}
+            <div className="w-1/2 pl-4 border-l flex flex-col">
+              {/* Title */}
+              <div className="mb-4">
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    className="w-full text-xl font-semibold border-b border-primary/20 focus:border-primary outline-none pb-1 bg-transparent"
+                  />
+                ) : (
+                  <h2 
+                    className="text-xl font-semibold pb-1 border-b border-transparent cursor-pointer hover:border-muted-foreground" 
+                    onClick={startEditing}
+                  >
+                    {currentSlide?.title}
+                  </h2>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="mb-4 flex-1">
+                {isEditing ? (
+                  <Textarea
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    className="min-h-[200px] h-full resize-none"
+                  />
+                ) : (
+                  <div 
+                    className="prose max-w-none cursor-pointer"
+                    onClick={startEditing}
+                  >
+                    {currentSlide?.content.split("\n").map((paragraph, i) => (
+                      <p key={i}>{paragraph}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Slide action buttons */}
+              <div className="mt-auto pt-4 border-t flex justify-between items-center">
+                <div>
+                  {isEditing && (
+                    <Button onClick={saveChanges}>Save Changes</Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={copyToClipboard}
+                  >
+                    Copy Content
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={deleteCurrentSlide}
+                    disabled={slides.length <= 1}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Delete Slide
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -873,9 +873,9 @@ export const SlideEditor = () => {
           </Button>
         </div>
         
-        {/* Film strip at the bottom */}
+        {/* Film strip at the bottom - FIXED: Proper horizontal ScrollArea without orientation */}
         <div className="h-28 border-t overflow-hidden">
-          <ScrollArea orientation="horizontal" className="h-full">
+          <ScrollArea className="h-full">
             <div className="flex gap-2 p-2 h-full">
               {slides.map((slide, index) => (
                 <div 

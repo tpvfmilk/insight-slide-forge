@@ -5,12 +5,22 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Search, RefreshCw, Film, Clock } from "lucide-react";
+import { Search, RefreshCw, Film, Clock, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { toast } from "sonner";
 import { clientExtractFramesFromVideo } from "@/services/clientFrameExtractionService";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { fetchProjectVideos, ProjectVideo } from "@/services/projectVideoService";
+import { 
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 export interface FramePickerModalProps {
   open: boolean;
@@ -37,7 +47,27 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [isExtracting, setIsExtracting] = useState(false);
   const [newFrames, setNewFrames] = useState<ExtractedFrame[]>([]);
   const [extractionTimestamps, setExtractionTimestamps] = useState("");
+  const [projectVideos, setProjectVideos] = useState<ProjectVideo[]>([]);
+  const [selectedVideoPath, setSelectedVideoPath] = useState(videoPath);
   const videoRef = useRef<HTMLVideoElement>(null);
+  
+  // Fetch project videos when the modal opens
+  useEffect(() => {
+    if (open && projectId) {
+      const loadProjectVideos = async () => {
+        try {
+          const videos = await fetchProjectVideos(projectId);
+          setProjectVideos(videos);
+          console.log("Loaded project videos:", videos);
+        } catch (error) {
+          console.error("Error loading project videos:", error);
+          toast.error("Failed to load project videos");
+        }
+      };
+      
+      loadProjectVideos();
+    }
+  }, [open, projectId]);
   
   useEffect(() => {
     setSelectedFrames(existingFrames || []);
@@ -77,6 +107,11 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       return;
     }
     
+    if (!selectedVideoPath) {
+      toast.error("Please select a video for extraction");
+      return;
+    }
+    
     const timestampsArray = extractionTimestamps.split(",").map(s => s.trim());
     
     if (timestampsArray.length === 0) {
@@ -89,7 +124,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     try {
       const result = await clientExtractFramesFromVideo(
         projectId,
-        videoPath,
+        selectedVideoPath,
         timestampsArray
       );
       
@@ -128,11 +163,47 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       });
     }
   };
+
+  // Handle video selection change
+  const handleVideoChange = (value: string) => {
+    setSelectedVideoPath(value);
+    
+    // Reset video player if the ref exists
+    if (videoRef.current) {
+      videoRef.current.load();
+    }
+  };
   
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogTitle>Select Frames</DialogTitle>
+        
+        {/* Video selector dropdown */}
+        <div className="mb-4">
+          <Select value={selectedVideoPath} onValueChange={handleVideoChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a video" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Project Videos</SelectLabel>
+                {projectVideos.map((video) => (
+                  <SelectItem 
+                    key={video.id} 
+                    value={video.source_file_path || ""}
+                    disabled={!video.source_file_path}
+                  >
+                    {video.title || video.video_metadata?.original_file_name || "Untitled video"}
+                  </SelectItem>
+                ))}
+                {projectVideos.length === 0 && (
+                  <SelectItem value="" disabled>No videos available</SelectItem>
+                )}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
         
         <Tabs 
           value={selectedTab} 
@@ -152,7 +223,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                 <div className="w-1/2 aspect-video bg-black rounded-md overflow-hidden">
                   <video
                     ref={videoRef}
-                    src={videoPath}
+                    src={selectedVideoPath}
                     className="w-full h-full"
                     controls
                     crossOrigin="anonymous"
@@ -213,7 +284,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                 <div className="w-1/2 aspect-video bg-black rounded-md overflow-hidden">
                   <video
                     ref={videoRef}
-                    src={videoPath}
+                    src={selectedVideoPath}
                     className="w-full h-full"
                     controls
                     crossOrigin="anonymous"
@@ -268,15 +339,18 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                 </div>
               </div>
               
-              {/* Film strip at bottom */}
-              <div className="h-28 mt-4 border-t pt-4">
-                <ScrollArea className="h-full">
+              {/* Frame library at bottom */}
+              <div className="mt-4 border-t pt-4">
+                <h3 className="text-sm font-medium mb-2">All Available Frames</h3>
+                <ScrollArea className="h-28">
                   <div className="flex gap-2">
-                    {selectedFrames.map((frame) => (
+                    {allExtractedFrames.map((frame) => (
                       <div 
                         key={frame.imageUrl} 
-                        className="relative h-24 aspect-video flex-shrink-0 cursor-pointer border-2 border-primary"
-                        onClick={() => jumpToTimestamp(frame.timestamp)}
+                        className={`relative h-24 aspect-video flex-shrink-0 cursor-pointer ${
+                          isFrameSelected(frame) ? "border-2 border-primary" : ""
+                        }`}
+                        onClick={() => handleFrameSelect(frame)}
                       >
                         <img
                           src={frame.imageUrl}
@@ -286,6 +360,11 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                         <Badge className="absolute bottom-1 right-1 text-xs">{frame.timestamp}</Badge>
                       </div>
                     ))}
+                    {allExtractedFrames.length === 0 && (
+                      <div className="h-full flex items-center justify-center px-4">
+                        <p className="text-muted-foreground text-sm">No frames available</p>
+                      </div>
+                    )}
                   </div>
                 </ScrollArea>
               </div>
@@ -297,7 +376,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                 <div className="w-1/2 aspect-video bg-black rounded-md overflow-hidden">
                   <video
                     ref={videoRef}
-                    src={videoPath}
+                    src={selectedVideoPath}
                     className="w-full h-full"
                     controls
                     crossOrigin="anonymous"
@@ -361,15 +440,18 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                 </div>
               </div>
               
-              {/* Film strip at bottom */}
-              <div className="h-28 mt-4 border-t pt-4">
-                <ScrollArea className="h-full">
+              {/* Frame library at bottom */}
+              <div className="mt-4 border-t pt-4">
+                <h3 className="text-sm font-medium mb-2">Extracted Frames</h3>
+                <ScrollArea className="h-28">
                   <div className="flex gap-2">
-                    {selectedFrames.map((frame) => (
+                    {newFrames.map((frame) => (
                       <div 
                         key={frame.imageUrl} 
-                        className="relative h-24 aspect-video flex-shrink-0 cursor-pointer border-2 border-primary"
-                        onClick={() => jumpToTimestamp(frame.timestamp)}
+                        className={`relative h-24 aspect-video flex-shrink-0 cursor-pointer ${
+                          isFrameSelected(frame) ? "border-2 border-primary" : ""
+                        }`}
+                        onClick={() => handleFrameSelect(frame)}
                       >
                         <img
                           src={frame.imageUrl}
@@ -379,6 +461,11 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                         <Badge className="absolute bottom-1 right-1 text-xs">{frame.timestamp}</Badge>
                       </div>
                     ))}
+                    {newFrames.length === 0 && (
+                      <div className="h-full flex items-center justify-center px-4">
+                        <p className="text-muted-foreground text-sm">No frames extracted yet</p>
+                      </div>
+                    )}
                   </div>
                 </ScrollArea>
               </div>
