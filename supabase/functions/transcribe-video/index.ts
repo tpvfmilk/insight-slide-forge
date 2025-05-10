@@ -95,6 +95,19 @@ serve(async (req) => {
             title: "Main Video",
             video_metadata: project.video_metadata
           }];
+        } else {
+          // Try to get videos from project_videos table as another fallback
+          console.log("Fetching videos from project_videos table");
+          const { data: projectVideosData, error: projectVideosError } = await supabase
+            .from('project_videos')
+            .select('*')
+            .eq('project_id', projectId)
+            .order('display_order', { ascending: true });
+            
+          if (!projectVideosError && projectVideosData && projectVideosData.length > 0) {
+            videosToProcess = projectVideosData;
+            console.log(`Found ${projectVideosData.length} videos in project_videos table`);
+          }
         }
       }
       
@@ -135,7 +148,7 @@ serve(async (req) => {
           const videoTranscript = await transcribeVideoFile(videoData, useSpeakerDetection);
           
           if (videoTranscript) {
-            // Add a header with the video title
+            // Add a header with the video title - use ## for consistency
             const videoHeader = `\n\n## ${videoTitle}\n\n`;
             transcripts.push(videoHeader + videoTranscript);
           }
@@ -157,6 +170,7 @@ serve(async (req) => {
       }
       
       console.log(`Generated combined transcript with ${combinedTranscript.length} chars from ${transcripts.length} videos`);
+      console.log("First 200 chars of transcript:", combinedTranscript.substring(0, 200));
     }
 
     // For direct audio processing (transcript-only mode)

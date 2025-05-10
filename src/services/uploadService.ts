@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { createProject, Project } from "@/services/projectService";
 import { v4 as uuidv4 } from "uuid";
@@ -283,9 +284,12 @@ export const transcribeVideo = async (
       return { success: false };
     }
     
-    toast.loading("Transcribing video...", { id: "transcribe-video" });
+    toast.loading("Transcribing videos...", { id: "transcribe-video" });
     
-    // Call the transcribe-video edge function
+    console.log("Calling transcribe-video edge function with videos:", 
+      projectVideos ? projectVideos.length : 0);
+    
+    // Use supabase.functions.invoke instead of direct fetch
     const response = await supabase.functions.invoke('transcribe-video', {
       body: { 
         projectId,
@@ -294,12 +298,17 @@ export const transcribeVideo = async (
     });
     
     if (response.error) {
+      console.error("Error from transcription service:", response.error);
       throw new Error(response.error.message || "Failed to transcribe video");
     }
     
     if (!response.data || !response.data.success) {
+      console.error("Transcription failed:", response.data);
       throw new Error(response.data?.error || "Failed to transcribe video");
     }
+    
+    console.log("Transcription complete, received transcript:", 
+      response.data.transcript ? response.data.transcript.substring(0, 100) + "..." : "No transcript");
     
     toast.success("Video transcription complete", { id: "transcribe-video" });
     

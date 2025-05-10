@@ -1,26 +1,16 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const openAIKey = Deno.env.get("OPENAI_API_KEY");
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const openAIKey = Deno.env.get("OPENAI_API_KEY");
 const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
-
-interface Slide {
-  id: string;
-  title: string;
-  content: string;
-  timestamp?: string;
-  transcriptTimestamps?: string[];
-  imageUrl?: string;
-  imageUrls?: string[];
-}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -29,114 +19,101 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId, contextPrompt, videoDuration } = await req.json();
-
+    const { projectId, contextPrompt = '', slidesPerMinute = 6, videoDuration = 0 } = await req.json();
+    
     if (!projectId) {
       return new Response(
         JSON.stringify({ error: "Project ID is required" }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
+    
     // Get project details from database
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('*')
+      .select('transcript, source_type, title, video_metadata')
       .eq('id', projectId)
       .single();
-
+    
     if (projectError || !project) {
       return new Response(
-        JSON.stringify({ error: "Project not found", details: projectError?.message }),
+        JSON.stringify({ error: "Project not found" }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Get content based on source type
-    let contentForProcessing = "";
-    if (project.transcript) {
-      console.log("Using transcript from project:", project.transcript.substring(0, 100) + "...");
-      contentForProcessing = project.transcript;
-    } else if (project.source_type === 'transcript' && project.transcript) {
-      contentForProcessing = project.transcript;
-    } else if (project.source_type === 'video' || project.source_type === 'url') {
-      // If no transcript but we have a video, inform the user
+    
+    // If no transcript, we can't generate slides
+    if (!project.transcript) {
       return new Response(
-        JSON.stringify({ 
-          error: "No transcript available for this project",
-          details: "Please run the transcription process first" 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } else {
-      return new Response(
-        JSON.stringify({ error: "Content not available for processing" }),
+        JSON.stringify({ error: "Project has no transcript" }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Use either contextPrompt passed in the request or the one stored in the project
-    const finalContextPrompt = contextPrompt || project.context_prompt || '';
-
-    // Extract a rough word count for reference
-    const wordCount = contentForProcessing.split(/\s+/).length;
     
-    // If the slides_per_minute is set in the project and > 0, use it as an override (for developer mode)
-    // Otherwise, let the AI decide based on content
-    const targetSlideCount = project.slides_per_minute && project.slides_per_minute > 0
-      ? Math.round((wordCount / 150) * project.slides_per_minute) // 150 words per minute is a rough estimate
-      : 0; // 0 means AI decides
-
-    // Process with AI and track token usage
-    const { slideDeck, usageData } = await generateSlidesWithAI(
-      contentForProcessing, 
-      project.title, 
-      finalContextPrompt,
-      targetSlideCount,
-      project.user_id,
-      projectId,
-      videoDuration // Pass video duration to generateSlidesWithAI function
+    // Calculate number of slides based on duration or default to a reasonable number
+    let targetNumSlides = 10;
+    
+    if (videoDuration && slidesPerMinute) {
+      // Calculate from total video duration and slides per minute
+      const durationInMinutes = videoDuration / 60;
+      targetNumSlides = Math.max(5, Math.round(durationInMinutes * slidesPerMinute));
+      console.log(`Using video duration: ${videoDuration}s (${durationInMinutes.toFixed(2)} min) with ${slidesPerMinute} slides/min = ${targetNumSlides} slides`);
+    } else if (project.video_metadata?.duration && slidesPerMinute) {
+      // Fallback to main video duration if available
+      const duration = project.video_metadata.duration as number;
+      const durationInMinutes = duration / 60;
+      targetNumSlides = Math.max(5, Math.round(durationInMinutes * slidesPerMinute));
+      console.log(`Using project video metadata duration: ${duration}s with ${slidesPerMinute} slides/min = ${targetNumSlides} slides`);
+    } else {
+      // If no duration, estimate based on transcript length
+      // Average read speed is about 150 words per minute, average slide might contain ~30 words
+      const wordCount = project.transcript.split(/\s+/).length;
+      const estimatedMinutes = wordCount / 150;
+      targetNumSlides = Math.max(5, Math.round(estimatedMinutes * slidesPerMinute));
+      console.log(`Estimated ${targetNumSlides} slides from transcript word count (${wordCount} words)`);
+    }
+    
+    // Cap the number of slides to a reasonable maximum to avoid token limits
+    targetNumSlides = Math.min(targetNumSlides, 30);
+    console.log(`Final target slides: ${targetNumSlides}`);
+    
+    console.log(`Using transcript from project: ${project.transcript.substring(0, 100)}...`);
+    
+    // Generate the slides using OpenAI
+    const slides = await generateSlidesFromTranscript(
+      project.transcript, 
+      targetNumSlides, 
+      contextPrompt,
+      project.title || "Presentation"
     );
     
-    // Insert usage data into openai_usage table
-    if (usageData) {
-      const { error: usageError } = await supabase
-        .from('openai_usage')
-        .insert({
-          user_id: project.user_id,
-          project_id: projectId,
-          model_id: usageData.model,
-          input_tokens: usageData.inputTokens,
-          output_tokens: usageData.outputTokens,
-          total_tokens: usageData.totalTokens,
-          estimated_cost: usageData.estimatedCost
-        });
-
-      if (usageError) {
-        console.error("Error recording token usage:", usageError);
-        // Continue with the function even if usage tracking fails
-      }
-    }
-    
-    // Update project with generated slides
-    const { error: updateError } = await supabase
-      .from('projects')
-      .update({ 
-        slides: slideDeck,
-        target_slide_count: slideDeck.length, // Store the actual number of slides created
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', projectId);
-
-    if (updateError) {
+    if (!slides) {
       return new Response(
-        JSON.stringify({ error: "Failed to update project with slides", details: updateError.message }),
+        JSON.stringify({ error: "Failed to generate slides" }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
+    
+    // Update the project with the generated slides
+    const { error: updateError } = await supabase
+      .from('projects')
+      .update({ 
+        slides,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', projectId);
+    
+    if (updateError) {
+      console.error("Failed to update project with slides:", updateError);
+      return new Response(
+        JSON.stringify({ error: "Failed to update project with slides" }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Return the slides
     return new Response(
-      JSON.stringify({ success: true, slides: slideDeck }),
+      JSON.stringify({ slides }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
@@ -148,231 +125,131 @@ serve(async (req) => {
   }
 });
 
-// Define a type for token usage data
-interface UsageData {
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  estimatedCost: number;
-}
-
-async function generateSlidesWithAI(
-  content: string, 
-  title: string, 
-  contextPrompt: string = '', 
-  targetSlideCount: number = 0,
-  userId: string,
-  projectId: string,
-  videoDuration?: number // Add video duration parameter
-): Promise<{ slideDeck: Slide[], usageData: UsageData }> {
-  if (!openAIKey) {
-    throw new Error("OpenAI API key not configured");
-  }
-
+/**
+ * Generate slides from transcript using OpenAI
+ */
+async function generateSlidesFromTranscript(
+  transcript: string, 
+  targetNumSlides: number,
+  contextPrompt: string = "",
+  presentationTitle: string = "Presentation"
+): Promise<any[] | null> {
   try {
-    // Incorporate the contextPrompt into the system prompt if provided
-    let contextInfo = '';
+    // Prepare the system prompt with instructions for handling multiple video sections
+    const systemPrompt = `You are a professional presentation creator. Create a presentation based on the provided transcript.
+    
+Key requirements:
+1. Create exactly ${targetNumSlides} slides.
+2. The transcript may contain multiple video sections marked by "## [Video Title]".
+3. Create slides that span the entire content, distributing them proportionally across all video sections.
+4. For each slide, extract the most relevant timestamp from the transcript in the format [MM:SS].
+5. Each slide must include: id, title (short and concise), content (bullet points), and timestamp if available.
+6. Don't focus only on the beginning of the transcript; cover the entire content.
+7. If the transcript has sections marked with ##, ensure slides cover content from all sections.
+
+Your output should be valid JSON - an array of slide objects.`;
+
+    // Prepare the user prompt
+    let userPrompt = `Based on this transcript, create a ${targetNumSlides}-slide presentation titled "${presentationTitle}":`;
+    
+    // Add context prompt if provided
     if (contextPrompt && contextPrompt.trim()) {
-      contextInfo = `\nAdditional context from the user:\n${contextPrompt.trim()}\n\nUse this context to guide your slide creation. The context may include instructions on what to focus on, what to skip, or how to maintain consistency with other content.`;
+      userPrompt += `\n\nAdditional context: ${contextPrompt}\n\n`;
     }
+    
+    userPrompt += `\n\nTranscript:\n${transcript}\n\n`;
+    
+    userPrompt += `
+Remember:
+- Create exactly ${targetNumSlides} slides
+- Distribute slides evenly across all video sections
+- Include relevant timestamps for each slide
+- Format as valid JSON array of slide objects
 
-    // Create a prompt that asks AI to determine the optimal slide count
-    // unless a specific targetSlideCount is provided (for developer override)
-    const optimalSlideInstructions = targetSlideCount > 0 
-      ? `The user wants approximately ${targetSlideCount} slides in total. Adjust your content grouping accordingly.`
-      : `Generate the optimal number of slides for effective studying. Segment the video into logical ideas, transitions, and key points. Avoid creating slides for filler content or repetitive information. Ensure the final slideset is concise, focused, and ideal for exam preparation or deep learning.`;
-
-    // Add specific timestamp instructions based on video duration
-    let timestampInstructions = `
-    IMPORTANT INSTRUCTIONS FOR TIMESTAMPS:
-    - For each slide, identify 1-4 key moments from the transcript that the slide content references
-    - Include timestamps for these moments in the "transcriptTimestamps" array
-    - For longer, content-rich slides, include more timestamps (up to 4)
-    - For simpler slides, 1-2 timestamps is sufficient
-    - If timestamps are explicitly mentioned in the transcript (like "at 00:05:32"), use those exact timestamps
-    - Otherwise, make your best estimation of where in the transcript the content appears
-    - The goal is to extract frames from these timestamps to provide visual context for each slide
-    `;
+Expected JSON format:
+[
+  {
+    "id": "slide-1",
+    "title": "Slide Title",
+    "content": "- Bullet point 1\\n- Bullet point 2\\n- Bullet point 3",
+    "timestamp": "05:30",
+    "transcriptTimestamps": ["05:20", "05:35", "05:50"]
+  },
+  ...
+]`;
     
-    // Add video duration constraint if available
-    if (videoDuration) {
-      const formattedDuration = formatDuration(videoDuration);
-      timestampInstructions += `
-    CRITICAL VIDEO DURATION CONSTRAINT:
-    - This video is exactly ${videoDuration} seconds long (${formattedDuration})
-    - All timestamps MUST be within the range 00:00:00 to ${formattedDuration}
-    - DO NOT generate any timestamps beyond ${formattedDuration}
-    - If you're unsure about a timestamp's position, choose an earlier one within the video's duration
-    - Double check all timestamps to ensure they are valid and within the video length
-    `;
-    }
-
-    const prompt = `
-    You are a professional presentation creator. Create a well-structured slide deck based on the following content.
-    Format the output as a JSON array of slide objects, where each slide has:
-    - id (string): a unique identifier like "slide-1"
-    - title (string): a concise, informative title
-    - content (string): bullet points separated by '\\n• ' (newline and bullet)
-    - transcriptTimestamps (array of strings): include 1-4 timestamps from the transcript that this slide covers, in "00:05:32" format
-    
-    For the main title slide, use the title: "${title}"
-    
-    ${optimalSlideInstructions}
-    
-    IMPORTANT:
-    - DO NOT create a conclusion or summary slide
-    - DO NOT include any slides titled "Conclusion", "Summary", or similar
-    - The last slide should be on the last topic from the content, not a summary
-    
-    Here's the content to transform into slides:
-    ${content}
-    ${contextInfo}
-    
-    ${timestampInstructions}
-    `;
-
-    const model = "gpt-4o-mini"; // Using the faster model for cost and speed
-    
+    // Call OpenAI API to generate the slides
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${openAIKey}`,
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${openAIKey}`
       },
       body: JSON.stringify({
-        model: model,
+        model: "gpt-4o-mini",
         messages: [
-          {
-            role: "system",
-            content: "You are a professional presentation creator specialized in creating well-organized slide decks with visual context."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
         ],
-        temperature: 0.7,
-      }),
+        temperature: 0.5,
+        max_tokens: 3500
+      })
     });
-
+    
     if (!response.ok) {
-      const error = await response.json();
-      console.error("OpenAI API error:", error);
-      throw new Error(`OpenAI API error: ${error.error?.message || "Unknown error"}`);
+      const errorData = await response.json();
+      console.error("OpenAI API error:", errorData);
+      throw new Error("Failed to generate slides: API error");
     }
-
-    const data = await response.json();
-    let slidesContent = data.choices[0].message.content;
     
-    // Extract JSON from potential markdown code blocks
-    if (slidesContent.includes("```json")) {
-      slidesContent = slidesContent.split("```json")[1].split("```")[0].trim();
-    } else if (slidesContent.includes("```")) {
-      slidesContent = slidesContent.split("```")[1].split("```")[0].trim();
+    const result = await response.json();
+    
+    if (!result.choices || !result.choices[0] || !result.choices[0].message) {
+      throw new Error("Invalid response from OpenAI API");
     }
-
-    // Calculate token usage and cost
-    // GPT-4o mini pricing: $0.15 per 1M input tokens, $0.6 per 1M output tokens
-    const inputTokens = data.usage.prompt_tokens;
-    const outputTokens = data.usage.completion_tokens;
-    const totalTokens = data.usage.total_tokens;
     
-    const inputCost = (inputTokens / 1000000) * 0.15;
-    const outputCost = (outputTokens / 1000000) * 0.6;
-    const estimatedCost = inputCost + outputCost;
+    // Log token usage
+    if (result.usage) {
+      console.log(`Token usage - Input: ${result.usage.prompt_tokens}, Output: ${result.usage.completion_tokens}, Total: ${result.usage.total_tokens}, Cost: $${(result.usage.total_tokens * 0.0000003).toFixed(4)}`);
+    }
     
-    const usageData: UsageData = {
-      model: model,
-      inputTokens: inputTokens,
-      outputTokens: outputTokens,
-      totalTokens: totalTokens,
-      estimatedCost: estimatedCost
-    };
-
-    console.log(`Token usage - Input: ${inputTokens}, Output: ${outputTokens}, Total: ${totalTokens}, Cost: $${estimatedCost.toFixed(4)}`);
-
-    // Parse JSON safely
+    const content = result.choices[0].message.content;
+    
+    // Extract JSON from the response
+    let slides;
+    
     try {
-      const slides: Slide[] = JSON.parse(slidesContent);
+      // Try to find JSON in the response
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        slides = JSON.parse(jsonMatch[0]);
+      } else {
+        // If no JSON found, try parsing the entire response
+        slides = JSON.parse(content);
+      }
       
-      // Process each slide to ensure it has the expected format and validate timestamps
-      const processedSlides = slides.map((slide, index) => {
-        // Ensure transcriptTimestamps is an array
-        const transcriptTimestamps = Array.isArray(slide.transcriptTimestamps) 
-          ? slide.transcriptTimestamps 
-          : (slide.timestamp ? [slide.timestamp] : []);
-          
-        // Validate timestamps against video duration if available
-        let validatedTimestamps = transcriptTimestamps;
-        if (videoDuration) {
-          validatedTimestamps = transcriptTimestamps
-            .filter(timestamp => {
-              const seconds = timestampToSeconds(timestamp);
-              const isValid = seconds <= videoDuration;
-              if (!isValid) {
-                console.log(`Filtering out invalid timestamp: ${timestamp} (${seconds}s) exceeds video duration of ${videoDuration}s`);
-              }
-              return isValid;
-            });
-        }
-        
-        // Limit to max 4 timestamps to keep things manageable
-        const limitedTimestamps = validatedTimestamps.slice(0, 4);
-        
-        return {
-          ...slide,
-          id: slide.id || `slide-${index + 1}`,
-          transcriptTimestamps: limitedTimestamps
-        };
-      });
+      // Validate the slides
+      if (!Array.isArray(slides)) {
+        throw new Error("Response is not a valid array");
+      }
       
-      return { slideDeck: processedSlides, usageData };
-    } catch (e) {
-      console.error("Failed to parse AI response as JSON:", e);
-      console.log("Raw response:", slidesContent);
-      
-      // Return a fallback slide deck
-      return { 
-        slideDeck: [
-          {
-            id: "slide-1",
-            title: title || "Introduction",
-            content: "• Failed to generate slides\n• Please try again later"
-          }
-        ],
-        usageData: usageData 
-      };
+      // Ensure each slide has required properties
+      slides = slides.map((slide, index) => ({
+        id: slide.id || `slide-${index + 1}`,
+        title: slide.title || `Slide ${index + 1}`,
+        content: slide.content || "",
+        timestamp: slide.timestamp || null,
+        transcriptTimestamps: Array.isArray(slide.transcriptTimestamps) ? slide.transcriptTimestamps : 
+                              (slide.timestamp ? [slide.timestamp] : [])
+      }));
+    } catch (error) {
+      console.error("Failed to parse slides:", error);
+      throw new Error("Failed to parse slides from API response");
     }
+    
+    return slides;
   } catch (error) {
-    console.error("Error generating slides with AI:", error);
-    throw new Error(`Failed to generate slides: ${error.message}`);
-  }
-}
-
-// Helper function to convert timestamp string (e.g., "00:05:32") to seconds
-function timestampToSeconds(timestamp: string): number {
-  const parts = timestamp.split(':').map(Number);
-  if (parts.length === 3) {
-    // Format: HH:MM:SS
-    return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  } else if (parts.length === 2) {
-    // Format: MM:SS
-    return parts[0] * 60 + parts[1];
-  } else {
-    return 0;
-  }
-}
-
-// Helper function to format seconds to timestamp string (e.g., "00:05:32")
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  
-  if (hours > 0) {
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  } else {
-    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    console.error("Error generating slides:", error);
+    return null;
   }
 }

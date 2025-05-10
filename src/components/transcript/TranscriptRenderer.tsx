@@ -36,17 +36,18 @@ export const TranscriptRenderer: React.FC<Props> = ({
       const line = lines[i];
       
       // Check if this is a video section header
-      const isVideoHeader = /^\s*#{1,3}\s+.+$/.test(line);
+      // Match more explicitly for ## followed by any text
+      const isVideoHeader = /^\s*#{2}\s+.+/.test(line);
       
-      if (isVideoHeader && hasMultipleVideos) {
+      if (isVideoHeader) {
         currentVideoSection = line.replace(/^#+\s+/, '').trim();
         
         if (showVideoSeparators) {
-          // Add a video section header
+          // Add a video section header with more distinctive styling
           result.push(
             <div 
               key={`video-${i}`}
-              className="my-4 py-2 px-3 bg-primary/10 border-l-4 border-primary rounded-sm font-medium"
+              className="my-6 py-3 px-4 bg-primary/10 border-l-4 border-primary rounded font-medium text-primary-foreground"
             >
               {currentVideoSection}
             </div>

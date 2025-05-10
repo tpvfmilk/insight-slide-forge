@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Project } from "@/services/projectService";
@@ -69,26 +68,21 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
     }
 
     console.log("Calling generate-slides edge function");
-    const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/generate-slides`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.session.access_token}`
-      },
-      body: JSON.stringify({
+    const response = await supabase.functions.invoke('generate-slides', {
+      body: {
         projectId,
         contextPrompt: project?.context_prompt || '',
         slidesPerMinute: project?.slides_per_minute || 6,
         videoDuration: totalVideoDuration // Pass total video duration to the edge function
-      })
+      }
     });
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to generate slides");
+    if (response.error) {
+      console.error("Error from generate-slides edge function:", response.error);
+      throw new Error(response.error.message || "Failed to generate slides");
     }
     
-    const { slides: generatedSlides } = await response.json();
+    const { slides: generatedSlides } = response.data || {};
     
     if (!generatedSlides || !Array.isArray(generatedSlides) || generatedSlides.length === 0) {
       throw new Error("No slides were generated");

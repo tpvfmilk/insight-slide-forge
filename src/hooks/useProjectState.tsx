@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -78,6 +77,7 @@ export const useProjectState = (projectId: string | undefined) => {
       // Load all project videos
       const videos = await fetchProjectVideos(projectId);
       setProjectVideos(videos);
+      console.log(`Loaded ${videos.length} videos for project`);
       
       // Calculate total video duration
       if (videos.length > 0) {
@@ -86,6 +86,7 @@ export const useProjectState = (projectId: string | undefined) => {
           return total + duration;
         }, 0);
         setTotalVideoDuration(totalDuration);
+        console.log(`Total duration of all videos: ${totalDuration}s`);
       }
       
       // We will still check if frames are needed, but we won't automatically extract them
@@ -190,10 +191,13 @@ export const useProjectState = (projectId: string | undefined) => {
     setIsTranscribing(true);
     
     try {
+      console.log(`Transcribing videos for project ${projectId}`, projectVideos);
       // Now we pass all videos in the project to be transcribed
       const result = await transcribeVideo(projectId, projectVideos);
       
       if (result.success && result.transcript) {
+        console.log("Transcription succeeded, updating project with transcript");
+        
         // Update the project in state with the new transcript
         setProject(prev => {
           if (!prev) return prev;
@@ -209,7 +213,11 @@ export const useProjectState = (projectId: string | undefined) => {
         if (!hasValidSlides(project)) {
           handleGenerateSlides();
         }
+      } else {
+        console.error("Transcription failed or returned empty transcript");
       }
+    } catch (error) {
+      console.error("Error in handleTranscribeVideo:", error);
     } finally {
       setIsTranscribing(false);
     }
