@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
@@ -193,21 +194,27 @@ export const deleteProjectStorage = async (project: Project): Promise<boolean> =
         const framePaths = new Set<string>();
         project.extracted_frames.forEach(frame => {
           try {
-            // Example URL: https://[bucket-url]/storage/v1/object/public/slide_stills/project_123/frame.jpg
-            const url = new URL(frame.imageUrl);
-            const pathParts = url.pathname.split('/');
-            
-            // Find the bucket name and everything after it
-            const publicIndex = pathParts.findIndex(part => part === "public");
-            if (publicIndex >= 0 && publicIndex + 2 < pathParts.length) {
-              // Get the part after the bucket name
-              const filePath = pathParts.slice(publicIndex + 2).join('/');
-              if (filePath) {
-                framePaths.add(filePath);
+            // Type assertion to access imageUrl property
+            // Extract frames are stored as ExtractedFrame type but come from JSON
+            if (typeof frame === 'object' && frame !== null && 'imageUrl' in frame) {
+              const imageUrl = (frame as ExtractedFrame).imageUrl;
+              
+              // Example URL: https://[bucket-url]/storage/v1/object/public/slide_stills/project_123/frame.jpg
+              const url = new URL(imageUrl);
+              const pathParts = url.pathname.split('/');
+              
+              // Find the bucket name and everything after it
+              const publicIndex = pathParts.findIndex(part => part === "public");
+              if (publicIndex >= 0 && publicIndex + 2 < pathParts.length) {
+                // Get the part after the bucket name
+                const filePath = pathParts.slice(publicIndex + 2).join('/');
+                if (filePath) {
+                  framePaths.add(filePath);
+                }
               }
             }
           } catch (e) {
-            console.error(`Error parsing frame URL: ${frame.imageUrl}`, e);
+            console.error(`Error parsing frame URL:`, frame, e);
           }
         });
         
