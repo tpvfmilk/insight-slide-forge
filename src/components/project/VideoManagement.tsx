@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Project } from "@/services/projectService";
 import { Plus, Trash2, GripVertical, Edit, Clock, Video } from "lucide-react";
 import { VideoUploader } from "@/components/project/VideoUploader";
+import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
 
 interface VideoManagementProps {
   project: Project | null;
@@ -182,10 +183,10 @@ export const VideoManagement = ({
               </Button>
             </div>
           ) : (
-            <div className="border rounded-lg p-4">
-              <div className="flex justify-between items-center mb-3">
+            <div className="border rounded-lg p-2">
+              <div className="flex justify-between items-center mb-2 px-2">
                 <p className="text-sm font-medium">Video order ({videos.length})</p>
-                <p className="text-sm text-muted-foreground">Drag to reorder</p>
+                <p className="text-xs text-muted-foreground">Drag to reorder</p>
               </div>
               <DragDropContext onDragEnd={handleOnDragEnd}>
                 <Droppable droppableId="videos">
@@ -193,7 +194,7 @@ export const VideoManagement = ({
                     <div
                       {...provided.droppableProps}
                       ref={provided.innerRef}
-                      className="space-y-2 max-h-[400px] overflow-y-auto"
+                      className="space-y-1 max-h-[300px] overflow-y-auto px-1 py-1"
                     >
                       {videos.map((video, index) => (
                         <Draggable
@@ -205,40 +206,42 @@ export const VideoManagement = ({
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              className={`border rounded-lg p-3 bg-background ${
+                              className={`border rounded-md p-2 bg-background ${
                                 snapshot.isDragging ? "shadow-lg border-primary/50" : ""
                               }`}
-                              style={
-                                snapshot.isDragging
-                                  ? { ...provided.draggableProps.style }
-                                  : {}
-                              }
+                              style={{
+                                ...provided.draggableProps.style,
+                                ...(snapshot.isDragging
+                                  ? { transform: provided.draggableProps.style?.transform }
+                                  : {})
+                              }}
                             >
-                              <div className="flex items-start gap-3">
+                              <div className="flex items-center gap-2">
                                 {/* Drag handle */}
                                 <div
                                   {...provided.dragHandleProps}
-                                  className="flex items-center justify-center mt-2 text-muted-foreground cursor-grab active:cursor-grabbing"
+                                  className="flex items-center justify-center text-muted-foreground cursor-grab active:cursor-grabbing"
                                 >
-                                  <GripVertical className="h-5 w-5" />
+                                  <GripVertical className="h-4 w-4" />
                                 </div>
                                 
                                 {/* Video details */}
                                 <div className="flex-1 min-w-0">
                                   <div className="flex flex-col">
-                                    <h3 className="font-medium truncate">
+                                    <h3 className="font-medium text-sm truncate">
                                       {video.title || video.video_metadata?.original_file_name || "Untitled Video"}
                                     </h3>
                                     <div className="flex gap-2 text-xs text-muted-foreground">
-                                      <span>
-                                        {video.video_metadata?.duration ? 
-                                          formatDuration(video.video_metadata.duration) : ""}
-                                      </span>
+                                      {video.video_metadata?.duration && (
+                                        <span className="flex items-center">
+                                          <Clock className="h-3 w-3 mr-1" />
+                                          {formatDuration(video.video_metadata.duration)}
+                                        </span>
+                                      )}
                                       {video.video_metadata?.file_size && (
-                                        <>
-                                          <span>•</span>
-                                          <span>{getFileSize(video.video_metadata.file_size)}</span>
-                                        </>
+                                        <span>
+                                          {getFileSize(video.video_metadata.file_size)}
+                                        </span>
                                       )}
                                     </div>
                                   </div>
@@ -249,9 +252,9 @@ export const VideoManagement = ({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => handleDeleteVideo(video.id)}
-                                  className="text-muted-foreground hover:text-foreground"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
                             </div>
