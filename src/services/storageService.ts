@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -111,5 +110,46 @@ export const getProjectTotalSize = async (projectId: string): Promise<number> =>
   } catch (error) {
     console.error("Failed to get project total size:", error);
     return 0;
+  }
+};
+
+/**
+ * Syncs the user's storage usage after a significant change like deleting a project
+ * This will force an update of the user's storage stats in the database
+ * @returns Promise resolving to success/failure status
+ */
+export const syncStorageUsage = async (): Promise<boolean> => {
+  try {
+    console.log("Syncing user's storage usage after storage changes");
+    
+    // Check if user is authenticated before proceeding
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.access_token) {
+      console.log("Storage sync skipped: User not authenticated");
+      return false;
+    }
+    
+    // Call the storage sync function
+    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/sync-storage-usage', {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.session.access_token}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Storage sync failed:", errorData);
+      return false;
+    }
+    
+    const data = await response.json();
+    console.log("Storage sync result:", data);
+    
+    return data.success === true;
+  } catch (error) {
+    console.error("Error syncing storage usage:", error);
+    return false;
   }
 };

@@ -12,6 +12,7 @@ import { FolderList } from "@/components/folders/FolderList";
 import { FolderDialog } from "@/components/folders/FolderDialog";
 import { Folder as FolderIcon } from "lucide-react";
 import { Folder as FolderType, createFolder, deleteFolder, fetchFolders } from "@/services/folderService";
+import { syncStorageUsage } from "@/services/storageService";
 
 const ProjectsPage = () => {
   const queryClient = useQueryClient();
@@ -59,13 +60,17 @@ const ProjectsPage = () => {
   const handleDeleteProject = async (projectId: string) => {
     try {
       await deleteProject(projectId);
-      toast.success("Project deleted successfully");
       
       // Update the projects list
       setProjects(projects.filter(project => project.id !== projectId));
       
+      // Sync storage usage to update metrics after deletion
+      await syncStorageUsage();
+      
       // Invalidate the storage info query to update the storage usage bar
       queryClient.invalidateQueries({ queryKey: ['storage-info'] });
+      
+      toast.success("Project deleted successfully");
     } catch (error) {
       console.error("Failed to delete project:", error);
       toast.error("Failed to delete project");
