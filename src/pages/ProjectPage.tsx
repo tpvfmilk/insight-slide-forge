@@ -42,6 +42,8 @@ const ProjectPage = () => {
     handleTranscribeVideo,
     handleExtractFrames,
     handleManualFrameSelectionComplete,
+    projectVideos,
+    totalVideoDuration
   } = useProjectState(projectId);
   
   // Empty placeholder method - this is only for manual frame selection now
@@ -95,7 +97,7 @@ const ProjectPage = () => {
               description: "Original project video",
               display_order: 0,
               video_metadata: project.video_metadata,
-              extracted_frames: project.extracted_frames // Add the missing property
+              extracted_frames: project.extracted_frames
             });
             console.log("Main video added to project_videos");
           }
@@ -150,6 +152,8 @@ const ProjectPage = () => {
               extractedFrames={extractedFrames}
               isTranscriptOnlyProject={isTranscriptOnlyProject}
               refreshProject={loadProject}
+              videosCount={projectVideos?.length || 0}
+              totalDuration={totalVideoDuration}
             />
           </div>
         </div>

@@ -23,10 +23,17 @@ serve(async (req) => {
     console.log("Transcribe-video function called");
     const startTime = Date.now();
     
-    const { projectId, audioData, useSpeakerDetection = false, isTranscriptOnly = false } = await req.json();
+    const { 
+      projectId, 
+      audioData, 
+      useSpeakerDetection = false, 
+      isTranscriptOnly = false,
+      projectVideos = [] 
+    } = await req.json();
 
     console.log(`Processing request: projectId=${projectId}, useSpeakerDetection=${useSpeakerDetection}, isTranscriptOnly=${isTranscriptOnly}`);
     console.log(`Has audioData: ${Boolean(audioData)}, audioData length: ${audioData ? audioData.length : 0}`);
+    console.log(`Project videos provided: ${projectVideos.length}`);
 
     if (!projectId && !audioData) {
       return new Response(
@@ -36,48 +43,20 @@ serve(async (req) => {
     }
 
     let project;
-    let fileData;
-    let audioBlob;
+    let combinedTranscript = "";
+    let userId;
 
     // Handle direct audio data (from client-side extraction)
     if (audioData) {
       console.log(`Processing directly provided audio data (${(audioData.length / 1024 / 1024).toFixed(2)}MB base64)`);
       
-      try {
-        // Process audio data in chunks to avoid memory issues
-        const chunkSize = 1024 * 1024; // 1MB chunks
-        const totalChunks = Math.ceil(audioData.length / chunkSize);
-        
-        console.log(`Processing audio in ${totalChunks} chunks`);
-        
-        const bytes = new Uint8Array(audioData.length);
-        
-        // Process chunks
-        for (let i = 0; i < totalChunks; i++) {
-          const start = i * chunkSize;
-          const end = Math.min(start + chunkSize, audioData.length);
-          const chunk = audioData.substring(start, end);
-          
-          // Decode the base64 chunk
-          const binaryChunk = atob(chunk);
-          for (let j = 0; j < binaryChunk.length; j++) {
-            bytes[start + j] = binaryChunk.charCodeAt(j);
-          }
-          
-          console.log(`Processed chunk ${i + 1}/${totalChunks}`);
-        }
-        
-        audioBlob = new Blob([bytes], { type: 'audio/mp3' });
-        console.log(`Audio blob created, size: ${audioBlob.size / 1024 / 1024} MB`);
-      } catch (e) {
-        console.error("Error decoding audio data:", e);
-        return new Response(
-          JSON.stringify({ error: "Failed to decode audio data", details: e.message }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      // Process the single audio stream
+      const singleTranscript = await processAudioData(audioData);
+      if (singleTranscript) {
+        combinedTranscript = singleTranscript;
       }
     } 
-    // Handle project with video file stored in Supabase
+    // Handle project with video files stored in Supabase
     else {
       console.log("Processing project with ID:", projectId);
       
@@ -97,193 +76,141 @@ serve(async (req) => {
       }
 
       project = projectData;
+      userId = project.user_id;
 
-      // Check if we have a source file to transcribe
-      if (project.source_type !== 'video' && project.source_type !== 'transcript-only' || !project.source_file_path) {
-        console.error("No video file available for transcription");
+      // Determine which videos to process
+      let videosToProcess = [];
+      
+      if (projectVideos && projectVideos.length > 0) {
+        console.log(`Using ${projectVideos.length} videos provided in request`);
+        videosToProcess = projectVideos;
+      } else {
+        // Fallback to using the project's main video
+        if (project.source_type === 'video' && project.source_file_path) {
+          console.log("Using project's main video");
+          videosToProcess = [{
+            id: null,
+            project_id: projectId,
+            source_file_path: project.source_file_path,
+            title: "Main Video",
+            video_metadata: project.video_metadata
+          }];
+        }
+      }
+      
+      if (videosToProcess.length === 0) {
+        console.error("No videos available for transcription");
         return new Response(
-          JSON.stringify({ error: "No video file available for transcription" }),
+          JSON.stringify({ error: "No videos available for transcription" }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-
-      // Download the video file from storage
-      console.log("Downloading video file from storage:", project.source_file_path);
-      const { data: videoData, error: fileError } = await supabase
-        .storage
-        .from('video_uploads')
-        .download(project.source_file_path);
       
-      if (fileError || !videoData) {
-        console.error("Failed to download video file:", fileError);
+      console.log(`Processing ${videosToProcess.length} videos for transcription`);
+      
+      // Process each video and combine the transcripts
+      const transcripts = [];
+      
+      for (let i = 0; i < videosToProcess.length; i++) {
+        const video = videosToProcess[i];
+        console.log(`Processing video ${i + 1}/${videosToProcess.length}: ${video.source_file_path}`);
+        
+        try {
+          // Download the video file from storage
+          console.log("Downloading video file from storage:", video.source_file_path);
+          const { data: videoData, error: fileError } = await supabase
+            .storage
+            .from('video_uploads')
+            .download(video.source_file_path);
+          
+          if (fileError || !videoData) {
+            console.error("Failed to download video file:", fileError);
+            continue; // Skip this video but continue with others
+          }
+          
+          console.log("Video file downloaded successfully");
+          
+          // Process this video file
+          const videoTitle = video.title || `Video ${i + 1}`;
+          const videoTranscript = await transcribeVideoFile(videoData, useSpeakerDetection);
+          
+          if (videoTranscript) {
+            // Add a header with the video title
+            const videoHeader = `\n\n## ${videoTitle}\n\n`;
+            transcripts.push(videoHeader + videoTranscript);
+          }
+        } catch (error) {
+          console.error(`Error processing video ${i + 1}:`, error);
+          // Continue with other videos
+        }
+      }
+      
+      // Combine all transcripts
+      combinedTranscript = transcripts.join("\n\n");
+      
+      if (combinedTranscript.trim() === "") {
+        console.error("Failed to generate any transcripts");
         return new Response(
-          JSON.stringify({ error: "Failed to download video file", details: fileError?.message }),
+          JSON.stringify({ error: "Failed to transcribe any videos" }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      fileData = videoData;
-      console.log("Video file downloaded successfully");
+      console.log(`Generated combined transcript with ${combinedTranscript.length} chars from ${transcripts.length} videos`);
     }
-
-    // Create form data for OpenAI API
-    const formData = new FormData();
-    
-    // Use the appropriate data source
-    if (audioBlob) {
-      console.log("Using audio blob from provided audio data");
-      formData.append('file', audioBlob, 'audio.mp3');
-    } else if (fileData) {
-      console.log("Using video file from storage");
-      formData.append('file', fileData, 'audio.mp4');
-    }
-    
-    // Configure the transcription options
-    formData.append('model', 'whisper-1');
-    formData.append('language', 'en'); // Default to English
-    
-    // For speaker detection, we use the response_format 'verbose_json'
-    if (useSpeakerDetection) {
-      console.log("Enabling speaker detection with verbose_json format");
-      formData.append('response_format', 'verbose_json');
-    }
-    
-    // Call OpenAI's Whisper API for transcription
-    console.log("Calling OpenAI Whisper API for transcription");
-    
-    const whisperStart = Date.now();
-    let openAIError = null;
-    
-    // Create a timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("OpenAI API timeout after 20 seconds")), 40000);
-    });
-    
-    // Make the API call with timeout
-    const apiCallPromise = fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIKey}`,
-      },
-      body: formData
-    });
-    
-    // Use Promise.race to implement timeout
-    let openAIResponse;
-    try {
-      openAIResponse = await Promise.race([apiCallPromise, timeoutPromise]) as Response;
-    } catch (e) {
-      console.error("OpenAI API call failed with timeout:", e);
-      openAIError = e;
-    }
-
-    if (!openAIResponse || !openAIResponse.ok) {
-      const errorMessage = openAIError ? openAIError.message : "Unknown OpenAI API error";
-      let errorDetails = "Unknown error";
-      
-      if (openAIResponse) {
-        try {
-          const errorData = await openAIResponse.json();
-          errorDetails = errorData.error?.message || "Unknown API error";
-        } catch (e) {
-          errorDetails = "Could not parse error response";
-        }
-      }
-      
-      console.error(`OpenAI transcription failed: ${errorDetails}`);
-      
-      // If there's a project, update it with the error
-      if (projectId) {
-        await supabase
-          .from('projects')
-          .update({
-            updated_at: new Date().toISOString(),
-            transcript: `[Transcription failed: ${errorDetails}]`
-          })
-          .eq('id', projectId);
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          error: "OpenAI transcription failed", 
-          details: errorDetails 
-        }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const whisperEnd = Date.now();
-    console.log(`OpenAI API responded in ${(whisperEnd - whisperStart) / 1000} seconds`);
-
-    // Process the transcription data
-    console.log("Processing transcription data");
-    const transcriptionData = await openAIResponse.json();
-    let transcript;
-    
-    // Format the transcript with speaker detection if requested
-    if (useSpeakerDetection && transcriptionData.segments) {
-      transcript = formatTranscriptWithSpeakers(transcriptionData);
-    } else {
-      transcript = transcriptionData.text;
-    }
-
-    console.log(`Transcript generated (${transcript.length} chars)`);
 
     // For direct audio processing (transcript-only mode)
     if (audioData && !projectId) {
       console.log("Returning transcript without storing");
       return new Response(
-        JSON.stringify({ success: true, transcript }),
+        JSON.stringify({ success: true, transcript: combinedTranscript }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get project user_id for tracking usage (Fix for the "Cannot read properties of undefined (reading 'user_id')" error)
-    let userId;
-    if (project) {
-      userId = project.user_id;
-    } else {
-      // If we don't have a project object, try to fetch the project's user_id directly
-      const { data: projectData, error: projectError } = await supabase
-        .from('projects')
-        .select('user_id')
-        .eq('id', projectId)
-        .single();
-
-      if (projectError || !projectData) {
-        console.error("Could not get user_id for project:", projectError);
-        userId = null;
-      } else {
-        userId = projectData.user_id;
-      }
-    }
-
     // Track the token usage for transcriptions if we have a user_id
     if (userId) {
-      // For Whisper API, we estimate based on audio duration (since the API doesn't return token counts)
-      const audioMinutes = project?.video_metadata?.duration 
-        ? Math.ceil(project.video_metadata.duration / 60)
-        : 5; // Default estimate, in a real app you'd calculate this from the audio length
-      const estimatedTokens = audioMinutes * 1000;
-      const estimatedCost = audioMinutes * 0.006; // $0.006 per minute for whisper-1
+      try {
+        // Calculate an estimated duration for all processed videos
+        let totalAudioMinutes = 0;
+        
+        if (projectVideos && projectVideos.length > 0) {
+          totalAudioMinutes = projectVideos.reduce((total, video) => {
+            const duration = video.video_metadata?.duration 
+              ? Math.ceil(video.video_metadata.duration / 60)
+              : 5; // Default estimate
+            return total + duration;
+          }, 0);
+        } else if (project?.video_metadata?.duration) {
+          totalAudioMinutes = Math.ceil(project.video_metadata.duration / 60);
+        } else {
+          totalAudioMinutes = 5; // Default estimate
+        }
+        
+        const estimatedTokens = totalAudioMinutes * 1000;
+        const estimatedCost = totalAudioMinutes * 0.006; // $0.006 per minute for whisper-1
 
-      // Insert usage data into openai_usage table
-      console.log("Recording usage data");
-      const { error: usageError } = await supabase
-        .from('openai_usage')
-        .insert({
-          user_id: userId,
-          project_id: projectId,
-          model_id: 'whisper-1',
-          input_tokens: estimatedTokens,
-          output_tokens: 0, // Whisper doesn't have output tokens in the same way
-          total_tokens: estimatedTokens,
-          estimated_cost: estimatedCost
-        });
+        // Insert usage data into openai_usage table
+        console.log(`Recording usage data for ${totalAudioMinutes} minutes of audio`);
+        const { error: usageError } = await supabase
+          .from('openai_usage')
+          .insert({
+            user_id: userId,
+            project_id: projectId,
+            model_id: 'whisper-1',
+            input_tokens: estimatedTokens,
+            output_tokens: 0, // Whisper doesn't have output tokens in the same way
+            total_tokens: estimatedTokens,
+            estimated_cost: estimatedCost
+          });
 
-      if (usageError) {
-        console.error("Error recording token usage:", usageError);
-        // Continue with the function even if usage tracking fails
+        if (usageError) {
+          console.error("Error recording token usage:", usageError);
+          // Continue with the function even if usage tracking fails
+        }
+      } catch (usageError) {
+        console.error("Error in usage tracking:", usageError);
+        // Continue even if usage tracking fails
       }
     }
 
@@ -292,7 +219,7 @@ serve(async (req) => {
     const { error: updateError } = await supabase
       .from('projects')
       .update({ 
-        transcript: transcript,
+        transcript: combinedTranscript,
         updated_at: new Date().toISOString()
       })
       .eq('id', projectId);
@@ -328,7 +255,7 @@ serve(async (req) => {
     console.log(`Transcribe-video function completed in ${totalTime/1000} seconds`);
 
     return new Response(
-      JSON.stringify({ success: true, transcript }),
+      JSON.stringify({ success: true, transcript: combinedTranscript }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
@@ -339,6 +266,191 @@ serve(async (req) => {
     );
   }
 });
+
+/**
+ * Process audio data directly (from base64)
+ */
+async function processAudioData(audioData: string): Promise<string | null> {
+  console.log(`Processing audio data (${(audioData.length / 1024 / 1024).toFixed(2)}MB base64)`);
+  
+  try {
+    // Process audio data in chunks to avoid memory issues
+    const chunkSize = 1024 * 1024; // 1MB chunks
+    const totalChunks = Math.ceil(audioData.length / chunkSize);
+    
+    console.log(`Processing audio in ${totalChunks} chunks`);
+    
+    const bytes = new Uint8Array(audioData.length);
+    
+    // Process chunks
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, audioData.length);
+      const chunk = audioData.substring(start, end);
+      
+      // Decode the base64 chunk
+      const binaryChunk = atob(chunk);
+      for (let j = 0; j < binaryChunk.length; j++) {
+        bytes[start + j] = binaryChunk.charCodeAt(j);
+      }
+      
+      console.log(`Processed chunk ${i + 1}/${totalChunks}`);
+    }
+    
+    const audioBlob = new Blob([bytes], { type: 'audio/mp3' });
+    console.log(`Audio blob created, size: ${audioBlob.size / 1024 / 1024} MB`);
+    
+    // Transcribe the audio blob
+    return await transcribeAudioBlob(audioBlob);
+  } catch (e) {
+    console.error("Error processing audio data:", e);
+    return null;
+  }
+}
+
+/**
+ * Transcribe an audio blob using OpenAI Whisper API
+ */
+async function transcribeAudioBlob(audioBlob: Blob, useSpeakerDetection = false): Promise<string | null> {
+  try {
+    // Create form data for OpenAI API
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.mp3');
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'en'); // Default to English
+    
+    // For speaker detection, we use the response_format 'verbose_json'
+    if (useSpeakerDetection) {
+      console.log("Enabling speaker detection with verbose_json format");
+      formData.append('response_format', 'verbose_json');
+    }
+    
+    // Call OpenAI's Whisper API for transcription
+    console.log("Calling OpenAI Whisper API for transcription");
+    
+    const whisperStart = Date.now();
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("OpenAI API timeout after 40 seconds")), 40000);
+    });
+    
+    // Make the API call with timeout
+    const apiCallPromise = fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIKey}`,
+      },
+      body: formData
+    });
+    
+    // Use Promise.race to implement timeout
+    const openAIResponse = await Promise.race([apiCallPromise, timeoutPromise]) as Response;
+
+    if (!openAIResponse.ok) {
+      let errorDetails = "Unknown API error";
+      
+      try {
+        const errorData = await openAIResponse.json();
+        errorDetails = errorData.error?.message || "Unknown API error";
+      } catch (e) {
+        errorDetails = "Could not parse error response";
+      }
+      
+      console.error(`OpenAI transcription failed: ${errorDetails}`);
+      return null;
+    }
+
+    const whisperEnd = Date.now();
+    console.log(`OpenAI API responded in ${(whisperEnd - whisperStart) / 1000} seconds`);
+
+    // Process the transcription data
+    console.log("Processing transcription data");
+    const transcriptionData = await openAIResponse.json();
+    
+    // Format the transcript with speaker detection if requested
+    if (useSpeakerDetection && transcriptionData.segments) {
+      return formatTranscriptWithSpeakers(transcriptionData);
+    } else {
+      return transcriptionData.text;
+    }
+  } catch (error) {
+    console.error("Error in transcribeAudioBlob:", error);
+    return null;
+  }
+}
+
+/**
+ * Transcribe a video file using OpenAI Whisper API
+ */
+async function transcribeVideoFile(videoData: Blob, useSpeakerDetection = false): Promise<string | null> {
+  try {
+    // Create form data for OpenAI API
+    const formData = new FormData();
+    formData.append('file', videoData, 'video.mp4');
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'en'); // Default to English
+    
+    // For speaker detection, we use the response_format 'verbose_json'
+    if (useSpeakerDetection) {
+      console.log("Enabling speaker detection with verbose_json format");
+      formData.append('response_format', 'verbose_json');
+    }
+    
+    // Call OpenAI's Whisper API for transcription
+    console.log("Calling OpenAI Whisper API for transcription");
+    
+    const whisperStart = Date.now();
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("OpenAI API timeout after 40 seconds")), 40000);
+    });
+    
+    // Make the API call with timeout
+    const apiCallPromise = fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIKey}`,
+      },
+      body: formData
+    });
+    
+    // Use Promise.race to implement timeout
+    const openAIResponse = await Promise.race([apiCallPromise, timeoutPromise]) as Response;
+
+    if (!openAIResponse.ok) {
+      let errorDetails = "Unknown API error";
+      
+      try {
+        const errorData = await openAIResponse.json();
+        errorDetails = errorData.error?.message || "Unknown API error";
+      } catch (e) {
+        errorDetails = "Could not parse error response";
+      }
+      
+      console.error(`OpenAI transcription failed: ${errorDetails}`);
+      return null;
+    }
+
+    const whisperEnd = Date.now();
+    console.log(`OpenAI API responded in ${(whisperEnd - whisperStart) / 1000} seconds`);
+
+    // Process the transcription data
+    console.log("Processing transcription data");
+    const transcriptionData = await openAIResponse.json();
+    
+    // Format the transcript with speaker detection if requested
+    if (useSpeakerDetection && transcriptionData.segments) {
+      return formatTranscriptWithSpeakers(transcriptionData);
+    } else {
+      return transcriptionData.text;
+    }
+  } catch (error) {
+    console.error("Error in transcribeVideoFile:", error);
+    return null;
+  }
+}
 
 /**
  * Format the transcript with speaker detection, timestamps, and line breaks

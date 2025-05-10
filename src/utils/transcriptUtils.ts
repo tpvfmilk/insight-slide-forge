@@ -1,3 +1,4 @@
+
 import { formatDuration, timestampToSeconds } from "./formatUtils";
 
 /**
@@ -214,4 +215,34 @@ export const formatTranscriptFromWhisper = (
   }
   
   return transcript.trim();
+};
+
+/**
+ * Checks if a transcript contains multiple video sections
+ * (identified by markdown headers)
+ * @param transcript The transcript text to check
+ * @returns Boolean indicating if the transcript has multiple video sections
+ */
+export const hasMultipleVideoSections = (transcript: string): boolean => {
+  if (!transcript) return false;
+  
+  // Check for markdown headers that indicate video sections
+  const videoSectionRegex = /^\s*#{1,3}\s+.+$/gm;
+  const matches = transcript.match(videoSectionRegex);
+  
+  return matches !== null && matches.length > 0;
+};
+
+/**
+ * Extracts video section headers from a transcript
+ * @param transcript The transcript text to parse
+ * @returns Array of video section headers
+ */
+export const extractVideoSections = (transcript: string): string[] => {
+  if (!transcript) return [];
+  
+  const videoSectionRegex = /^\s*(#{1,3}\s+.+)$/gm;
+  const matches = Array.from(transcript.matchAll(videoSectionRegex));
+  
+  return matches.map(match => match[1].trim());
 };

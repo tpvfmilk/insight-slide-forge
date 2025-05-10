@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Project } from "@/services/projectService";
 import { extractFramesFromVideo, mapTimestampsToImages } from "@/services/frameExtractionService";
 import { initializeStorage } from "@/services/storageService";
+import { fetchProjectVideos } from "@/services/projectVideoService";
 
 /**
  * Initiates the slide generation process for a project
@@ -42,14 +43,25 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       return { success: false };
     }
     
-    // Get video duration from metadata if it's a video project
-    let videoDuration: number | undefined;
-    if (project.source_type === 'video' && project.video_metadata) {
+    // Get all videos in the project to calculate total duration
+    const projectVideos = await fetchProjectVideos(projectId);
+    let totalVideoDuration = 0;
+    
+    // Calculate total duration from all project videos
+    if (projectVideos.length > 0) {
+      totalVideoDuration = projectVideos.reduce((total, video) => {
+        const duration = video.video_metadata?.duration || 0;
+        return total + duration;
+      }, 0);
+      
+      console.log(`Total duration across all ${projectVideos.length} videos: ${totalVideoDuration}s`);
+    } else if (project.source_type === 'video' && project.video_metadata) {
+      // Fallback to the main video's metadata
       try {
         const metadata = project.video_metadata as { duration?: number };
         if (metadata.duration) {
-          videoDuration = metadata.duration;
-          console.log(`Video duration for slide generation: ${videoDuration}s`);
+          totalVideoDuration = metadata.duration;
+          console.log(`Using main video duration for slide generation: ${totalVideoDuration}s`);
         }
       } catch (error) {
         console.warn('Could not extract video duration from metadata:', error);
@@ -67,7 +79,7 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
         projectId,
         contextPrompt: project?.context_prompt || '',
         slidesPerMinute: project?.slides_per_minute || 6,
-        videoDuration: videoDuration // Pass video duration to the edge function
+        videoDuration: totalVideoDuration // Pass total video duration to the edge function
       })
     });
     
@@ -85,12 +97,9 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
     console.log(`Generated ${generatedSlides.length} slides successfully`);
     toast.success(`Generated ${generatedSlides.length} slides successfully!`, { id: "generate-slides" });
     
-    // The automatic frame extraction code has been removed from here
-    // Users will need to manually extract frames after slides are generated
-    
     // If this is a video source, inform the user that they need to manually extract frames
     if (project.source_type === 'video' && project.source_file_path) {
-      // Collect all timestamps from all slides (we still collect them even though we're not auto-extracting)
+      // Collect all timestamps from all slides
       const allTimestamps = generatedSlides.reduce((timestamps, slide) => {
         if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
           return [...timestamps, ...slide.transcriptTimestamps];

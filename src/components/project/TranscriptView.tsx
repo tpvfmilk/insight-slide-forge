@@ -20,6 +20,7 @@ interface TranscriptViewProps {
 export const TranscriptView = ({ project, isGenerating, handleGenerateSlides, openTranscriptDialog }: TranscriptViewProps) => {
   const [showTimestamps, setShowTimestamps] = useState(true);
   const [highlightSpeakers, setHighlightSpeakers] = useState(true);
+  const [showVideoSeparators, setShowVideoSeparators] = useState(true);
   const [isCopied, setIsCopied] = useState(false);
   
   const handleCopyTranscript = async () => {
@@ -72,7 +73,7 @@ export const TranscriptView = ({ project, isGenerating, handleGenerateSlides, op
               )}
             </div>
             <CardDescription>
-              This is the transcript extracted from your video
+              This is the transcript extracted from your {project?.transcript?.includes('##') ? 'videos' : 'video'}
             </CardDescription>
             
             {project?.transcript && (
@@ -93,6 +94,16 @@ export const TranscriptView = ({ project, isGenerating, handleGenerateSlides, op
                   />
                   <Label htmlFor="highlight-speakers">Highlight speakers</Label>
                 </div>
+                {project?.transcript?.includes('##') && (
+                  <div className="flex items-center space-x-2">
+                    <Switch 
+                      id="show-video-separators" 
+                      checked={showVideoSeparators} 
+                      onCheckedChange={setShowVideoSeparators}
+                    />
+                    <Label htmlFor="show-video-separators">Show video separators</Label>
+                  </div>
+                )}
               </div>
             )}
           </CardHeader>
@@ -103,6 +114,7 @@ export const TranscriptView = ({ project, isGenerating, handleGenerateSlides, op
                   transcript={project.transcript}
                   showTimestamps={showTimestamps}
                   highlightSpeakers={highlightSpeakers}
+                  showVideoSeparators={showVideoSeparators}
                 />
               ) : (
                 <div className="text-center py-8 text-muted-foreground">

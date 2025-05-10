@@ -260,35 +260,56 @@ export const createProjectFromTranscript = async (
 };
 
 /**
- * Triggers video transcription for a project
- * @param projectId ID of the project to transcribe
+ * Transcribe a video and update the project
+ * @param projectId Project ID
+ * @param projectVideos Optional array of project videos to transcribe
  * @returns Object containing success status and transcript if successful
  */
-export const transcribeVideo = async (projectId: string): Promise<{ success: boolean; transcript?: string }> => {
+export const transcribeVideo = async (
+  projectId: string, 
+  projectVideos?: Array<{
+    id: string;
+    project_id: string;
+    source_file_path: string;
+    title?: string;
+    video_metadata?: any;
+  }>
+): Promise<{ success: boolean; transcript?: string }> => {
   try {
-    toast.loading('Transcribing video...', { id: 'transcribe-video' });
-    
-    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/transcribe-video', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-      },
-      body: JSON.stringify({ projectId })
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to transcribe video');
+    // Get the supabase session
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.access_token) {
+      toast.error("You need to be logged in to transcribe videos");
+      return { success: false };
     }
     
-    const { transcript } = await response.json();
+    toast.loading("Transcribing video...", { id: "transcribe-video" });
     
-    toast.success('Video transcribed successfully!', { id: 'transcribe-video' });
-    return { success: true, transcript };
+    // Call the transcribe-video edge function
+    const response = await supabase.functions.invoke('transcribe-video', {
+      body: { 
+        projectId,
+        projectVideos: projectVideos || []
+      }
+    });
+    
+    if (response.error) {
+      throw new Error(response.error.message || "Failed to transcribe video");
+    }
+    
+    if (!response.data || !response.data.success) {
+      throw new Error(response.data?.error || "Failed to transcribe video");
+    }
+    
+    toast.success("Video transcription complete", { id: "transcribe-video" });
+    
+    return {
+      success: true,
+      transcript: response.data.transcript
+    };
   } catch (error) {
-    console.error('Error transcribing video:', error);
-    toast.error(`Failed to transcribe video: ${error.message}`, { id: 'transcribe-video' });
+    console.error("Error transcribing video:", error);
+    toast.error(`Transcription failed: ${error.message}`, { id: "transcribe-video" });
     return { success: false };
   }
 };

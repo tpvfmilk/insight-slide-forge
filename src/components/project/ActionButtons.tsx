@@ -1,9 +1,10 @@
 
 import { Button } from "@/components/ui/button";
-import { RefreshCw, FileText } from "lucide-react";
+import { RefreshCw, FileText, Clock } from "lucide-react";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { Project } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
+import { formatDuration } from "@/utils/formatUtils";
 
 interface ActionButtonsProps {
   project: Project | null;
@@ -19,6 +20,8 @@ interface ActionButtonsProps {
   extractedFrames: ExtractedFrame[];
   isTranscriptOnlyProject: boolean;
   refreshProject?: () => Promise<void>;
+  videosCount?: number; 
+  totalDuration?: number;
 }
 
 export const ActionButtons = ({
@@ -28,42 +31,80 @@ export const ActionButtons = ({
   handleTranscribeVideo,
   isGenerating,
   handleGenerateSlides,
-  isTranscriptOnlyProject
+  isTranscriptOnlyProject,
+  videosCount = 0,
+  totalDuration = 0
 }: ActionButtonsProps) => {
-  return <div className="flex items-center space-x-2">
-      {/* "Select Video Frames" button removed as requested */}
+  return (
+    <div className="flex items-center space-x-2">
+      {/* Video count and duration indicator */}
+      {videosCount > 0 && (
+        <div className="flex items-center mr-2 text-xs text-muted-foreground">
+          <span className="mr-2">{videosCount} {videosCount === 1 ? 'video' : 'videos'}</span>
+          {totalDuration > 0 && (
+            <span className="flex items-center">
+              <Clock className="h-3 w-3 mr-1" />
+              {formatDuration(totalDuration)}
+            </span>
+          )}
+        </div>
+      )}
       
       {/* Transcribe Button */}
-      {needsTranscription && <Button variant="outline" size="sm" onClick={handleTranscribeVideo} disabled={isTranscribing}>
-          {isTranscribing ? <>
+      {needsTranscription && (
+        <Button variant="outline" size="sm" onClick={handleTranscribeVideo} disabled={isTranscribing}>
+          {isTranscribing ? (
+            <>
               <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
               Transcribing...
-            </> : <>
+            </>
+          ) : (
+            <>
               <FileText className="h-4 w-4 mr-1" />
-              Transcribe Video
-            </>}
-        </Button>}
+              Transcribe {videosCount > 1 ? 'Videos' : 'Video'}
+            </>
+          )}
+        </Button>
+      )}
       
       {/* Generate Slides Button (for non-transcript-only projects) */}
-      {!isTranscriptOnlyProject && <Button variant={needsTranscription ? "outline" : "default"} size="sm" onClick={handleGenerateSlides} disabled={isGenerating || project?.source_type === 'video' && !project?.transcript}>
-          {isGenerating ? <>
+      {!isTranscriptOnlyProject && (
+        <Button 
+          variant={needsTranscription ? "outline" : "default"} 
+          size="sm" 
+          onClick={handleGenerateSlides} 
+          disabled={isGenerating || (project?.source_type === 'video' && !project?.transcript)}
+        >
+          {isGenerating ? (
+            <>
               <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
               Generating...
-            </> : <>
+            </>
+          ) : (
+            <>
               <RefreshCw className="h-4 w-4 mr-1" />
               Generate Slides
-            </>}
-        </Button>}
+            </>
+          )}
+        </Button>
+      )}
       
       {/* Generate Slides Button for transcript-only projects */}
-      {isTranscriptOnlyProject && project?.transcript && !hasValidSlides(project) && <Button variant="default" size="sm" onClick={handleGenerateSlides} disabled={isGenerating}>
-          {isGenerating ? <>
+      {isTranscriptOnlyProject && project?.transcript && !hasValidSlides(project) && (
+        <Button variant="default" size="sm" onClick={handleGenerateSlides} disabled={isGenerating}>
+          {isGenerating ? (
+            <>
               <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
               Generating...
-            </> : <>
+            </> 
+          ) : (
+            <>
               <RefreshCw className="h-4 w-4 mr-1" />
               Generate Slides
-            </>}
-        </Button>}
-    </div>;
+            </>
+          )}
+        </Button>
+      )}
+    </div>
+  );
 };

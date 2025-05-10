@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -9,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { generateSlidesForProject } from "@/services/slideGenerationService";
 import { transcribeVideo, updateProject } from "@/services/uploadService";
 import { updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
+import { fetchProjectVideos, ProjectVideo } from "@/services/projectVideoService";
 
 export const useProjectState = (projectId: string | undefined) => {
   const navigate = useNavigate();
@@ -31,6 +33,8 @@ export const useProjectState = (projectId: string | undefined) => {
     file_size?: number;
   } | null>(null);
   const [extractedFrames, setExtractedFrames] = useState<ExtractedFrame[]>([]);
+  const [projectVideos, setProjectVideos] = useState<ProjectVideo[]>([]);
+  const [totalVideoDuration, setTotalVideoDuration] = useState<number>(0);
 
   const loadProject = async () => {
     if (!projectId) return;
@@ -69,6 +73,19 @@ export const useProjectState = (projectId: string | undefined) => {
       // Get previously extracted frames
       if (projectData.extracted_frames && Array.isArray(projectData.extracted_frames)) {
         setExtractedFrames(projectData.extracted_frames as ExtractedFrame[]);
+      }
+      
+      // Load all project videos
+      const videos = await fetchProjectVideos(projectId);
+      setProjectVideos(videos);
+      
+      // Calculate total video duration
+      if (videos.length > 0) {
+        const totalDuration = videos.reduce((total, video) => {
+          const duration = video.video_metadata?.duration || 0;
+          return total + duration;
+        }, 0);
+        setTotalVideoDuration(totalDuration);
       }
       
       // We will still check if frames are needed, but we won't automatically extract them
@@ -173,7 +190,8 @@ export const useProjectState = (projectId: string | undefined) => {
     setIsTranscribing(true);
     
     try {
-      const result = await transcribeVideo(projectId);
+      // Now we pass all videos in the project to be transcribed
+      const result = await transcribeVideo(projectId, projectVideos);
       
       if (result.success && result.transcript) {
         // Update the project in state with the new transcript
@@ -272,6 +290,8 @@ export const useProjectState = (projectId: string | undefined) => {
     extractedFrames,
     needsTranscription,
     isTranscriptOnlyProject,
+    projectVideos,
+    totalVideoDuration,
     
     // Actions
     loadProject,
