@@ -580,15 +580,6 @@ export const FramePickerModal = ({
         <DialogHeader className="px-6 py-4 border-b">
           <div className="flex justify-between items-center">
             <DialogTitle>Frame Picker</DialogTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={handleClose}
-                variant="outline"
-                size="icon"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </DialogHeader>
         

@@ -183,16 +183,24 @@ export const VideoManagement = ({
                         draggableId={video.id}
                         index={index}
                       >
-                        {(provided) => (
+                        {(provided, snapshot) => (
                           <div
                             ref={provided.innerRef}
                             {...provided.draggableProps}
-                            className="flex items-center p-4 border rounded-lg hover:bg-accent/20 transition-colors"
+                            style={{
+                              ...provided.draggableProps.style,
+                              height: snapshot.isDragging ? provided.draggableProps.style?.height : 'auto'
+                            }}
+                            className={`flex items-center p-4 border rounded-lg transition-colors ${
+                              snapshot.isDragging 
+                                ? "bg-accent shadow-md" 
+                                : "hover:bg-accent/20"
+                            }`}
                           >
-                            {/* Make the drag handle a fixed width to prevent jumping */}
+                            {/* Fixed-width drag handle with proper cursor styling */}
                             <div
                               {...provided.dragHandleProps}
-                              className="mr-3 text-muted-foreground cursor-grab active:cursor-grabbing flex items-center justify-center w-6"
+                              className="mr-3 text-muted-foreground cursor-grab active:cursor-grabbing flex items-center justify-center w-6 flex-shrink-0"
                             >
                               <GripVertical className="h-5 w-5" />
                             </div>
