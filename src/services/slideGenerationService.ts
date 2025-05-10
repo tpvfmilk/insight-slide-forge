@@ -85,11 +85,13 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
     console.log(`Generated ${generatedSlides.length} slides successfully`);
     toast.success(`Generated ${generatedSlides.length} slides successfully!`, { id: "generate-slides" });
     
-    // If this is a video source, extract frames for slides with timestamps
+    // The automatic frame extraction code has been removed from here
+    // Users will need to manually extract frames after slides are generated
+    
+    // If this is a video source, inform the user that they need to manually extract frames
     if (project.source_type === 'video' && project.source_file_path) {
-      // Collect all timestamps from all slides
+      // Collect all timestamps from all slides (we still collect them even though we're not auto-extracting)
       const allTimestamps = generatedSlides.reduce((timestamps, slide) => {
-        // Use either transcriptTimestamps array or single timestamp 
         if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
           return [...timestamps, ...slide.transcriptTimestamps];
         } else if (slide.timestamp && typeof slide.timestamp === 'string') {
@@ -99,82 +101,8 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       }, []);
       
       if (allTimestamps.length > 0) {
-        console.log("Extracting frames for timestamps:", allTimestamps);
-        toast.loading("Extracting video frames for slides...", { id: "extract-frames" });
-        
-        try {
-          // Extract frames for all timestamps in one go
-          const extractionResult = await extractFramesFromVideo(projectId, project.source_file_path, allTimestamps);
-          
-          if (extractionResult.success && extractionResult.frames && extractionResult.frames.length > 0) {
-            console.log("Frames extracted successfully:", extractionResult.frames);
-            
-            // Map timestamps to images for each slide
-            const slidesWithImages = generatedSlides.map(slide => {
-              // Determine which timestamps to use for this slide
-              const slideTimestamps = slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps) 
-                ? slide.transcriptTimestamps 
-                : (slide.timestamp ? [slide.timestamp] : []);
-              
-              if (slideTimestamps.length === 0) {
-                console.log(`Slide ${slide.id} has no timestamps`);
-                return slide;
-              }
-              
-              // Map timestamps to images
-              const imageUrls = mapTimestampsToImages(extractionResult.frames, slideTimestamps);
-              
-              // If we have new imageUrls array, use it, otherwise keep the existing imageUrl for backward compatibility
-              if (imageUrls.length > 0) {
-                console.log(`Slide ${slide.id}: Adding ${imageUrls.length} images`);
-                return {
-                  ...slide,
-                  imageUrls
-                };
-              } else if (slide.timestamp) {
-                const matchingFrame = extractionResult.frames.find(frame => frame.timestamp === slide.timestamp);
-                if (matchingFrame) {
-                  console.log(`Slide ${slide.id}: Adding single image for timestamp ${slide.timestamp}`);
-                  return {
-                    ...slide,
-                    imageUrl: matchingFrame.imageUrl
-                  };
-                }
-              }
-              return slide;
-            });
-            
-            // Store the updated slides with images in the database
-            try {
-              console.log("Saving slides with images to database");
-              const { error: updateError } = await supabase
-                .from('projects')
-                .update({ slides: slidesWithImages })
-                .eq('id', projectId);
-                
-              if (updateError) {
-                console.error("Error updating slides with images:", updateError);
-                toast.error("Slides were generated but images couldn't be saved", { id: "extract-frames" });
-              } else {
-                console.log("Successfully updated slides with images in database");
-                toast.success("Slides with images were created successfully", { id: "extract-frames" });
-              }
-            } catch (e) {
-              console.error("Failed to save slides with images:", e);
-              toast.error("Failed to save slides with images", { id: "extract-frames" });
-            }
-            
-            return { success: true, slides: slidesWithImages };
-          } else {
-            console.warn("No frames were extracted or extraction failed");
-            toast.warning("Slides were generated but frame extraction failed", { id: "extract-frames" });
-          }
-        } catch (extractionError) {
-          console.error("Error during frame extraction:", extractionError);
-          toast.error("Slides were generated but frame extraction failed", { id: "extract-frames" });
-        }
-      } else {
-        console.log("No timestamps found in slides, skipping frame extraction");
+        console.log("Slides contain timestamps for manual frame extraction:", allTimestamps);
+        toast.info("Slides generated. You can now manually extract frames for your slides.", { id: "generate-slides" });
       }
     }
     
