@@ -246,7 +246,7 @@ export const SlideEditor = () => {
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [filmstripRef.current]);
+  }, []);
   
   const generateSlides = async () => {
     if (!projectId) return;
@@ -715,9 +715,9 @@ export const SlideEditor = () => {
 
       {/* Main slide editing area - now with side-by-side layout */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-hidden">
-          {/* Slide content area - now in a side-by-side layout */}
-          <div className="w-full p-4 flex">
+        <div className="flex-1 overflow-auto">
+          {/* Slide content area - now in a side-by-side layout with constrained width */}
+          <div className="w-full p-4 flex max-w-full overflow-x-hidden">
             {/* Left side - Images */}
             <div className="w-1/2 pr-4 flex flex-col">
               {/* Images header */}
@@ -930,11 +930,11 @@ export const SlideEditor = () => {
           </Button>
         </div>
         
-        {/* Film strip at the bottom - with horizontal scroll area and drag-to-scroll */}
-        <div className="h-28 border-t">
+        {/* Film strip at the bottom - with improved horizontal scroll */}
+        <div className="h-28 border-t w-full">
           <div 
             ref={filmstripRef} 
-            className="overflow-x-auto h-full w-full scrollbar-hide" 
+            className="overflow-x-auto h-full w-full" 
             style={{ overscrollBehaviorX: 'contain' }}
           >
             <div className="flex gap-2 p-2 h-full min-w-max">
