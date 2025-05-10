@@ -20,11 +20,13 @@ export function CleanupStorageButton() {
         return;
       }
       
-      // Call the cleanup function with force=true to aggressively clean up all files
-      // when the user has no projects
+      toast.info("Cleaning up storage...");
+      
+      // Call the cleanup function with forceDeleteAll=true to completely wipe storage
+      // This is more aggressive than the previous forceCleanup option
       const response = await supabase.functions.invoke("cleanup-orphaned-files", {
         method: "POST",
-        body: { forceCleanup: true }
+        body: { forceDeleteAll: true }
       });
       
       if (response.error) {
@@ -35,10 +37,14 @@ export function CleanupStorageButton() {
       if (response.data.success) {
         toast.success(response.data.message);
         
-        // Invalidate storage info to refresh the UI
-        // This would be a good place to use React Query's invalidateQueries if you're using it
+        // Force sync storage info
+        await supabase.functions.invoke('sync-storage-usage', {
+          body: { userId: session.user.id }
+        });
+        
+        // Refresh the page to update storage usage display
         setTimeout(() => {
-          window.location.reload(); // Refresh the page to update storage usage display
+          window.location.reload();
         }, 1500);
       } else {
         throw new Error(response.data.error || "Failed to clean up storage");
@@ -67,7 +73,7 @@ export function CleanupStorageButton() {
       ) : (
         <>
           <Trash2 className="h-4 w-4 mr-2" />
-          Clean Orphaned Files
+          Clear All Storage
         </>
       )}
     </Button>

@@ -23,9 +23,11 @@ serve(async (req) => {
   try {
     // Get request body if any
     let forceCleanup = false;
+    let forceDeleteAll = false;
     try {
       const body = await req.json();
       forceCleanup = !!body.forceCleanup;
+      forceDeleteAll = !!body.forceDeleteAll;
     } catch (e) {
       // No body or invalid JSON, continue with default settings
     }
@@ -50,7 +52,7 @@ serve(async (req) => {
       )
     }
 
-    console.log(`Starting cleanup for user: ${user.id}, forceCleanup: ${forceCleanup}`)
+    console.log(`Starting cleanup for user: ${user.id}, forceCleanup: ${forceCleanup}, forceDeleteAll: ${forceDeleteAll}`)
 
     // 1. Get all existing projects for the user
     const { data: projects, error: projectsError } = await supabaseAdmin
@@ -68,8 +70,9 @@ serve(async (req) => {
     
     console.log(`Found ${validProjectIds.length} valid projects`)
     
-    // In force cleanup mode for users with no projects, we'll delete all user files
+    // In force delete all mode, we'll delete ALL user files regardless of projects
     const hasNoProjects = validProjectIds.length === 0;
+    const shouldForceDelete = forceDeleteAll || (forceCleanup && hasNoProjects);
     
     // Storage buckets to check
     const buckets = ['video_uploads', 'slide_stills']
@@ -81,12 +84,12 @@ serve(async (req) => {
     for (const bucket of buckets) {
       console.log(`Checking bucket: ${bucket}`)
       
-      // List all files in the bucket
+      // List all files in the bucket with larger limit
       const { data: files, error: listError } = await supabaseAdmin
         .storage
         .from(bucket)
         .list(undefined, {
-          limit: 1000,
+          limit: 10000,  // Increased limit to catch more files
           offset: 0,
         })
 
@@ -110,68 +113,106 @@ serve(async (req) => {
         
         // Skip if it's a folder
         if (file.id === null) continue
+
+        // Check if the file belongs to this user by path
+        const belongsToUser = file.name.includes(`${user.id}/`);
         
-        // In force cleanup mode for users with no projects, delete all files belonging to the user
-        if (forceCleanup && hasNoProjects && file.name.includes(`${user.id}/`)) {
-          console.log(`Force cleaning: ${file.name}`)
-          shouldDelete = true
+        if (!belongsToUser) {
+          // Skip files not belonging to this user
+          continue;
+        }
+        
+        // Force delete all user files if requested
+        if (shouldForceDelete) {
+          console.log(`Force deleting: ${file.name}`);
+          shouldDelete = true;
         }
         // Normal cleanup mode
         else {
           // Check if file belongs to user by naming convention and if it's orphaned
           if (bucket === 'video_uploads') {
             // Check if the file is a source for any project
-            if (file.name.startsWith(`${user.id}/`) && !validSourcePaths.includes(file.name)) {
-              shouldDelete = true
+            if (!validSourcePaths.includes(file.name)) {
+              shouldDelete = true;
             }
           } else if (bucket === 'slide_stills') {
             // Check if associated with any project
-            let isProjectFile = false
+            let isProjectFile = false;
             for (const projectId of validProjectIds) {
               if (file.name.includes(`project_${projectId}/`)) {
-                isProjectFile = true
-                break
+                isProjectFile = true;
+                break;
               }
             }
             
-            // If it's user's file but not associated with any valid project
-            if (file.name.includes(`/${user.id}/`) && !isProjectFile) {
-              shouldDelete = true
+            // If it's not associated with any valid project
+            if (!isProjectFile) {
+              shouldDelete = true;
             }
           }
         }
 
         if (shouldDelete) {
-          filesToDelete.push(file.name)
+          filesToDelete.push(file.name);
           // Add file size if available
           if (file.metadata && file.metadata.size) {
-            totalSizeDeleted += parseInt(file.metadata.size)
+            totalSizeDeleted += parseInt(file.metadata.size);
           }
         }
       }
 
       // Delete the orphaned files
       if (filesToDelete.length > 0) {
-        console.log(`Deleting ${filesToDelete.length} orphaned files from ${bucket}`)
+        console.log(`Deleting ${filesToDelete.length} files from ${bucket}`);
         
         // Due to potential limits on batch deletions, delete in chunks
-        const chunkSize = 100
+        const chunkSize = 100;
         for (let i = 0; i < filesToDelete.length; i += chunkSize) {
-          const chunk = filesToDelete.slice(i, i + chunkSize)
+          const chunk = filesToDelete.slice(i, i + chunkSize);
           const { error: deleteError } = await supabaseAdmin
             .storage
             .from(bucket)
-            .remove(chunk)
+            .remove(chunk);
             
           if (deleteError) {
-            console.error(`Error deleting files from ${bucket}:`, deleteError)
+            console.error(`Error deleting files from ${bucket}:`, deleteError);
           } else {
-            deletedFilesCount += chunk.length
+            deletedFilesCount += chunk.length;
+            console.log(`Successfully deleted chunk of ${chunk.length} files`);
           }
         }
       } else {
-        console.log(`No orphaned files to delete in ${bucket}`)
+        console.log(`No files to delete in ${bucket}`);
       }
+    }
+
+    // Always try to clear any empty folders
+    try {
+      for (const bucket of buckets) {
+        const { data: emptyFolderFiles } = await supabaseAdmin
+          .storage
+          .from(bucket)
+          .list(`${user.id}/`, {
+            limit: 1000,
+          });
+        
+        if (emptyFolderFiles && emptyFolderFiles.length > 0) {
+          const emptyFolderPlaceholders = emptyFolderFiles
+            .filter(file => file.name.endsWith('.emptyFolderPlaceholder'))
+            .map(file => `${user.id}/${file.name}`);
+          
+          if (emptyFolderPlaceholders.length > 0) {
+            console.log(`Removing ${emptyFolderPlaceholders.length} empty folder placeholders`);
+            await supabaseAdmin
+              .storage
+              .from(bucket)
+              .remove(emptyFolderPlaceholders);
+          }
+        }
+      }
+    } catch (folderError) {
+      console.error("Error cleaning empty folders:", folderError);
+      // Non-critical error, continue
     }
 
     // Sync storage usage to update the database
@@ -179,19 +220,25 @@ serve(async (req) => {
       // Use the existing sync storage usage function
       const syncResponse = await supabaseAdmin.functions.invoke('sync-storage-usage', {
         body: { userId: user.id }
-      })
+      });
       
-      if (!syncResponse.data?.success) {
-        console.warn('Storage sync function call failed:', syncResponse.error || 'Unknown error')
+      if (syncResponse.error || !syncResponse.data?.success) {
+        console.warn('Storage sync function call failed:', syncResponse.error || 'Unknown error');
+        
+        // Fallback: Try to directly update storage usage (in case sync function fails)
+        await supabaseAdmin.rpc('update_user_storage_with_value', { 
+          user_id_param: user.id,
+          new_storage_value: 0 
+        });
       }
     } catch (syncError) {
-      console.error('Error calling sync storage function:', syncError)
+      console.error('Error calling sync storage function:', syncError);
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Cleanup completed. Deleted ${deletedFilesCount} orphaned files (${formatBytes(totalSizeDeleted)})`,
+        message: `Cleanup completed. Deleted ${deletedFilesCount} files (${formatBytes(totalSizeDeleted)})`,
         deletedCount: deletedFilesCount,
         sizeDeleted: totalSizeDeleted,
         sizeDeletedFormatted: formatBytes(totalSizeDeleted)
