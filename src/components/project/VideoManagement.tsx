@@ -189,15 +189,16 @@ export const VideoManagement = ({
                             {...provided.draggableProps}
                             className="flex items-center p-4 border rounded-lg hover:bg-accent/20 transition-colors"
                           >
+                            {/* Make the drag handle a fixed width to prevent jumping */}
                             <div
                               {...provided.dragHandleProps}
-                              className="mr-3 text-muted-foreground"
+                              className="mr-3 text-muted-foreground cursor-grab active:cursor-grabbing flex items-center justify-center w-6"
                             >
                               <GripVertical className="h-5 w-5" />
                             </div>
                             
-                            <div className="flex-1">
-                              <h3 className="font-medium">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium truncate">
                                 {video.title || video.video_metadata?.original_file_name || "Untitled Video"}
                               </h3>
                               {video.description && (
@@ -216,7 +217,7 @@ export const VideoManagement = ({
                               </div>
                             </div>
                             
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 shrink-0 ml-2">
                               <Button
                                 variant="ghost"
                                 size="icon"
