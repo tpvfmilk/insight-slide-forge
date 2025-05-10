@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ProjectVideo, deleteProjectVideo, fetchProjectVideos, updateVideosOrder } from "@/services/projectVideoService";
@@ -209,6 +210,9 @@ export const VideoManagement = ({
                               className={`border rounded-md p-2 bg-background ${
                                 snapshot.isDragging ? "shadow-lg border-primary/50" : ""
                               }`}
+                              style={{
+                                ...provided.draggableProps.style
+                              }}
                             >
                               <div className="flex items-center gap-2">
                                 {/* Drag handle */}
