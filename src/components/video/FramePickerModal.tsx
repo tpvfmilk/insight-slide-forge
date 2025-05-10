@@ -198,7 +198,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                   </SelectItem>
                 ))}
                 {projectVideos.length === 0 && (
-                  <SelectItem value="" disabled>No videos available</SelectItem>
+                  <SelectItem value="_empty" disabled>No videos available</SelectItem>
                 )}
               </SelectGroup>
             </SelectContent>

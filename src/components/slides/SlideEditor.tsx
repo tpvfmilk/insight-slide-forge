@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, Plus, X, Undo, Film } from "lucide-react";
@@ -72,6 +73,12 @@ export const SlideEditor = () => {
     file_type?: string;
     file_size?: number;
   } | null>(null);
+  
+  // References for drag-to-scroll functionality
+  const filmstripRef = useRef<HTMLDivElement>(null);
+  const isMouseDown = useRef<boolean>(false);
+  const startX = useRef<number>(0);
+  const scrollLeft = useRef<number>(0);
   
   const currentSlide = slides[currentSlideIndex];
   
@@ -190,6 +197,57 @@ export const SlideEditor = () => {
       return () => clearTimeout(timer);
     }
   }, [showUndoButton]);
+  
+  // Set up drag-to-scroll functionality for the filmstrip
+  useEffect(() => {
+    const filmstrip = filmstripRef.current;
+    if (!filmstrip) return;
+    
+    const handleMouseDown = (e: MouseEvent) => {
+      isMouseDown.current = true;
+      startX.current = e.pageX - filmstrip.offsetLeft;
+      scrollLeft.current = filmstrip.scrollLeft;
+      filmstrip.style.cursor = 'grabbing';
+      filmstrip.style.userSelect = 'none';
+    };
+    
+    const handleMouseUp = () => {
+      isMouseDown.current = false;
+      filmstrip.style.cursor = 'grab';
+      filmstrip.style.userSelect = '';
+    };
+    
+    const handleMouseLeave = () => {
+      isMouseDown.current = false;
+      filmstrip.style.cursor = 'grab';
+      filmstrip.style.userSelect = '';
+    };
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isMouseDown.current) return;
+      e.preventDefault();
+      const x = e.pageX - filmstrip.offsetLeft;
+      const walk = (x - startX.current) * 2; // Scroll speed multiplier
+      filmstrip.scrollLeft = scrollLeft.current - walk;
+    };
+    
+    // Add event listeners
+    filmstrip.addEventListener('mousedown', handleMouseDown);
+    filmstrip.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', handleMouseMove);
+    
+    // Initialize cursor style
+    filmstrip.style.cursor = 'grab';
+    
+    return () => {
+      // Clean up event listeners
+      filmstrip.removeEventListener('mousedown', handleMouseDown);
+      filmstrip.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [filmstripRef.current]);
   
   const generateSlides = async () => {
     if (!projectId) return;
@@ -707,8 +765,8 @@ export const SlideEditor = () => {
                 </div>
               </div>
               
-              {/* Image gallery */}
-              <div className="flex-1 overflow-y-auto">
+              {/* Image gallery with max-width */}
+              <div className="flex-1 overflow-y-auto max-w-xl mx-auto w-full">
                 {currentSlide && (
                   <div className="grid grid-cols-2 gap-2">
                     {/* Show from imageUrl (legacy) */}
@@ -772,7 +830,7 @@ export const SlideEditor = () => {
             {/* Right side - Slide content */}
             <div className="w-1/2 pl-4 border-l flex flex-col">
               {/* Title */}
-              <div className="mb-4">
+              <div className="mb-4 max-w-xl mx-auto w-full">
                 {isEditing ? (
                   <input
                     type="text"
@@ -790,8 +848,8 @@ export const SlideEditor = () => {
                 )}
               </div>
 
-              {/* Content */}
-              <div className="mb-4 flex-1">
+              {/* Content with max-width */}
+              <div className="mb-4 flex-1 max-w-xl mx-auto w-full">
                 {isEditing ? (
                   <Textarea
                     value={editedContent}
@@ -811,7 +869,7 @@ export const SlideEditor = () => {
               </div>
 
               {/* Slide action buttons */}
-              <div className="mt-auto pt-4 border-t flex justify-between items-center">
+              <div className="mt-auto pt-4 border-t flex justify-between items-center max-w-xl mx-auto w-full">
                 <div>
                   {isEditing && (
                     <Button onClick={saveChanges}>Save Changes</Button>
@@ -873,9 +931,13 @@ export const SlideEditor = () => {
           </Button>
         </div>
         
-        {/* Film strip at the bottom - FIXED: Proper horizontal ScrollArea without orientation */}
+        {/* Film strip at the bottom - with horizontal scroll area and drag-to-scroll */}
         <div className="h-28 border-t overflow-hidden">
-          <ScrollArea className="h-full">
+          <div 
+            ref={filmstripRef} 
+            className="overflow-x-auto h-full scrollbar-hide" 
+            style={{ overscrollBehaviorX: 'contain' }}
+          >
             <div className="flex gap-2 p-2 h-full">
               {slides.map((slide, index) => (
                 <div 
@@ -909,7 +971,7 @@ export const SlideEditor = () => {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </div>
       </div>
       
@@ -919,7 +981,7 @@ export const SlideEditor = () => {
           open={isFramePickerModalOpen}
           onClose={() => setIsFramePickerModalOpen(false)} 
           videoPath={videoPath}
-          projectId={projectId}
+          projectId={projectId || ""}
           onFramesSelected={handleFrameSelection}
           allExtractedFrames={allExtractedFrames}
           // Convert string URLs to ExtractedFrame objects for compatibility
