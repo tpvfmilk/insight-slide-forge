@@ -99,7 +99,8 @@ export const VideoUpload = () => {
             title: title || "Main Video",
             description: "Original project video",
             display_order: 0,
-            video_metadata: project.video_metadata
+            video_metadata: project.video_metadata,
+            extracted_frames: null // Add the missing property
           });
           console.log("Added main video to project_videos table");
         } catch (error) {

@@ -94,7 +94,8 @@ const ProjectPage = () => {
               title: project.title || "Main Video",
               description: "Original project video",
               display_order: 0,
-              video_metadata: project.video_metadata
+              video_metadata: project.video_metadata,
+              extracted_frames: project.extracted_frames // Add the missing property
             });
             console.log("Main video added to project_videos");
           }
