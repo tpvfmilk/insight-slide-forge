@@ -8,6 +8,7 @@ import { Database, RefreshCw } from "lucide-react";
 import { syncStorageUsage } from "@/services/storageUsageService";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { CleanupStorageButton } from "./CleanupStorageButton";
 
 export function StorageUsageBar() {
   const [percentage, setPercentage] = useState(0);
@@ -77,7 +78,7 @@ export function StorageUsageBar() {
   }
   
   return (
-    <div className="space-y-1 px-[25px] py-[10px]">
+    <div className="space-y-3 px-[25px] py-[10px]">
       <div className="flex justify-between text-xs text-muted-foreground">
         <span className="flex items-center">
           <Database className="h-3.5 w-3.5 mr-1" />
@@ -103,6 +104,9 @@ export function StorageUsageBar() {
       {percentage > 90 && 
         <div className="text-xs text-destructive">Storage almost full</div>
       }
+      <div className="flex justify-end">
+        <CleanupStorageButton />
+      </div>
     </div>
   );
 }
