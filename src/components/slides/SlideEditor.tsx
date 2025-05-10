@@ -881,4 +881,31 @@ export const SlideEditor = () => {
               <ChevronLeft className="h-4 w-4 mr-1" />
               Previous
             </Button>
-            <
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToNextSlide}
+              disabled={currentSlideIndex === slides.length - 1}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      </div>
+      
+      {/* Frame Picker Modal */}
+      {isFramePickerModalOpen && (
+        <FramePickerModal
+          open={isFramePickerModalOpen}
+          onClose={() => setIsFramePickerModalOpen(false)} 
+          videoPath={videoPath}
+          projectId={projectId}
+          onFramesSelected={handleFrameSelection}
+          allExtractedFrames={allExtractedFrames}
+          existingFrames={currentSlide?.imageUrls || []}
+        />
+      )}
+    </div>
+  );
+};
