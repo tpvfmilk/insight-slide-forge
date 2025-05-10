@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -72,8 +71,8 @@ export const useProjectState = (projectId: string | undefined) => {
         setExtractedFrames(projectData.extracted_frames as ExtractedFrame[]);
       }
       
-      // Check if the project has slides with timestamps but no images
-      // Make sure we're passing an array to slidesNeedFrameExtraction
+      // We will still check if frames are needed, but we won't automatically extract them
+      // This is just for UI indication purposes
       const slidesArray = Array.isArray(projectData.slides) ? projectData.slides : [];
       setNeedsFrameExtraction(
         projectData.source_type === 'video' && 
@@ -115,7 +114,7 @@ export const useProjectState = (projectId: string | undefined) => {
         }
       }
       
-      // For new projects, check if we need to transcribe or generate slides
+      // For new projects, check if we need to transcribe
       const isNewlyCreated = Date.now() - new Date(projectData.created_at).getTime() < 60000; // Within a minute
       
       if (isNewlyCreated) {
@@ -123,13 +122,7 @@ export const useProjectState = (projectId: string | undefined) => {
         if (projectData.source_type === 'video' && !projectData.transcript) {
           handleTranscribeVideo();
         }
-        // If has transcript but no slides, generate slides
-        else if (projectData.transcript && !hasValidSlides(projectData)) {
-          // For transcript-only projects, don't auto-generate slides
-          if (projectData.source_type !== 'transcript-only') {
-            handleGenerateSlides();
-          }
-        }
+        // NO LONGER automatically generate slides or extract frames
       }
     } catch (error) {
       console.error("Error loading project:", error);
@@ -156,9 +149,14 @@ export const useProjectState = (projectId: string | undefined) => {
             slides: result.slides
           };
           
-          // Check if we need frame extraction after slide generation
+          // We will still check if frames are needed, but not automatically extract them
           if (prev.source_type === 'video') {
             setNeedsFrameExtraction(slidesNeedFrameExtraction(result.slides));
+            
+            // Inform the user that they need to manually select frames
+            if (slidesNeedFrameExtraction(result.slides)) {
+              toast.info("Slides have been generated. You can now manually select frames for your slides.");
+            }
           }
           
           return updatedProject;
@@ -199,10 +197,9 @@ export const useProjectState = (projectId: string | undefined) => {
     }
   };
 
-  // Simplified handleExtractFrames - now just a stub that doesn't do anything
-  // We'll use manual frame picker directly instead
+  // Modified to be a no-op as we don't want automatic extraction
   const handleExtractFrames = async () => {
-    // Empty function as we're disabling automatic extraction
+    // This is now intentionally empty - we only want manual frame selection
     return;
   };
   

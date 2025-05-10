@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
@@ -7,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { 
   Play, Pause, SkipBack, SkipForward, Camera, AlertCircle,
-  RefreshCw, CheckCircle2, X, Trash2
+  RefreshCw, CheckCircle2, X, Trash2, Film
 } from "lucide-react";
 import { formatDuration } from "@/utils/formatUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +15,8 @@ import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { useUIReset } from "@/context/UIResetContext";
 import { Badge } from "@/components/ui/badge";
+import { fetchProjectVideos, ProjectVideo } from "@/services/projectVideoService";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface FramePickerModalProps {
   open: boolean;
@@ -49,11 +50,42 @@ export const FramePickerModal = ({
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
   const [isCaptureLoading, setIsCaptureLoading] = useState<boolean>(false);
+  const [projectVideos, setProjectVideos] = useState<ProjectVideo[]>([]);
+  const [selectedVideoPath, setSelectedVideoPath] = useState<string>(videoPath);
+  const [isLoadingVideos, setIsLoadingVideos] = useState<boolean>(false);
+  
   const { registerUIElement, unregisterUIElement } = useUIReset();
   const elementId = useRef(`frame-picker-${Math.random().toString(36).substring(2, 9)}`);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Load project videos
+  useEffect(() => {
+    if (open && projectId) {
+      setIsLoadingVideos(true);
+      
+      fetchProjectVideos(projectId)
+        .then(videos => {
+          console.log("Fetched project videos:", videos);
+          setProjectVideos(videos || []);
+          
+          // Add the main project video if it's not already in the list
+          // This ensures the original uploaded video is included
+          if (videoPath && !videos.some(v => v.source_file_path === videoPath)) {
+            // We'll handle this after loading the current video
+            console.log("Main project video is not in project_videos table:", videoPath);
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching project videos:", err);
+          toast.error("Failed to load project videos");
+        })
+        .finally(() => {
+          setIsLoadingVideos(false);
+        });
+    }
+  }, [open, projectId, videoPath]);
   
   // Register with UIResetContext when dialog opens
   useEffect(() => {
@@ -72,9 +104,9 @@ export const FramePickerModal = ({
     };
   }, [open, registerUIElement, unregisterUIElement]);
   
-  // Load the video when the component mounts
+  // Load the video when the component mounts or when the selected video changes
   useEffect(() => {
-    if (!open) return;
+    if (!open || !selectedVideoPath) return;
     
     const fetchVideo = async () => {
       setIsLoading(true);
@@ -85,7 +117,7 @@ export const FramePickerModal = ({
         try {
           const { data, error } = await supabase.storage
             .from("video_uploads")
-            .createSignedUrl(videoPath, 3600); // 1 hour expiry
+            .createSignedUrl(selectedVideoPath, 3600); // 1 hour expiry
           
           if (error) throw error;
           
@@ -98,12 +130,12 @@ export const FramePickerModal = ({
           setIsLoading(false);
           return;
         } catch (videoUploadsError) {
-          console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...");
+          console.warn("Failed to get video from video_uploads bucket, trying 'videos' bucket...", videoUploadsError);
           
           // Try with 'videos' bucket as alternative
           try {
             // Extract just the filename from the path
-            const filename = videoPath.split('/').pop();
+            const filename = selectedVideoPath.split('/').pop();
             if (!filename) {
               throw new Error("Invalid video path format");
             }
@@ -162,7 +194,20 @@ export const FramePickerModal = ({
     if (existingFrames && existingFrames.length > 0) {
       setCapturedFrames(existingFrames);
     }
-  }, [open, videoPath, existingFrames, projectId]);
+  }, [open, selectedVideoPath, projectId, existingFrames]);
+  
+  // Handle video selection change
+  const handleVideoChange = (value: string) => {
+    setSelectedVideoPath(value);
+    
+    // Reset player state
+    setCurrentTime(0);
+    setIsPlaying(false);
+    setVideoDuration(0);
+    setVideoUrl(null);
+    
+    console.log("Selected video changed to:", value);
+  };
   
   // Update currentTime when the video plays
   useEffect(() => {
@@ -259,7 +304,7 @@ export const FramePickerModal = ({
     }
   };
   
-  // Improved captureFrame function with enhanced techniques to avoid black frames
+  // Capture frame function - no changes needed here
   const captureFrame = async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -498,6 +543,19 @@ export const FramePickerModal = ({
     onClose();
   };
   
+  // Get a display name for the video
+  const getVideoDisplayName = (path: string) => {
+    // First try to match with project videos
+    const matchedVideo = projectVideos.find(v => v.source_file_path === path);
+    if (matchedVideo && matchedVideo.title) {
+      return matchedVideo.title;
+    }
+    
+    // Otherwise extract from path
+    const pathParts = path.split('/');
+    return pathParts[pathParts.length - 1];
+  };
+  
   return (
     <SafeDialog 
       open={open} 
@@ -525,6 +583,52 @@ export const FramePickerModal = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 h-[80vh] overflow-hidden">
           {/* Left side - Video player */}
           <div className="md:col-span-2 flex flex-col h-full overflow-hidden">
+            {/* Video selector */}
+            <div className="mb-4">
+              <label className="text-sm font-medium mb-2 block">Select Video</label>
+              <div className="flex gap-2">
+                <Select 
+                  value={selectedVideoPath}
+                  onValueChange={handleVideoChange}
+                  disabled={isLoadingVideos}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue>
+                      {isLoadingVideos ? (
+                        <span className="flex items-center">
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Loading videos...
+                        </span>
+                      ) : (
+                        getVideoDisplayName(selectedVideoPath)
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Add the main project video if it's not already in the list */}
+                    {videoPath && !projectVideos.some(v => v.source_file_path === videoPath) && (
+                      <SelectItem value={videoPath}>
+                        <div className="flex items-center">
+                          <Film className="h-4 w-4 mr-2" />
+                          {getVideoDisplayName(videoPath)} (Main video)
+                        </div>
+                      </SelectItem>
+                    )}
+                    
+                    {/* List all project videos */}
+                    {projectVideos.map((video) => (
+                      <SelectItem key={video.id} value={video.source_file_path || ''}>
+                        <div className="flex items-center">
+                          <Film className="h-4 w-4 mr-2" />
+                          {video.title || 'Untitled Video'}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
             <div className="relative bg-black aspect-video flex items-center justify-center flex-1 overflow-hidden">
               {isLoading ? (
                 <div className="text-white flex flex-col items-center justify-center">

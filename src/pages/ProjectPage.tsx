@@ -1,4 +1,3 @@
-
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -45,8 +44,10 @@ const ProjectPage = () => {
   // Empty placeholder method that's not used since the button is removed
   const handleOpenManualFramePicker = () => {};
 
-  // Process frames using client-side extraction only
+  // Process frames using client-side extraction only when manually triggered
   const processFrameExtraction = async () => {
+    // We keep this method as it may be used from other parts of the code
+    // but we won't call it automatically
     if (!project?.source_file_path || !projectId || !allTimestamps || allTimestamps.length === 0) {
       toast.error("Unable to extract frames: missing video or timestamps");
       return;
@@ -105,7 +106,7 @@ const ProjectPage = () => {
               project={project}
               needsFrameExtraction={needsFrameExtraction}
               isExtractingFrames={isExtractingFrames}
-              handleExtractFrames={processFrameExtraction}
+              handleExtractFrames={handleExtractFrames}
               needsTranscription={needsTranscription}
               isTranscribing={isTranscribing}
               handleTranscribeVideo={handleTranscribeVideo}

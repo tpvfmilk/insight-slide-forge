@@ -123,6 +123,36 @@ export const VideoUploader = ({
         extracted_frames: null, // Add the missing property
       });
       
+      // 4. Also ensure the main project video is added to project_videos if it's not already there
+      if (project.source_type === 'video' && project.source_file_path) {
+        try {
+          // Check if the source video is already in project_videos table
+          const { data: existingVideos } = await supabase
+            .from('project_videos')
+            .select('id')
+            .eq('project_id', project.id)
+            .eq('source_file_path', project.source_file_path);
+          
+          // If main video isn't in project_videos table yet, add it
+          if (!existingVideos || existingVideos.length === 0) {
+            console.log("Adding main project video to project_videos table:", project.source_file_path);
+            
+            await createProjectVideo({
+              project_id: project.id,
+              title: "Main Project Video",
+              description: "Primary video for this project", 
+              source_file_path: project.source_file_path,
+              video_metadata: project.video_metadata,
+              display_order: 0, // Give it priority in ordering
+              extracted_frames: project.extracted_frames
+            });
+          }
+        } catch (error) {
+          console.error("Error checking/adding main project video:", error);
+          // Don't fail the entire operation if this fails
+        }
+      }
+      
       toast.success("Video uploaded successfully");
       onComplete();
     } catch (error) {

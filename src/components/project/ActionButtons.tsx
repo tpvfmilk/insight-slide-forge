@@ -31,7 +31,7 @@ export const ActionButtons = ({
   isTranscriptOnlyProject
 }: ActionButtonsProps) => {
   return <div className="flex items-center space-x-2">
-      {/* "Select Video Frames" button removed as it's redundant with one in the slide editor */}
+      {/* "Select Video Frames" button removed as requested */}
       
       {/* Transcribe Button */}
       {needsTranscription && <Button variant="outline" size="sm" onClick={handleTranscribeVideo} disabled={isTranscribing}>
