@@ -17,6 +17,7 @@ import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 import { getProjectTotalSize } from "@/services/storageService";
 import { FileSizeBadge } from "@/components/projects/FileSizeBadge";
 import { handleManualFrameSelectionComplete, Slide as FrameUtilsSlide } from "@/utils/frameUtils";
+import { generateSlidesForProject } from "@/services/slideGenerationService";
 
 // Define a local interface that ensures id is required 
 // while still being compatible with the imported Slide type
@@ -196,42 +197,30 @@ export const SlideEditor = () => {
       toast.loading("Generating slides...", {
         id: "generate-slides"
       });
-      const response = await fetch(`https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/generate-slides`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
-        body: JSON.stringify({
-          projectId
-        })
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to generate slides");
-      }
-      const {
-        slides: generatedSlides
-      } = await response.json();
-      if (!generatedSlides || !Array.isArray(generatedSlides) || generatedSlides.length === 0) {
-        throw new Error("No slides were generated");
-      }
-
-      // Type assertion to ensure we're setting the proper Slide[] type
-      setSlides(generatedSlides as Slide[]);
-      setCurrentSlideIndex(0);
-
-      // Update edited fields with the first slide
-      if (generatedSlides[0]) {
-        setEditedTitle(generatedSlides[0].title);
-        setEditedContent(generatedSlides[0].content);
-      }
-      toast.success("Slides generated successfully!", {
-        id: "generate-slides"
-      });
       
-      // Update project size after generation
-      fetchProjectSize();
+      // Use the shared function from slideGenerationService
+      const result = await generateSlidesForProject(projectId);
+      
+      if (result.success && result.slides) {
+        // Update slides with the generated content
+        setSlides(result.slides);
+        setCurrentSlideIndex(0);
+        
+        // Update edited fields with the first slide
+        if (result.slides[0]) {
+          setEditedTitle(result.slides[0].title);
+          setEditedContent(result.slides[0].content);
+        }
+        
+        toast.success(`${result.slides.length} slides generated successfully!`, {
+          id: "generate-slides"
+        });
+        
+        // Update project size after generation
+        fetchProjectSize();
+      } else {
+        throw new Error("Failed to generate slides");
+      }
     } catch (error) {
       console.error("Error generating slides:", error);
       toast.error(`Failed to generate slides: ${error.message}`, {
@@ -901,7 +890,7 @@ export const SlideEditor = () => {
           onClose={() => setIsFramePickerModalOpen(false)} 
           videoPath={videoPath}
           projectId={projectId}
-          onSelectFrames={handleFrameSelection}
+          onFramesSelected={handleFrameSelection}
           allExtractedFrames={allExtractedFrames}
           // Convert string URLs to ExtractedFrame objects for compatibility
           existingFrames={currentSlide?.imageUrls?.map(url => {
