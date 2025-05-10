@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ProjectVideo, deleteProjectVideo, fetchProjectVideos, updateVideosOrder } from "@/services/projectVideoService";
@@ -140,6 +141,19 @@ export const VideoManagement = ({
     }
   };
 
+  // Function to get the file size in a readable format
+  const getFileSize = (bytes?: number): string => {
+    if (!bytes) return "Unknown";
+    
+    const kb = bytes / 1024;
+    if (kb < 1024) {
+      return `${kb.toFixed(2)} KB`;
+    }
+    
+    const mb = kb / 1024;
+    return `${mb.toFixed(2)} MB`;
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent className="sm:max-w-4xl">
@@ -170,7 +184,7 @@ export const VideoManagement = ({
           ) : (
             <div className="border rounded-lg p-4">
               <div className="flex justify-between items-center mb-3">
-                <p className="text-sm font-medium">Selected Videos ({videos.length})</p>
+                <p className="text-sm font-medium">Video order ({videos.length})</p>
                 <p className="text-sm text-muted-foreground">Drag to reorder</p>
               </div>
               <DragDropContext onDragEnd={handleOnDragEnd}>
@@ -192,29 +206,39 @@ export const VideoManagement = ({
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               style={{
-                                ...provided.draggableProps.style
+                                ...provided.draggableProps.style,
+                                // Fixed styles for consistent dragging experience
+                                transform: snapshot.isDragging ? provided.draggableProps.style?.transform : "none"
                               }}
-                              className={`flex items-center p-3 border rounded-lg bg-background ${
-                                snapshot.isDragging ? "shadow-md" : ""
+                              className={`flex items-center p-3 border rounded-lg bg-background transition-shadow ${
+                                snapshot.isDragging ? "shadow-md border-primary/50" : ""
                               }`}
                             >
+                              {/* Drag handle with proper styling */}
                               <div
                                 {...provided.dragHandleProps}
-                                className="flex items-center mr-3 text-muted-foreground cursor-grab active:cursor-grabbing"
+                                className="flex items-center justify-center w-10 cursor-grab active:cursor-grabbing"
                               >
-                                <GripVertical className="h-5 w-5" />
+                                <GripVertical className="h-5 w-5 text-muted-foreground" />
                               </div>
                               
-                              <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0 pl-2">
                                 <div className="flex flex-col">
                                   <h3 className="font-medium truncate">
                                     {video.title || video.video_metadata?.original_file_name || "Untitled Video"}
                                   </h3>
-                                  <p className="text-sm text-muted-foreground">
-                                    {video.video_metadata?.file_size ? 
-                                      `${(video.video_metadata.file_size / (1024 * 1024)).toFixed(2)} MB` : 
-                                      ""}
-                                  </p>
+                                  <div className="flex gap-2 text-xs text-muted-foreground">
+                                    <span>
+                                      {video.video_metadata?.duration ? 
+                                        formatDuration(video.video_metadata.duration) : ""}
+                                    </span>
+                                    {video.video_metadata?.file_size && (
+                                      <>
+                                        <span>•</span>
+                                        <span>{getFileSize(video.video_metadata.file_size)}</span>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               
