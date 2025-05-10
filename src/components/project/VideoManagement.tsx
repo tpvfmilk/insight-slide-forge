@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ProjectVideo, deleteProjectVideo, fetchProjectVideos, updateVideosOrder } from "@/services/projectVideoService";
@@ -11,6 +10,7 @@ import { Project } from "@/services/projectService";
 import { Plus, Trash2, GripVertical, Edit, Clock, Video } from "lucide-react";
 import { VideoUploader } from "@/components/project/VideoUploader";
 import { VideoDetailsCard } from "@/components/video/VideoDetailsCard";
+import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
 
 interface VideoManagementProps {
   project: Project | null;
@@ -156,11 +156,8 @@ export const VideoManagement = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => onClose()}>
-      <DialogContent 
-        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:max-w-4xl max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto" 
-        style={{ transform: 'none' }}
-      >
+    <SafeDialog open={isOpen} onOpenChange={() => onClose()}>
+      <SafeDialogContent className="sm:max-w-4xl max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">
             Manage Project Videos
@@ -212,9 +209,6 @@ export const VideoManagement = ({
                               className={`border rounded-md p-2 bg-background ${
                                 snapshot.isDragging ? "shadow-lg border-primary/50" : ""
                               }`}
-                              style={{
-                                ...provided.draggableProps.style
-                              }}
                             >
                               <div className="flex items-center gap-2">
                                 {/* Drag handle */}
@@ -269,14 +263,11 @@ export const VideoManagement = ({
             </div>
           )}
         </div>
-      </DialogContent>
+      </SafeDialogContent>
       
       {/* Add Video Dialog */}
-      <Dialog open={isAddingVideo} onOpenChange={(open) => !open && setIsAddingVideo(false)}>
-        <DialogContent 
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:max-w-3xl max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto" 
-          style={{ transform: 'none' }}
-        >
+      <SafeDialog open={isAddingVideo} onOpenChange={(open) => !open && setIsAddingVideo(false)}>
+        <SafeDialogContent className="sm:max-w-3xl max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Video to Project</DialogTitle>
           </DialogHeader>
@@ -288,16 +279,13 @@ export const VideoManagement = ({
               onCancel={() => setIsAddingVideo(false)}
             />
           )}
-        </DialogContent>
-      </Dialog>
+        </SafeDialogContent>
+      </SafeDialog>
       
       {/* Edit Video Dialog */}
       {editingVideo && (
-        <Dialog open={!!editingVideo} onOpenChange={() => setEditingVideo(null)}>
-          <DialogContent 
-            className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 sm:max-w-lg max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto" 
-            style={{ transform: 'none' }}
-          >
+        <SafeDialog open={!!editingVideo} onOpenChange={() => setEditingVideo(null)}>
+          <SafeDialogContent className="sm:max-w-lg max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Video Details</DialogTitle>
             </DialogHeader>
@@ -337,9 +325,9 @@ export const VideoManagement = ({
                 </Button>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          </SafeDialogContent>
+        </SafeDialog>
       )}
-    </Dialog>
+    </SafeDialog>
   );
 };
