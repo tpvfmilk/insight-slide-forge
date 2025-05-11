@@ -662,6 +662,10 @@ export const SlideEditor = () => {
     toast.success("New slide added");
   };
   
+  const deleteCurrentSlide = () => {
+    deleteSlideFromFilmstrip(new MouseEvent('click'), currentSlideIndex);
+  };
+  
   // Render the component with the updated layout
   return (
     <div className="h-full flex flex-col">
