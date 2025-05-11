@@ -930,39 +930,39 @@ export const SlideEditor = () => {
         </Button>
       </div>
       
-      {/* Film strip at the bottom - now constrained to match main content width and with increased height */}
+      {/* Film strip at the bottom - card-style with centered titles */}
       <div className="h-40 border-t w-full">
         <div className="max-w-screen-xl mx-auto px-4">
           <ScrollArea orientation="horizontal" className="h-full w-full">
-            <div className="flex gap-2 p-2 h-full min-w-max">
+            <div ref={filmstripRef} className="flex gap-2 p-2 h-full">
               {slides.map((slide, index) => (
                 <div 
                   key={slide.id}
                   onClick={() => goToSlide(index)}
-                  className={`h-full aspect-video flex-shrink-0 cursor-pointer rounded-md overflow-hidden border-2 flex flex-col ${
-                    currentSlideIndex === index ? "border-primary" : "border-transparent hover:border-muted-foreground/30"
-                  }`}
+                  className={`h-full w-48 flex-shrink-0 cursor-pointer ${
+                    currentSlideIndex === index ? "border-2 border-primary" : "border border-border hover:border-muted-foreground/30"
+                  } rounded-md overflow-hidden shadow-sm bg-card`}
                 >
                   {/* Thumbnail preview - use first image if available */}
-                  {(slide.imageUrl || (slide.imageUrls && slide.imageUrls.length > 0)) ? (
-                    <div className="w-full h-3/4 overflow-hidden bg-muted/10">
+                  <div className="w-full h-3/4 overflow-hidden bg-muted/10 flex items-center justify-center">
+                    {(slide.imageUrl || (slide.imageUrls && slide.imageUrls.length > 0)) ? (
                       <img 
                         src={slide.imageUrl || slide.imageUrls![0]} 
                         alt={`Slide ${index + 1}`}
                         className="w-full h-full object-cover"
                       />
-                    </div>
-                  ) : (
-                    <div className="w-full h-3/4 flex items-center justify-center bg-muted/10">
-                      <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
-                    </div>
-                  )}
+                    ) : (
+                      <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
+                    )}
+                  </div>
                   
                   {/* Slide title/number */}
-                  <div className={`px-2 py-1 text-xs truncate flex-grow flex items-center ${
-                    currentSlideIndex === index ? "bg-primary text-primary-foreground" : "bg-muted/20"
+                  <div className={`px-2 py-1 text-xs truncate flex-grow flex items-center justify-center ${
+                    currentSlideIndex === index ? "bg-primary text-primary-foreground" : "bg-card"
                   }`}>
-                    <span className="font-medium">{index + 1}.</span> {slide.title}
+                    <span className="font-medium text-center">
+                      {index + 1}. {slide.title}
+                    </span>
                   </div>
                 </div>
               ))}
