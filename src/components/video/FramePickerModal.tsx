@@ -19,6 +19,15 @@ import {
 } from "@/components/ui/select";
 import { timestampToSeconds } from "@/utils/formatUtils";
 
+// Create a separate interface for frames with blobs that extends ExtractedFrame
+interface CapturedFrameWithBlob {
+  timestamp: string;
+  imageUrl: string;
+  id?: string;
+  isPlaceholder?: boolean;
+  blob: Blob;
+}
+
 export interface FramePickerModalProps {
   open: boolean;
   onClose: () => void;
@@ -39,7 +48,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   existingFrames = []
 }) => {
   const [selectedFrames, setSelectedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
-  const [capturedFrames, setCapturedFrames] = useState<ExtractedFrame[]>([]);
+  const [capturedFrames, setCapturedFrames] = useState<CapturedFrameWithBlob[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [projectVideos, setProjectVideos] = useState<ProjectVideo[]>([]);
@@ -172,14 +181,17 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       const newFrame: ExtractedFrame = {
         id: frameId,
         imageUrl,
-        timestamp,
-        // Fix: Store blob as a property but don't include it in the type
-        // Instead of assigning blob directly, we'll create a separate property
-        // that's not part of the ExtractedFrame interface
+        timestamp
+      };
+      
+      // Create a captured frame with blob
+      const capturedFrame: CapturedFrameWithBlob = {
+        ...newFrame,
+        blob
       };
       
       // Add to captured frames
-      setCapturedFrames(prev => [...prev, { ...newFrame, blob }]);
+      setCapturedFrames(prev => [...prev, capturedFrame]);
       
       // Auto-select the newly captured frame
       setSelectedFrames(prev => [...prev, newFrame]);
@@ -344,3 +356,4 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     </Dialog>
   );
 };
+
