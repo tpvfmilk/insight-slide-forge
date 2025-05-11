@@ -579,7 +579,8 @@ export const SlideEditor = () => {
     toast.success("Image removed from slide");
   };
   
-  const deleteSlideFromFilmstrip = (event: React.MouseEvent, slideIndex: number) => {
+  // Create a properly typed version of the deleteCurrentSlide function
+  const deleteSlideFromFilmstrip = (event: React.MouseEvent<Element, MouseEvent>, slideIndex: number) => {
     // Stop the click event from propagating to the slide card
     event.stopPropagation();
     
@@ -621,23 +622,17 @@ export const SlideEditor = () => {
       }
     });
   };
-  
-  const undoDeleteSlide = () => {
-    if (!lastDeletedSlide) return;
+
+  // IMPORTANT: Define the deleteCurrentSlide function here
+  const deleteCurrentSlide = () => {
+    // Create a synthetic event to pass to deleteSlideFromFilmstrip
+    const syntheticEvent = {
+      stopPropagation: () => {}
+    } as React.MouseEvent<Element, MouseEvent>;
     
-    const updatedSlides = [...slides];
-    updatedSlides.splice(currentSlideIndex, 0, lastDeletedSlide);
-    setSlides(updatedSlides);
-    
-    // Update slides in database
-    updateSlidesInDatabase(updatedSlides);
-    
-    setLastDeletedSlide(null);
-    setShowUndoButton(false);
-    
-    toast.success("Slide restored");
+    deleteSlideFromFilmstrip(syntheticEvent, currentSlideIndex);
   };
-  
+
   const addNewSlide = () => {
     // Save current changes before adding a new slide
     saveChanges();
@@ -662,8 +657,20 @@ export const SlideEditor = () => {
     toast.success("New slide added");
   };
   
-  const deleteCurrentSlide = () => {
-    deleteSlideFromFilmstrip(new MouseEvent('click'), currentSlideIndex);
+  const undoDeleteSlide = () => {
+    if (!lastDeletedSlide) return;
+    
+    const updatedSlides = [...slides];
+    updatedSlides.splice(currentSlideIndex, 0, lastDeletedSlide);
+    setSlides(updatedSlides);
+    
+    // Update slides in database
+    updateSlidesInDatabase(updatedSlides);
+    
+    setLastDeletedSlide(null);
+    setShowUndoButton(false);
+    
+    toast.success("Slide restored");
   };
   
   // Render the component with the updated layout
