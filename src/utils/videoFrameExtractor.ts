@@ -193,8 +193,10 @@ export async function extractFramesFromVideoUrl(
     
     // Extract frame at a specific time
     function extractFrameAtTime(seconds: number, currentTimestamp: string, callback: (success: boolean) => void) {
-      // Set current time and wait for seeking to complete
-      video.currentTime = seconds;
+      // Use requestAnimationFrame for more reliable timing when setting currentTime
+      requestAnimationFrame(() => {
+        video.currentTime = seconds;
+      });
       
       // Handle the 'seeked' event
       const handleSeeked = function() {
@@ -203,7 +205,7 @@ export async function extractFramesFromVideoUrl(
         // Remove event listener to avoid multiple callbacks
         video.removeEventListener('seeked', handleSeeked);
         
-        // Make sure video is fully ready before capturing frames - increased delay for reliability
+        // Make sure video is fully ready before capturing frames - increased delay for reliability to 1200ms
         setTimeout(() => {
           if (ctx) {
             // Clear the canvas before drawing new content
@@ -213,116 +215,130 @@ export async function extractFramesFromVideoUrl(
             ctx.fillStyle = "white";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Play the video for a fraction of a second to ensure the frame is loaded
-            video.play().then(() => {
+            // Store original time before scrubbing
+            const originalTime = video.currentTime;
+            
+            // Scrub forward by 0.1 seconds to ensure frame loading
+            video.currentTime = originalTime + 0.1;
+            
+            // After scrubbing forward, go back to original position and capture
+            setTimeout(() => {
+              video.currentTime = originalTime;
+              
+              // Wait for the frame to stabilize at original position
               setTimeout(() => {
-                video.pause();
-                
-                // Draw the current frame on the canvas
-                ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                // Add timestamp as text overlay for debugging (can be commented out in production)
-                ctx!.fillStyle = "rgba(0, 0, 0, 0.5)";
-                ctx!.fillRect(10, 10, 300, 30);
-                ctx!.fillStyle = "white";
-                ctx!.font = "16px Arial";
-                ctx!.fillText(`Timestamp: ${currentTimestamp} (${seconds.toFixed(2)}s)`, 15, 30);
-                
-                // Check if canvas is actually rendering content (debug for black/white frames)
-                const imageData = ctx!.getImageData(0, 0, canvas.width, canvas.height);
-                let hasContent = false;
-                let totalBrightness = 0;
-                
-                // More aggressive check for content by sampling pixels throughout the image
-                const pixelCount = imageData.data.length / 4;
-                const sampleSize = Math.min(1000, pixelCount);
-                const step = Math.max(1, Math.floor(pixelCount / sampleSize));
-                
-                for (let i = 0; i < imageData.data.length; i += 4 * step) {
-                  const r = imageData.data[i];
-                  const g = imageData.data[i+1];
-                  const b = imageData.data[i+2];
-                  totalBrightness += (r + g + b) / 3;
-                  
-                  // If we find significant non-white, non-black content, we're good
-                  if ((r < 240 || g < 240 || b < 240) && (r > 15 || g > 15 || b > 15)) {
-                    hasContent = true;
-                  }
-                }
-                
-                const avgBrightness = totalBrightness / (sampleSize * 255); // Normalize to 0-1
-                
-                // Frame is too white (>95% brightness) or too dark (<5% brightness)
-                if (avgBrightness > 0.95 || avgBrightness < 0.05 || !hasContent) {
-                  console.warn(`Frame at ${currentTimestamp} appears to be blank (brightness: ${avgBrightness.toFixed(2)}). Trying to fix...`);
-                  
-                  // Force a redraw to try to fix blank frames
-                  // Try forward/back seek approach with a larger offset
-                  const currentTime = video.currentTime;
-                  video.currentTime = currentTime + 0.5; // Skip forward
-                  
-                  // After seeking forward, seek back and try to capture again
+                // Play the video for a fraction of a second to ensure the frame is loaded
+                video.play().then(() => {
                   setTimeout(() => {
-                    video.currentTime = currentTime; // Back to original time
+                    video.pause();
                     
-                    setTimeout(() => {
-                      // Draw a colorful background so we can detect if new content is drawn
-                      ctx!.fillStyle = "rgb(200, 200, 240)";
-                      ctx!.fillRect(0, 0, canvas.width, canvas.height);
+                    // Draw the current frame on the canvas
+                    ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Add timestamp as text overlay for debugging (can be commented out in production)
+                    ctx!.fillStyle = "rgba(0, 0, 0, 0.5)";
+                    ctx!.fillRect(10, 10, 300, 30);
+                    ctx!.fillStyle = "white";
+                    ctx!.font = "16px Arial";
+                    ctx!.fillText(`Timestamp: ${currentTimestamp} (${seconds.toFixed(2)}s)`, 15, 30);
+                    
+                    // Check if canvas is actually rendering content (debug for black/white frames)
+                    const imageData = ctx!.getImageData(0, 0, canvas.width, canvas.height);
+                    let hasContent = false;
+                    let totalBrightness = 0;
+                    
+                    // More aggressive check for content by sampling pixels throughout the image
+                    const pixelCount = imageData.data.length / 4;
+                    const sampleSize = Math.min(1000, pixelCount);
+                    const step = Math.max(1, Math.floor(pixelCount / sampleSize));
+                    
+                    for (let i = 0; i < imageData.data.length; i += 4 * step) {
+                      const r = imageData.data[i];
+                      const g = imageData.data[i+1];
+                      const b = imageData.data[i+2];
+                      totalBrightness += (r + g + b) / 3;
                       
-                      // Try to draw the video frame again
-                      ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
-                      
-                      // Check again if we have content now
-                      const newData = ctx!.getImageData(0, 0, canvas.width, canvas.height);
-                      let hasContentNow = false;
-                      let newBrightness = 0;
-                      
-                      // Sample pixels again
-                      for (let i = 0; i < newData.data.length; i += 4 * step) {
-                        const r = newData.data[i];
-                        const g = newData.data[i+1];
-                        const b = newData.data[i+2];
-                        newBrightness += (r + g + b) / 3;
-                        
-                        // Check if pixel differs from our background color
-                        if (Math.abs(r - 200) > 20 || Math.abs(g - 200) > 20 || Math.abs(b - 240) > 20) {
-                          hasContentNow = true;
-                        }
+                      // If we find significant non-white, non-black content, we're good
+                      if ((r < 240 || g < 240 || b < 240) && (r > 15 || g > 15 || b > 15)) {
+                        hasContent = true;
                       }
+                    }
+                    
+                    const avgBrightness = totalBrightness / (sampleSize * 255); // Normalize to 0-1
+                    
+                    // Frame is too white (>95% brightness) or too dark (<5% brightness)
+                    if (avgBrightness > 0.95 || avgBrightness < 0.05 || !hasContent) {
+                      console.warn(`Frame at ${currentTimestamp} appears to be blank (brightness: ${avgBrightness.toFixed(2)}). Trying to fix...`);
                       
-                      if (hasContentNow) {
-                        finalizeFrame(currentTimestamp, true);
-                      } else {
-                        console.warn(`Frame at ${currentTimestamp} still blank after retry. Trying one last approach.`);
+                      // Force a redraw to try to fix blank frames
+                      // Try forward/back seek approach with a larger offset
+                      const currentTime = video.currentTime;
+                      video.currentTime = currentTime + 0.5; // Skip forward
+                      
+                      // After seeking forward, seek back and try to capture again
+                      setTimeout(() => {
+                        video.currentTime = currentTime; // Back to original time
                         
-                        // One final attempt with different settings
-                        video.play().then(() => {
-                          setTimeout(() => {
-                            video.pause();
-                            ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            finalizeFrame(currentTimestamp, true); // Just use whatever we have now
-                          }, 200);
-                        }).catch(() => {
-                          callback(false);
-                        });
-                      }
-                    }, 300);
-                  }, 300);
-                } else {
+                        setTimeout(() => {
+                          // Draw a colorful background so we can detect if new content is drawn
+                          ctx!.fillStyle = "rgb(200, 200, 240)";
+                          ctx!.fillRect(0, 0, canvas.width, canvas.height);
+                          
+                          // Try to draw the video frame again
+                          ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
+                          
+                          // Check again if we have content now
+                          const newData = ctx!.getImageData(0, 0, canvas.width, canvas.height);
+                          let hasContentNow = false;
+                          let newBrightness = 0;
+                          
+                          // Sample pixels again
+                          for (let i = 0; i < newData.data.length; i += 4 * step) {
+                            const r = newData.data[i];
+                            const g = newData.data[i+1];
+                            const b = newData.data[i+2];
+                            newBrightness += (r + g + b) / 3;
+                            
+                            // Check if pixel differs from our background color
+                            if (Math.abs(r - 200) > 20 || Math.abs(g - 200) > 20 || Math.abs(b - 240) > 20) {
+                              hasContentNow = true;
+                            }
+                          }
+                          
+                          if (hasContentNow) {
+                            finalizeFrame(currentTimestamp, true);
+                          } else {
+                            console.warn(`Frame at ${currentTimestamp} still blank after retry. Trying one last approach.`);
+                            
+                            // One final attempt with different settings
+                            video.play().then(() => {
+                              setTimeout(() => {
+                                video.pause();
+                                ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                finalizeFrame(currentTimestamp, true); // Just use whatever we have now
+                              }, 200);
+                            }).catch(() => {
+                              callback(false);
+                            });
+                          }
+                        }, 300);
+                      }, 300);
+                    } else {
+                      finalizeFrame(currentTimestamp, true);
+                    }
+                  }, 100); // Short play duration
+                }).catch(() => {
+                  console.warn("Could not play video briefly, capturing static frame");
+                  ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
                   finalizeFrame(currentTimestamp, true);
-                }
-              }, 100); // Short play duration
-            }).catch(() => {
-              console.warn("Could not play video briefly, capturing static frame");
-              ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
-              finalizeFrame(currentTimestamp, true);
-            });
+                });
+              }, 300); // Wait after seeking back to original position
+            }, 300); // Wait after seeking forward
           } else {
             console.error("Canvas context is null");
             callback(false);
           }
-        }, 800); // Longer delay to ensure frame is fully loaded
+        }, 1200); // Increased delay to 1200ms to ensure frame is fully loaded
       };
       
       // Add seeked event listener
