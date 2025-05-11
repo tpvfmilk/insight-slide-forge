@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -248,12 +249,12 @@ export const useProjectState = (projectId: string | undefined) => {
   };
   
   // Update to store frames in project-level state and make them available to all slides
-  const handleManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]) => {
-    if (!projectId) return;
+  const handleManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]): Promise<boolean> => {
+    if (!projectId) return false;
     
     if (selectedFrames.length === 0) {
       toast.info("No frames were selected");
-      return;
+      return false;
     }
     
     try {
@@ -276,13 +277,23 @@ export const useProjectState = (projectId: string | undefined) => {
       // Get existing frames
       const existingFrames: ExtractedFrame[] = projectData?.extracted_frames as unknown as ExtractedFrame[] || [];
       
+      // Filter out frames that are white/blank
+      const nonBlankFrames = selectedFrames.filter(frame => !frame.isPlaceholder);
+      
+      if (nonBlankFrames.length === 0) {
+        toast.error("All selected frames appear to be blank. Please try capturing frames at different timestamps.");
+        return false;
+      }
+      
       // Merge with new frames, avoiding duplicates by timestamp
       const combinedFrames = [
-        ...selectedFrames,
+        ...nonBlankFrames,
         ...existingFrames.filter(existing => 
-          !selectedFrames.some(selected => selected.timestamp === existing.timestamp)
+          !nonBlankFrames.some(selected => selected.timestamp === existing.timestamp)
         )
       ];
+      
+      console.log(`Updating project with ${nonBlankFrames.length} new frames, total will be ${combinedFrames.length} frames`);
       
       // Update project with combined frames
       const { error: updateError } = await supabase
@@ -297,13 +308,13 @@ export const useProjectState = (projectId: string | undefined) => {
       }
       
       // Now update the slides to show the selected frames
-      const success = await updateSlidesWithExtractedFrames(projectId, selectedFrames);
+      const success = await updateSlidesWithExtractedFrames(projectId, nonBlankFrames);
       
       if (success) {
         // Reload the project to get the updated slides with images
         await loadProject();
         setNeedsFrameExtraction(false);
-        toast.success(`${selectedFrames.length} frames have been saved and are now available to all slides`);
+        toast.success(`${nonBlankFrames.length} frames have been saved and are now available to all slides`);
         return true;
       } else {
         toast.error("Failed to update slides with selected frames");

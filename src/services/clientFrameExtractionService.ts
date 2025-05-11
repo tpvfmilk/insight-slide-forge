@@ -371,7 +371,7 @@ export const updateSlidesWithExtractedFrames = async (
     const updatedSlides = project.slides.map((slide: any) => {
       if (slide.timestamp) {
         // Find a matching frame
-        const matchingFrame = extractedFrames.find(
+        const matchingFrame = allExtractedFrames.find(
           frame => frame.timestamp === slide.timestamp
         );
         
@@ -380,6 +380,27 @@ export const updateSlidesWithExtractedFrames = async (
           return {
             ...slide,
             image: matchingFrame.imageUrl,
+            imageUrl: matchingFrame.imageUrl, // Also set imageUrl for compatibility
+            frameSource: 'extracted'
+          };
+        }
+      }
+      
+      // Also check transcript timestamps
+      if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps) && slide.transcriptTimestamps.length > 0) {
+        // Find all matching frames for this slide's timestamps
+        const matchingFrames = slide.transcriptTimestamps
+          .map(timestamp => allExtractedFrames.find(frame => frame.timestamp === timestamp))
+          .filter(Boolean); // Remove undefined entries
+        
+        if (matchingFrames.length > 0) {
+          const imageUrls = matchingFrames.map(frame => frame.imageUrl);
+          
+          return {
+            ...slide,
+            imageUrls, // Add multiple images
+            image: matchingFrames[0].imageUrl, // Set first one as primary for compatibility
+            imageUrl: matchingFrames[0].imageUrl, // Also set imageUrl for compatibility
             frameSource: 'extracted'
           };
         }
