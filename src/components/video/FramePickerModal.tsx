@@ -7,17 +7,6 @@ import { Play, Pause, Camera, Trash2, Plus } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fetchProjectVideos, ProjectVideo } from "@/services/projectVideoService";
-import { 
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { timestampToSeconds } from "@/utils/formatUtils";
 
 // Create a separate interface for frames with blobs that extends ExtractedFrame
 interface CapturedFrameWithBlob {
@@ -51,28 +40,26 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [capturedFrames, setCapturedFrames] = useState<CapturedFrameWithBlob[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [projectVideos, setProjectVideos] = useState<ProjectVideo[]>([]);
-  const [selectedVideoPath, setSelectedVideoPath] = useState(videoPath);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   
-  // Fetch project videos when the modal opens
+  // Reset state when opening modal
   useEffect(() => {
-    if (open && projectId) {
-      const loadProjectVideos = async () => {
-        try {
-          const videos = await fetchProjectVideos(projectId);
-          setProjectVideos(videos);
-          console.log("Loaded project videos:", videos);
-        } catch (error) {
-          console.error("Error loading project videos:", error);
-          toast.error("Failed to load project videos");
-        }
-      };
+    if (open) {
+      setSelectedFrames(existingFrames || []);
+      setVideoError(null);
+      setIsVideoLoaded(false);
       
-      loadProjectVideos();
+      // Give a moment for the video element to be created in the DOM
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.load();
+        }
+      }, 100);
     }
-  }, [open, projectId]);
+  }, [open, existingFrames]);
   
   useEffect(() => {
     setSelectedFrames(existingFrames || []);
@@ -138,6 +125,18 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
   
+  // Handle video load events
+  const handleVideoLoaded = () => {
+    setIsVideoLoaded(true);
+    setVideoError(null);
+  };
+  
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    console.error("Video error:", e);
+    setVideoError("Failed to load video. Please check the video file format and try again.");
+    setIsVideoLoaded(false);
+  };
+  
   // Capture current frame
   const captureFrame = () => {
     const video = videoRef.current;
@@ -177,7 +176,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       // Create a URL for the blob
       const imageUrl = URL.createObjectURL(blob);
       
-      // Create a new captured frame
+      // Create a new extracted frame
       const newFrame: ExtractedFrame = {
         id: frameId,
         imageUrl,
@@ -204,18 +203,6 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const removeFrame = (frameId: string) => {
     setSelectedFrames(prev => prev.filter(frame => frame.id !== frameId));
   };
-
-  // Handle video selection change
-  const handleVideoChange = (value: string) => {
-    setSelectedVideoPath(value);
-    
-    // Reset video player if the ref exists
-    if (videoRef.current) {
-      videoRef.current.load();
-      setIsPlaying(false);
-      setCurrentTime(0);
-    }
-  };
   
   // Apply selected frames to slide
   const handleApplyFrames = () => {
@@ -228,41 +215,35 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogTitle>Select Frames</DialogTitle>
         
-        {/* Video selector dropdown */}
-        <div className="mb-4">
-          <Select value={selectedVideoPath} onValueChange={handleVideoChange}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a video" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Project Videos</SelectLabel>
-                {projectVideos.map((video) => (
-                  <SelectItem 
-                    key={video.id} 
-                    value={video.source_file_path || ""}
-                    disabled={!video.source_file_path}
-                  >
-                    {video.title || video.video_metadata?.original_file_name || "Untitled video"}
-                  </SelectItem>
-                ))}
-                {projectVideos.length === 0 && (
-                  <SelectItem value="_empty" disabled>No videos available</SelectItem>
-                )}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-        
         {/* Main content area */}
         <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
           {/* Video player */}
           <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
+            {videoError ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
+                <div>
+                  <p className="mb-2">{videoError}</p>
+                  <Button 
+                    variant="secondary" 
+                    onClick={() => {
+                      if (videoRef.current) {
+                        videoRef.current.load();
+                      }
+                    }}
+                  >
+                    Retry Loading Video
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            
             <video
               ref={videoRef}
-              src={selectedVideoPath}
+              src={videoPath}
               className="w-full h-full"
               crossOrigin="anonymous"
+              onLoadedData={handleVideoLoaded}
+              onError={handleVideoError}
             >
               Your browser does not support the video tag.
             </video>
@@ -274,6 +255,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                 size="icon" 
                 onClick={togglePlayPause}
                 className="text-white hover:bg-white/20"
+                disabled={!isVideoLoaded}
               >
                 {isPlaying ? (
                   <Pause className="h-5 w-5" />
@@ -293,6 +275,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                 size="sm"
                 onClick={captureFrame}
                 className="flex items-center space-x-1"
+                disabled={!isVideoLoaded}
               >
                 <Camera className="h-4 w-4 mr-1" />
                 Capture Frame
@@ -356,4 +339,3 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     </Dialog>
   );
 };
-
