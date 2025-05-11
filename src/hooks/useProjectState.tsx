@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -246,6 +247,7 @@ export const useProjectState = (projectId: string | undefined) => {
     }
   };
   
+  // Update to store frames in project-level state and make them available to all slides
   const handleManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]) => {
     if (!projectId) return;
     
@@ -254,14 +256,63 @@ export const useProjectState = (projectId: string | undefined) => {
       return;
     }
     
-    // Update the project's slides with the selected frames
-    const success = await updateSlidesWithExtractedFrames(projectId, selectedFrames);
-    
-    if (success) {
-      // Reload the project to get the updated slides with images
-      await loadProject();
-      setNeedsFrameExtraction(false);
-      toast.success(`${selectedFrames.length} frames have been applied to your slides`);
+    try {
+      // First, add selected frames to the project's extracted_frames collection
+      // This ensures they're persistent and available for any slide
+      
+      // Get current extracted frames
+      const { data: projectData, error: getError } = await supabase
+        .from('projects')
+        .select('extracted_frames')
+        .eq('id', projectId)
+        .single();
+        
+      if (getError) {
+        console.error("Error getting project data:", getError);
+        toast.error("Failed to update project with selected frames");
+        return false;
+      }
+      
+      // Get existing frames
+      const existingFrames: ExtractedFrame[] = projectData?.extracted_frames as unknown as ExtractedFrame[] || [];
+      
+      // Merge with new frames, avoiding duplicates by timestamp
+      const combinedFrames = [
+        ...selectedFrames,
+        ...existingFrames.filter(existing => 
+          !selectedFrames.some(selected => selected.timestamp === existing.timestamp)
+        )
+      ];
+      
+      // Update project with combined frames
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update({ extracted_frames: combinedFrames })
+        .eq('id', projectId);
+        
+      if (updateError) {
+        console.error("Error updating project frames:", updateError);
+        toast.error("Failed to store selected frames");
+        return false;
+      }
+      
+      // Now update the slides to show the selected frames
+      const success = await updateSlidesWithExtractedFrames(projectId, selectedFrames);
+      
+      if (success) {
+        // Reload the project to get the updated slides with images
+        await loadProject();
+        setNeedsFrameExtraction(false);
+        toast.success(`${selectedFrames.length} frames have been saved and are now available to all slides`);
+        return true;
+      } else {
+        toast.error("Failed to update slides with selected frames");
+        return false;
+      }
+    } catch (error) {
+      console.error("Error in handleManualFrameSelectionComplete:", error);
+      toast.error("An error occurred while processing the selected frames");
+      return false;
     }
   };
 

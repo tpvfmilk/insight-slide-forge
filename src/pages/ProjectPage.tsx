@@ -49,6 +49,20 @@ const ProjectPage = () => {
     modals.openFramePickerModal();
   };
   
+  // Handler for when frames are selected in the frame picker
+  const handleFrameSelection = (selectedFrames) => {
+    // Pass the selected frames to be handled in the project state
+    handleManualFrameSelectionComplete(selectedFrames);
+    
+    // Close the modal
+    modals.closeFramePickerModal();
+    
+    // After frames are processed, reload the project to reflect changes
+    setTimeout(() => {
+      loadProject();
+    }, 500);
+  };
+  
   return (
     <InsightLayout>
       <div className="h-full flex flex-col">
@@ -118,7 +132,7 @@ const ProjectPage = () => {
           onClose={() => modals.closeFramePickerModal()} 
           videoPath={project.source_file_path}
           projectId={projectId || ""}
-          onFramesSelected={handleManualFrameSelectionComplete}
+          onFramesSelected={handleFrameSelection}
           allExtractedFrames={extractedFrames || []}
           existingFrames={[]} // This will be populated by the SlideEditor when needed
         />

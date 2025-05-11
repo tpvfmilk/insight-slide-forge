@@ -1,4 +1,3 @@
-
 import { timestampToSeconds } from "./formatUtils";
 
 /**
@@ -455,15 +454,21 @@ export async function extractFramesFromVideoUrl(
         const frameQuality = analyzeFrameQuality(imageData);
         
         if (frameQuality.score > 0.15) { // Good quality threshold
+          // Apply contrast adjustment to prevent white frames
+          applyFrameCorrections(ctx);
+          
           canvas.toBlob((blob) => {
             if (blob && blob.size > 1000) { // Ensure blob has reasonable size
               callback(true, blob);
             } else {
               callback(false);
             }
-          }, "image/jpeg", 0.99); // High quality JPEG
+          }, "image/jpeg", 0.95); // High quality JPEG
         } else {
           // Also try PNG for problematic frames
+          // Apply stronger corrections for PNG
+          applyFrameCorrections(ctx, true);
+          
           canvas.toBlob((blob) => {
             if (blob && blob.size > 1000) { // Ensure blob has reasonable size
               console.log(`Used PNG format for ${timestamp} with quality ${frameQuality.score.toFixed(2)}`);
@@ -508,13 +513,16 @@ export async function extractFramesFromVideoUrl(
               console.log(`Play-pause quality for ${timestamp}: ${frameQuality.score.toFixed(2)}`);
               
               if (frameQuality.score > 0.15) {
+                // Apply stronger contrast adjustment
+                applyFrameCorrections(ctx, true);
+                
                 canvas.toBlob((blob) => {
                   if (blob && blob.size > 1000) {
                     callback(true, blob);
                   } else {
                     callback(false);
                   }
-                }, "image/jpeg", 0.99);
+                }, "image/jpeg", 0.95);
               } else {
                 callback(false);
               }
@@ -561,13 +569,17 @@ export async function extractFramesFromVideoUrl(
           if (bestFrame && bestScore > 0.15) {
             console.log(`Found good timelapse frame with score ${bestScore.toFixed(2)}`);
             ctx.putImageData(bestFrame, 0, 0);
+            
+            // Apply stronger contrast adjustment for timelapse frames
+            applyFrameCorrections(ctx, true);
+            
             canvas.toBlob((blob) => {
               if (blob && blob.size > 1000) {
                 callback(true, blob);
               } else {
                 callback(false);
               }
-            }, "image/jpeg", 0.99);
+            }, "image/jpeg", 0.95);
           } else {
             callback(false);
           }
@@ -625,13 +637,16 @@ export async function extractFramesFromVideoUrl(
           console.log(`ImageBitmap quality for ${timestamp}: ${frameQuality.score.toFixed(2)}`);
           
           if (frameQuality.score > 0.15) {
+            // Apply strong contrast/brightness adjustments
+            applyFrameCorrections(ctx, true);
+            
             canvas.toBlob((blob) => {
               if (blob && blob.size > 1000) {
                 callback(true, blob);
               } else {
                 callback(false);
               }
-            }, "image/jpeg", 0.99);
+            }, "image/jpeg", 0.95);
           } else {
             callback(false);
           }
@@ -663,29 +678,68 @@ export async function extractFramesFromVideoUrl(
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
       
-      // Apply contrast and brightness adjustments
+      // Apply direct pixel manipulation for stronger contrast adjustments
+      // This works better for overly bright frames
+      let totalBrightness = 0;
+      
+      // First calculate average brightness
       for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i+1];
+        const b = data[i+2]; 
+        totalBrightness += (r + g + b) / 3;
+      }
+      
+      const avgBrightness = totalBrightness / (data.length / 4) / 255;
+      console.log(`Average brightness before correction: ${avgBrightness.toFixed(2)}`);
+      
+      // Apply appropriate correction based on brightness
+      let contrastFactor = 1.2; // Default contrast boost
+      let brightnessFactor = 0.0; // Default no brightness change
+      
+      if (avgBrightness > 0.85) {
+        // Handle overly bright frames - reduce brightness and increase contrast
+        contrastFactor = 1.5; 
+        brightnessFactor = -30; // Darken the image
+        console.log("Applying strong darkening for overly bright frame");
+      } else if (avgBrightness > 0.7) {
+        // Handle bright frames - moderate correction
+        contrastFactor = 1.3;
+        brightnessFactor = -20;
+        console.log("Applying moderate darkening for bright frame");
+      } else if (avgBrightness < 0.2) {
+        // Handle dark frames - increase brightness
+        contrastFactor = 1.3;
+        brightnessFactor = 20;
+        console.log("Applying brightness boost for dark frame");
+      }
+      
+      // Apply pixel-level adjustments
+      for (let i = 0; i < data.length; i += 4) {
+        // Apply contrast
+        for (let j = 0; j < 3; j++) {
+          let color = data[i+j];
+          // Apply contrast (centered at 128)
+          color = Math.floor(((color / 255 - 0.5) * contrastFactor + 0.5) * 255);
+          // Apply brightness
+          color += brightnessFactor;
+          // Clamp values
+          data[i+j] = Math.max(0, Math.min(255, color));
+        }
+        
         // Check if pixel is close to white
         if (data[i] > 240 && data[i+1] > 240 && data[i+2] > 240) {
-          // Make sure it's not pure white (which might be a blank frame)
+          // Make sure white isn't pure white, to add texture
           data[i] = 230;     // R
           data[i+1] = 230;   // G
           data[i+2] = 235;   // B
-        }
-        
-        // Add slight contrast
-        for (let j = 0; j < 3; j++) {
-          const factor = 1.1; // Contrast factor
-          let color = data[i+j];
-          color = Math.floor((color / 255 - 0.5) * factor * 255 + 0.5 * 255);
-          data[i+j] = Math.max(0, Math.min(255, color));
         }
       }
       
       // Put the modified image data back on the canvas
       ctx.putImageData(imageData, 0, 0);
       
-      // Create blob
+      // Create blob with higher quality setting
       canvas.toBlob((blob) => {
         if (blob && blob.size > 1000) {
           console.log(`Color correction technique produced a valid blob for ${timestamp}`);
@@ -693,7 +747,57 @@ export async function extractFramesFromVideoUrl(
         } else {
           callback(false);
         }
-      }, "image/jpeg", 0.99);
+      }, "image/jpeg", 0.95);
+    }
+    
+    // Helper function to apply contrast/brightness to already drawn frame
+    function applyFrameCorrections(ctx: CanvasRenderingContext2D, strongCorrection: boolean = false) {
+      // Get current frame from canvas
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      
+      // Calculate average brightness first
+      let totalBrightness = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        totalBrightness += (data[i] + data[i+1] + data[i+2]) / 3;
+      }
+      
+      const avgBrightness = totalBrightness / (data.length / 4) / 255;
+      
+      // Adjust parameters based on current brightness
+      let contrastAdjust = strongCorrection ? 1.4 : 1.2;
+      let brightnessAdjust = 0;
+      
+      // Apply special handling for overly bright frames (common issue)
+      if (avgBrightness > 0.85) {
+        contrastAdjust = strongCorrection ? 1.6 : 1.4;
+        brightnessAdjust = strongCorrection ? -35 : -25;
+      } else if (avgBrightness > 0.7) {
+        contrastAdjust = strongCorrection ? 1.5 : 1.3;
+        brightnessAdjust = strongCorrection ? -25 : -15;
+      } else if (avgBrightness < 0.2) {
+        // Handle dark frames by brightening
+        brightnessAdjust = strongCorrection ? 30 : 20;
+      }
+      
+      // Apply adjustments
+      for (let i = 0; i < data.length; i += 4) {
+        for (let j = 0; j < 3; j++) {
+          let color = data[i + j];
+          
+          // Apply contrast centered at 128
+          color = ((color / 255 - 0.5) * contrastAdjust + 0.5) * 255;
+          
+          // Apply brightness
+          color += brightnessAdjust;
+          
+          // Clamp values
+          data[i + j] = Math.max(0, Math.min(255, color));
+        }
+      }
+      
+      // Apply the modified data back to canvas
+      ctx.putImageData(imageData, 0, 0);
     }
     
     // Analyze frame quality and return score with metrics
