@@ -90,6 +90,65 @@ export const clientExtractFramesFromVideo = async (
 
     if (urlError) {
       console.error('Error creating signed URL:', urlError);
+      
+      // Try to get source URL from project
+      const { data: projectData } = await supabase
+        .from('projects')
+        .select('source_url')
+        .eq('id', projectId)
+        .single();
+        
+      if (projectData?.source_url) {
+        console.log('Using project source URL as fallback');
+        
+        // Use the source_url directly if signed URL fails
+        try {
+          toast.loading('Extracting frames from video...', {
+            id: 'extract-frames',
+            duration: Infinity
+          });
+          
+          // Extract frames using the source URL
+          const extractedFrames = await extractFramesFromVideoUrl(
+            projectData.source_url, 
+            timestamps,
+            (completed, total) => {
+              console.log(`Frame extraction progress: ${completed}/${total}`);
+            },
+            videoDuration
+          );
+          
+          if (!extractedFrames || extractedFrames.length === 0) {
+            toast.error('No frames could be extracted from the video. Please try again or capture frames manually.', {
+              id: 'extract-frames'
+            });
+            return { 
+              success: false, 
+              error: 'Failed to extract frames from source URL'
+            };
+          }
+          
+          // Upload extracted frames and continue with normal process
+          const uploadedFrames = await uploadExtractedFrames(projectId, extractedFrames);
+          await saveExtractedFramesToProject(projectId, uploadedFrames);
+          
+          toast.success(`Successfully extracted ${uploadedFrames.length} frames`, {
+            id: 'extract-frames'
+          });
+          
+          return { 
+            success: true, 
+            frames: [...uploadedFrames, ...existingFrames.filter(existing => 
+              !uploadedFrames.some(uploaded => uploaded.timestamp === existing.timestamp)
+            )]
+          };
+        } catch (sourceUrlError) {
+          console.error('Error extracting frames from source URL:', sourceUrlError);
+          toast.dismiss('extract-frames');
+          return { success: false, error: 'Failed to extract frames from video source' };
+        }
+      }
+      
       return { success: false, error: urlError.message };
     }
 
@@ -128,55 +187,16 @@ export const clientExtractFramesFromVideo = async (
         };
       }
       
-      toast.success(`Successfully extracted ${extractedFrames.length} frames`, {
-        id: 'extract-frames'
-      });
-      
       // Upload each extracted frame
-      const uploadedFrames: ExtractedFrame[] = [];
-      
-      for (const { frame, timestamp } of extractedFrames) {
-        try {
-          // Create a File from the Blob
-          const file = new File([frame], `frame-${timestamp.replace(/:/g, "-")}.jpg`, {
-            type: 'image/jpeg'
-          });
-          
-          // Upload the file
-          const { data: uploadData } = await supabase
-            .storage
-            .from('slide_stills')
-            .upload(`${projectId}/${timestamp.replace(/:/g, '_')}.jpg`, file, {
-              cacheControl: '3600',
-              upsert: true
-            });
-            
-          if (!uploadData?.path) {
-            console.warn(`Failed to upload frame at ${timestamp}`);
-            continue;
-          }
-          
-          // Get public URL
-          const { data: urlData } = supabase
-            .storage
-            .from('slide_stills')
-            .getPublicUrl(uploadData.path);
-            
-          uploadedFrames.push({
-            timestamp,
-            imageUrl: urlData.publicUrl,
-            id: `frame-${timestamp.replace(/:/g, "-")}`,
-            isPlaceholder: false
-          });
-          
-        } catch (uploadError) {
-          console.error(`Error uploading frame at ${timestamp}:`, uploadError);
-        }
-      }
+      const uploadedFrames = await uploadExtractedFrames(projectId, extractedFrames);
       
       if (uploadedFrames.length > 0) {
         // Save these frames to the project
         await saveExtractedFramesToProject(projectId, uploadedFrames);
+        
+        toast.success(`Successfully extracted ${uploadedFrames.length} frames`, {
+          id: 'extract-frames'
+        });
         
         return { 
           success: true, 
@@ -186,6 +206,9 @@ export const clientExtractFramesFromVideo = async (
         };
       } else {
         console.error('Client-side extraction succeeded but uploads failed');
+        toast.error('Failed to upload extracted frames', {
+          id: 'extract-frames'
+        });
         return { 
           success: false, 
           error: 'Failed to upload extracted frames'
@@ -214,6 +237,55 @@ export const clientExtractFramesFromVideo = async (
     };
   }
 };
+
+// Helper function to upload extracted frames
+async function uploadExtractedFrames(
+  projectId: string, 
+  extractedFrames: Array<{ timestamp: string; frame: Blob }>
+): Promise<ExtractedFrame[]> {
+  const uploadedFrames: ExtractedFrame[] = [];
+  
+  for (const { frame, timestamp } of extractedFrames) {
+    try {
+      // Create a File from the Blob
+      const file = new File([frame], `frame-${timestamp.replace(/:/g, "-")}.jpg`, {
+        type: 'image/jpeg'
+      });
+      
+      // Upload the file
+      const { data: uploadData, error: uploadError } = await supabase
+        .storage
+        .from('slide_stills')
+        .upload(`${projectId}/${timestamp.replace(/:/g, '_')}.jpg`, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+        
+      if (uploadError || !uploadData?.path) {
+        console.warn(`Failed to upload frame at ${timestamp}:`, uploadError);
+        continue;
+      }
+      
+      // Get public URL
+      const { data: urlData } = supabase
+        .storage
+        .from('slide_stills')
+        .getPublicUrl(uploadData.path);
+        
+      uploadedFrames.push({
+        timestamp,
+        imageUrl: urlData.publicUrl,
+        id: `frame-${timestamp.replace(/:/g, "-")}`,
+        isPlaceholder: false
+      });
+      
+    } catch (uploadError) {
+      console.error(`Error uploading frame at ${timestamp}:`, uploadError);
+    }
+  }
+  
+  return uploadedFrames;
+}
 
 // Helper function to save extracted frames to the project
 async function saveExtractedFramesToProject(projectId: string, frames: ExtractedFrame[]): Promise<void> {
