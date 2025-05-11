@@ -24,12 +24,12 @@ export const VideoUpload = () => {
   // Set default title from filename when a file is selected
   useEffect(() => {
     if (videoFile) {
-      const filename = videoFile.file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+      const filename = videoFile.name.replace(/\.[^/.]+$/, ""); // Remove extension
       if (!title) {
         setTitle(filename);
       }
     }
-  }, [videoFile]);
+  }, [videoFile, title]);
   
   const handleFileSelected = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -48,14 +48,7 @@ export const VideoUpload = () => {
       return;
     }
     
-    setVideoFile({
-      file,
-      title: file.name.replace(/\.[^/.]+$/, ""), // Default title from filename without extension
-      description: "",
-      uploadProgress: 0,
-      uploading: false,
-      error: null
-    });
+    setVideoFile(file);
   };
   
   const handleRemoveFile = () => {
@@ -92,11 +85,11 @@ export const VideoUpload = () => {
     }, 300);
     
     try {
-      console.log("Creating project from video file:", videoFile.file.name);
+      console.log("Creating project from video file:", videoFile.name);
       
       // Create project from the single video file
       const project = await createProjectFromVideo(
-        videoFile.file, 
+        videoFile, 
         title, 
         contextPrompt,
         "", // No transcript
@@ -148,7 +141,7 @@ export const VideoUpload = () => {
             
             <FileUploader
               onFilesSelected={handleFileSelected}
-              selectedFiles={videoFile ? [videoFile.file] : []}
+              selectedFiles={videoFile ? [videoFile] : []}
               onRemoveFile={handleRemoveFile}
               accept="video/*"
               maxSize={100}
