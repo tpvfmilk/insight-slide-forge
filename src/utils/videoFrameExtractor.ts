@@ -137,19 +137,19 @@ export async function extractFramesFromVideoUrl(
         return;
       }
       
-      const timestamp = validTimestamps[index];
-      const seconds = timestampToSeconds(timestamp);
+      const currentTimestamp = validTimestamps[index];
+      const seconds = timestampToSeconds(currentTimestamp);
       
-      console.log(`Extracting frame at timestamp ${timestamp} (${seconds}s), ${index + 1}/${validTimestamps.length}`);
+      console.log(`Extracting frame at timestamp ${currentTimestamp} (${seconds}s), ${index + 1}/${validTimestamps.length}`);
       
       // First try with a small offset to avoid exact boundary issues
-      extractFrameAtTime(seconds, timestamp, (success) => {
+      extractFrameAtTime(seconds, currentTimestamp, (success) => {
         if (success) {
           // Move to next timestamp
           processNextTimestamp(validTimestamps, index + 1);
         } else {
           // Add to failed list to retry later with a different approach
-          failedExtractions.push(timestamp);
+          failedExtractions.push(currentTimestamp);
           processNextTimestamp(validTimestamps, index + 1);
         }
       });
@@ -163,17 +163,17 @@ export async function extractFramesFromVideoUrl(
         return;
       }
       
-      const timestamp = failedTimestamps[index];
-      const seconds = timestampToSeconds(timestamp);
+      const currentTimestamp = failedTimestamps[index];
+      const seconds = timestampToSeconds(currentTimestamp);
       
-      console.log(`Retrying extraction at ${timestamp} with alternative approach...`);
+      console.log(`Retrying extraction at ${currentTimestamp} with alternative approach...`);
       
       // Try with a larger offset and repeated attempts
       let attempts = 0;
       const maxAttempts = 3;
       const tryExtraction = () => {
         const offset = attempts * 0.1; // Try different offsets: 0.1, 0.2, 0.3 seconds
-        extractFrameAtTime(seconds + offset, timestamp, (success) => {
+        extractFrameAtTime(seconds + offset, currentTimestamp, (success) => {
           if (success) {
             retryFailedExtractions(failedTimestamps, index + 1);
           } else if (attempts < maxAttempts) {
@@ -181,7 +181,7 @@ export async function extractFramesFromVideoUrl(
             setTimeout(tryExtraction, 300);
           } else {
             // If all attempts fail, create a placeholder frame with text
-            createPlaceholderFrame(timestamp, () => {
+            createPlaceholderFrame(currentTimestamp, () => {
               retryFailedExtractions(failedTimestamps, index + 1);
             });
           }
@@ -192,13 +192,13 @@ export async function extractFramesFromVideoUrl(
     }
     
     // Extract frame at a specific time
-    function extractFrameAtTime(seconds: number, timestamp: string, callback: (success: boolean) => void) {
+    function extractFrameAtTime(seconds: number, currentTimestamp: string, onComplete: (success: boolean) => void) {
       // Set current time and wait for seeking to complete
       video.currentTime = seconds;
       
       // Handle the 'seeked' event
       const handleSeeked = function() {
-        console.log(`Seeked to ${video.currentTime}s for timestamp ${timestamp}`);
+        console.log(`Seeked to ${video.currentTime}s for timestamp ${currentTimestamp}`);
         
         // Remove event listener to avoid multiple callbacks
         video.removeEventListener('seeked', handleSeeked);
@@ -226,7 +226,7 @@ export async function extractFramesFromVideoUrl(
                 ctx!.fillRect(10, 10, 300, 30);
                 ctx!.fillStyle = "white";
                 ctx!.font = "16px Arial";
-                ctx!.fillText(`Timestamp: ${timestamp} (${seconds.toFixed(2)}s)`, 15, 30);
+                ctx!.fillText(`Timestamp: ${currentTimestamp} (${seconds.toFixed(2)}s)`, 15, 30);
                 
                 // Check if canvas is actually rendering content (debug for black/white frames)
                 const imageData = ctx!.getImageData(0, 0, canvas.width, canvas.height);
@@ -254,7 +254,7 @@ export async function extractFramesFromVideoUrl(
                 
                 // Frame is too white (>95% brightness) or too dark (<5% brightness)
                 if (avgBrightness > 0.95 || avgBrightness < 0.05 || !hasContent) {
-                  console.warn(`Frame at ${timestamp} appears to be blank (brightness: ${avgBrightness.toFixed(2)}). Trying to fix...`);
+                  console.warn(`Frame at ${currentTimestamp} appears to be blank (brightness: ${avgBrightness.toFixed(2)}). Trying to fix...`);
                   
                   // Force a redraw to try to fix blank frames
                   // Try forward/back seek approach with a larger offset
@@ -292,35 +292,35 @@ export async function extractFramesFromVideoUrl(
                       }
                       
                       if (hasContentNow) {
-                        finalizeFrame(true);
+                        finalizeFrame(currentTimestamp, true);
                       } else {
-                        console.warn(`Frame at ${timestamp} still blank after retry. Trying one last approach.`);
+                        console.warn(`Frame at ${currentTimestamp} still blank after retry. Trying one last approach.`);
                         
                         // One final attempt with different settings
                         video.play().then(() => {
                           setTimeout(() => {
                             video.pause();
                             ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            finalizeFrame(true); // Just use whatever we have now
+                            finalizeFrame(currentTimestamp, true); // Just use whatever we have now
                           }, 200);
                         }).catch(() => {
-                          callback(false);
+                          onComplete(false);
                         });
                       }
                     }, 300);
                   }, 300);
                 } else {
-                  finalizeFrame(true);
+                  finalizeFrame(currentTimestamp, true);
                 }
               }, 100); // Short play duration
             }).catch(() => {
               console.warn("Could not play video briefly, capturing static frame");
               ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
-              finalizeFrame(true);
+              finalizeFrame(currentTimestamp, true);
             });
           } else {
             console.error("Canvas context is null");
-            callback(false);
+            onComplete(false);
           }
         }, 800); // Longer delay to ensure frame is fully loaded
       };
@@ -329,9 +329,9 @@ export async function extractFramesFromVideoUrl(
       video.addEventListener('seeked', handleSeeked);
     }
     
-    function finalizeFrame(success: boolean) {
+    function finalizeFrame(currentTimestamp: string, success: boolean) {
       if (!success || !ctx) {
-        callback(false);
+        onComplete(false);
         return;
       }
       
@@ -339,7 +339,7 @@ export async function extractFramesFromVideoUrl(
       canvas.toBlob((blob) => {
         if (blob) {
           frames.push({
-            timestamp,
+            timestamp: currentTimestamp,
             frame: blob
           });
           
@@ -349,17 +349,17 @@ export async function extractFramesFromVideoUrl(
             progressCallback(framesProcessed, timestamps.length);
           }
           
-          callback(true);
+          onComplete(true);
         } else {
-          console.error(`Failed to create blob for timestamp ${timestamp}`);
-          callback(false);
+          console.error(`Failed to create blob for timestamp ${currentTimestamp}`);
+          onComplete(false);
         }
       }, "image/jpeg", 0.98); // Use higher JPEG quality (0.98 instead of 0.95)
     }
     
     // Create a placeholder frame with text when all extraction attempts fail
-    function createPlaceholderFrame(timestamp: string, callback: () => void) {
-      console.log(`Creating placeholder frame for ${timestamp}`);
+    function createPlaceholderFrame(currentTimestamp: string, onComplete: () => void) {
+      console.log(`Creating placeholder frame for ${currentTimestamp}`);
       
       if (ctx) {
         // Clear canvas and create a colored background
@@ -371,14 +371,14 @@ export async function extractFramesFromVideoUrl(
         ctx.fillStyle = "white";
         ctx.font = "bold 24px Arial";
         ctx.textAlign = "center";
-        ctx.fillText(`Frame at ${timestamp} unavailable`, canvas.width / 2, canvas.height / 2 - 15);
+        ctx.fillText(`Frame at ${currentTimestamp} unavailable`, canvas.width / 2, canvas.height / 2 - 15);
         ctx.font = "18px Arial";
         ctx.fillText("Frame could not be extracted from video", canvas.width / 2, canvas.height / 2 + 20);
         
         canvas.toBlob((blob) => {
           if (blob) {
             frames.push({
-              timestamp,
+              timestamp: currentTimestamp,
               frame: blob
             });
             
@@ -388,10 +388,10 @@ export async function extractFramesFromVideoUrl(
               progressCallback(framesProcessed, timestamps.length);
             }
           }
-          callback();
+          onComplete();
         }, "image/jpeg", 0.95);
       } else {
-        callback();
+        onComplete();
       }
     }
     
