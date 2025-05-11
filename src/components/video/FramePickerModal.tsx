@@ -3,10 +3,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, Camera, Trash2, Plus } from "lucide-react";
+import { Play, Pause, Camera, Trash2, Plus, RefreshCw, AlertCircle } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { supabase } from "@/integrations/supabase/client";
 
 // Create a separate interface for frames with blobs that extends ExtractedFrame
 interface CapturedFrameWithBlob {
@@ -44,6 +45,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+  const [isLoadingVideo, setIsLoadingVideo] = useState(true);
+  const [videoUrl, setVideoUrl] = useState<string | null>(videoPath);
+  const [loadAttempts, setLoadAttempts] = useState(0);
   
   // Reset state when opening modal
   useEffect(() => {
@@ -51,6 +55,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       setSelectedFrames(existingFrames || []);
       setVideoError(null);
       setIsVideoLoaded(false);
+      setIsLoadingVideo(true);
+      setLoadAttempts(0);
+      setVideoUrl(videoPath);
       
       // Give a moment for the video element to be created in the DOM
       setTimeout(() => {
@@ -59,11 +66,51 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         }
       }, 100);
     }
-  }, [open, existingFrames]);
+  }, [open, existingFrames, videoPath]);
   
+  // Attempt to reload video with a fresh signed URL if initial load fails
   useEffect(() => {
-    setSelectedFrames(existingFrames || []);
-  }, [existingFrames, open]);
+    if (loadAttempts > 0 && loadAttempts <= 3) {
+      (async () => {
+        try {
+          console.log(`Retrying video load (attempt ${loadAttempts})`);
+          setIsLoadingVideo(true);
+          
+          // Try to get a fresh signed URL from storage
+          let filePath = videoPath;
+          
+          // If path includes '/', extract the actual file path without bucket name
+          let bucket = 'video_uploads';
+          if (videoPath.includes('/')) {
+            const pathParts = videoPath.split('/');
+            if (pathParts.length > 1) {
+              filePath = pathParts.pop() || '';
+              bucket = pathParts.join('/');
+            }
+          }
+          
+          console.log(`Getting signed URL for ${bucket}/${filePath}`);
+          
+          const { data, error } = await supabase
+            .storage
+            .from(bucket)
+            .createSignedUrl(filePath, 3600); // 1 hour expiry
+            
+          if (error || !data?.signedUrl) {
+            throw new Error("Couldn't create access link for video");
+          }
+          
+          console.log("Got new signed URL for video");
+          setVideoUrl(data.signedUrl);
+        } catch (error) {
+          console.error("Error getting fresh video URL:", error);
+          setVideoError("Failed to access video. The video might be unavailable or the format is not supported.");
+        } finally {
+          setIsLoadingVideo(false);
+        }
+      })();
+    }
+  }, [loadAttempts, videoPath]);
   
   // Update time display when video is playing
   useEffect(() => {
@@ -129,12 +176,21 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const handleVideoLoaded = () => {
     setIsVideoLoaded(true);
     setVideoError(null);
+    setIsLoadingVideo(false);
   };
   
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     console.error("Video error:", e);
     setVideoError("Failed to load video. Please check the video file format and try again.");
     setIsVideoLoaded(false);
+    setIsLoadingVideo(false);
+  };
+  
+  // Retry loading video
+  const retryLoadVideo = () => {
+    if (videoRef.current) {
+      setLoadAttempts(prev => prev + 1);
+    }
   };
   
   // Capture current frame
@@ -219,18 +275,21 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
           {/* Video player */}
           <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
-            {videoError ? (
+            {isLoadingVideo ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
+                <RefreshCw className="h-8 w-8 animate-spin mr-2" />
+                <span>Loading video...</span>
+              </div>
+            ) : videoError ? (
               <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
                 <div>
-                  <p className="mb-2">{videoError}</p>
+                  <AlertCircle className="h-10 w-10 mb-2 mx-auto text-destructive" />
+                  <p className="mb-4">{videoError}</p>
                   <Button 
                     variant="secondary" 
-                    onClick={() => {
-                      if (videoRef.current) {
-                        videoRef.current.load();
-                      }
-                    }}
+                    onClick={retryLoadVideo}
                   >
+                    <RefreshCw className="h-4 w-4 mr-2" />
                     Retry Loading Video
                   </Button>
                 </div>
@@ -239,7 +298,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
             
             <video
               ref={videoRef}
-              src={videoPath}
+              src={videoUrl || undefined}
               className="w-full h-full"
               crossOrigin="anonymous"
               onLoadedData={handleVideoLoaded}
