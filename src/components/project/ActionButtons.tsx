@@ -30,19 +30,13 @@ interface ActionButtonsProps {
 
 export const ActionButtons = ({
   project,
-  needsFrameExtraction,
-  isExtractingFrames,
-  handleExtractFrames,
   needsTranscription,
   isTranscribing,
   handleTranscribeVideo,
   isGenerating,
   handleGenerateSlides,
   handleOpenManualFramePicker,
-  extractedFrames,
   isTranscriptOnlyProject,
-  refreshProject,
-  totalDuration
 }: ActionButtonsProps) => {
   return (
     <>
@@ -65,6 +59,14 @@ export const ActionButtons = ({
           )}
         </Button>
       )}
+      
+      <Button 
+        variant="outline" 
+        onClick={handleOpenManualFramePicker}
+      >
+        <Film className="mr-2 h-4 w-4" />
+        Select Frames
+      </Button>
       
       <Button 
         disabled={isGenerating || !project}

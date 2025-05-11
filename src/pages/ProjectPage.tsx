@@ -10,7 +10,7 @@ import { TranscriptView } from "@/components/project/TranscriptView";
 import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
-import { clientExtractFramesFromVideo } from "@/services/clientFrameExtractionService";
+import { FramePickerModal } from "@/components/video/FramePickerModal";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -41,35 +41,12 @@ const ProjectPage = () => {
     totalVideoDuration
   } = useProjectState(projectId);
   
-  // Empty placeholder method - this is only for manual frame selection now
-  const handleOpenManualFramePicker = () => {};
-
-  // This function is now only used for manual frame extraction, never auto-triggered
-  const processFrameExtraction = async () => {
-    if (!project?.source_file_path || !projectId || !allTimestamps || allTimestamps.length === 0) {
-      toast.error("Unable to extract frames: missing video or timestamps");
+  const handleOpenManualFramePicker = () => {
+    if (!project?.source_file_path) {
+      toast.error("No video available");
       return;
     }
-    
-    try {
-      // Use client-side extraction
-      const result = await clientExtractFramesFromVideo(
-        projectId,
-        project.source_file_path,
-        allTimestamps,
-        videoMetadata?.duration
-      );
-      
-      if (result.success && result.frames) {
-        handleManualFrameSelectionComplete(result.frames);
-        toast.success(`Successfully extracted ${result.frames.length} frames`);
-      } else {
-        toast.error(result.error || "Failed to extract frames");
-      }
-    } catch (error) {
-      console.error("Frame extraction error:", error);
-      toast.error("Failed to extract frames");
-    }
+    modals.openFramePickerModal();
   };
   
   return (
@@ -133,6 +110,19 @@ const ProjectPage = () => {
           )}
         </div>
       </div>
+
+      {/* Frame Picker Modal */}
+      {modals.isFramePickerModalOpen && project?.source_file_path && (
+        <FramePickerModal
+          open={modals.isFramePickerModalOpen}
+          onClose={() => modals.closeFramePickerModal()} 
+          videoPath={project.source_file_path}
+          projectId={projectId || ""}
+          onFramesSelected={handleManualFrameSelectionComplete}
+          allExtractedFrames={extractedFrames || []}
+          existingFrames={[]} // This will be populated by the SlideEditor when needed
+        />
+      )}
     </InsightLayout>
   );
 };
