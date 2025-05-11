@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Progress } from "@/components/ui/progress";
@@ -9,12 +8,10 @@ import { syncStorageUsage } from "@/services/storageUsageService";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CleanupStorageButton } from "./CleanupStorageButton";
-
 export function StorageUsageBar() {
   const [percentage, setPercentage] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const queryClient = useQueryClient();
-  
   const {
     data: storageInfo,
     isLoading,
@@ -30,13 +27,11 @@ export function StorageUsageBar() {
   useEffect(() => {
     refetch();
   }, [refetch]);
-  
   useEffect(() => {
     if (storageInfo) {
       setPercentage(Math.min(100, storageInfo.percentageUsed));
     }
   }, [storageInfo]);
-  
   const handleSyncStorage = async () => {
     setIsSyncing(true);
     try {
@@ -44,7 +39,9 @@ export function StorageUsageBar() {
       if (result.success) {
         toast.success(result.message);
         // Refetch storage info to update the UI
-        await queryClient.invalidateQueries({ queryKey: ['storage-info'] });
+        await queryClient.invalidateQueries({
+          queryKey: ['storage-info']
+        });
         refetch();
       } else {
         toast.error(result.message);
@@ -55,17 +52,14 @@ export function StorageUsageBar() {
       setIsSyncing(false);
     }
   };
-  
   if (isLoading) {
     return <div className="px-4 py-2 text-sm text-muted-foreground">
         Loading storage info...
       </div>;
   }
-  
   if (!storageInfo) {
     return null;
   }
-  
   const usedFormatted = formatFileSize(storageInfo.storageUsed);
   const limitFormatted = formatFileSize(storageInfo.storageLimit);
 
@@ -76,37 +70,23 @@ export function StorageUsageBar() {
   } else if (percentage > 75) {
     progressColor = "bg-warning";
   }
-  
-  return (
-    <div className="space-y-3 px-[25px] py-[10px]">
+  return <div className="space-y-3 px-[25px] py-[43px]">
       <div className="flex justify-between text-xs text-muted-foreground">
-        <span className="flex items-center">
-          <Database className="h-3.5 w-3.5 mr-1" />
-          Storage
-        </span>
-        <div className="flex items-center gap-2">
-          <span>
+        
+        <div className="flex items-center gap-2 px-[11px]">
+          <span className="px-0 mx-0">
             {usedFormatted} / {limitFormatted}
           </span>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-5 w-5 rounded-full" 
-            onClick={handleSyncStorage}
-            disabled={isSyncing}
-          >
+          <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={handleSyncStorage} disabled={isSyncing}>
             <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
             <span className="sr-only">Sync storage usage</span>
           </Button>
         </div>
       </div>
       <Progress value={percentage} className="h-2" indicatorClassName={progressColor} />
-      {percentage > 90 && 
-        <div className="text-xs text-destructive">Storage almost full</div>
-      }
+      {percentage > 90 && <div className="text-xs text-destructive">Storage almost full</div>}
       <div className="flex justify-end">
         <CleanupStorageButton />
       </div>
-    </div>
-  );
+    </div>;
 }
