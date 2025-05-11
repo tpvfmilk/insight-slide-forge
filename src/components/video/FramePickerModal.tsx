@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -8,6 +9,7 @@ import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { Slider } from "@/components/ui/slider";
+import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 
 // Create a separate interface for frames with blobs that extends ExtractedFrame
 interface CapturedFrameWithBlob {
@@ -52,6 +54,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [loadAttempts, setLoadAttempts] = useState(0);
   const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   
   // Reset state when opening modal
   useEffect(() => {
@@ -69,6 +72,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       setCurrentTime(0);
       setSeekingValue(0);
       setCapturedTimemarks([]);
+      setIsCapturingFrame(false);
       
       // Try to load the video
       loadVideo();
@@ -308,167 +312,133 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     loadVideo();
   };
   
-  // Capture current frame with improved method to prevent white/black frames
-  const captureFrame = () => {
+  // Capture current frame using the improved extraction service
+  const captureFrame = async () => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || !projectId) return;
+    if (!video || !videoUrl || isCapturingFrame) return;
     
-    // Pause the video to ensure stable frame
-    video.pause();
-    setIsPlaying(false);
-    
-    // Store original time before any seeking
-    const originalTime = video.currentTime;
-    
-    // Use requestAnimationFrame for more reliable timing
-    requestAnimationFrame(() => {
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+    try {
+      setIsCapturingFrame(true);
       
-      const ctx = canvas.getContext('2d', { alpha: false });
-      if (!ctx) {
-        toast.error("Failed to capture frame");
-        return;
-      }
+      // Pause the video
+      video.pause();
+      setIsPlaying(false);
       
-      // Draw white background to avoid transparency issues
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Store current time
+      const currentTimePosition = video.currentTime;
+      const timestamp = formatTime(currentTimePosition);
       
-      // First try with a small offset to avoid exact boundary issues
-      // Scrub forward by 0.1 seconds to ensure frame loading
-      video.currentTime = originalTime + 0.1;
+      toast.loading(`Capturing frame at ${timestamp}...`, {
+        id: 'capture-frame'
+      });
       
-      // After scrubbing forward, go back to original position and capture
-      setTimeout(() => {
-        video.currentTime = originalTime;
-        
-        // Give the video 1200ms to ensure the frame is fully loaded
-        // Using longer delay as in videoFrameExtractor.ts for better reliability
-        setTimeout(() => {
-          // Play the video for a fraction of a second to ensure the frame is loaded
-          video.play().then(() => {
-            setTimeout(() => {
-              video.pause();
-              
-              // Draw the current frame on the canvas
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              
-              // Check if canvas has content (not a blank frame)
-              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-              let hasContent = false;
-              let totalBrightness = 0;
-              
-              // More aggressive check for content by sampling pixels throughout the image
-              const pixelCount = imageData.data.length / 4;
-              const sampleSize = Math.min(1000, pixelCount);
-              const step = Math.max(1, Math.floor(pixelCount / sampleSize));
-              
-              for (let i = 0; i < imageData.data.length; i += 4 * step) {
-                const r = imageData.data[i];
-                const g = imageData.data[i + 1];
-                const b = imageData.data[i + 2];
-                const brightness = (r + g + b) / 3;
-                totalBrightness += brightness;
-                
-                // If any pixel has meaningful content, we're good
-                if ((r < 240 || g < 240 || b < 240) && (r > 15 || g > 15 || b > 15)) {
-                  hasContent = true;
-                }
-              }
-              
-              const avgBrightness = totalBrightness / (sampleSize * 255); // Normalize to 0-1
-              
-              // If the frame is too white (>95% brightness) or too dark (<5% brightness)
-              if (avgBrightness > 0.95 || avgBrightness < 0.05 || !hasContent) {
-                console.warn(`Frame at ${formatTime(originalTime)} appears to be blank (brightness: ${avgBrightness.toFixed(2)}). Trying to fix...`);
-                
-                // Try forward/back seek approach with a larger offset
-                video.currentTime = originalTime + 0.5; // Skip forward
-                
-                // After seeking forward, seek back and try to capture again
-                setTimeout(() => {
-                  video.currentTime = originalTime; // Back to original time
-                  
-                  setTimeout(() => {
-                    // Draw a colorful background so we can detect if new content is drawn
-                    ctx.fillStyle = "rgb(200, 200, 240)";
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Try to draw the video frame again
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    // Check again if we have content now
-                    const newData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    let hasContentNow = false;
-                    let newBrightness = 0;
-                    
-                    // Sample pixels again
-                    for (let i = 0; i < newData.data.length; i += 4 * step) {
-                      const r = newData.data[i];
-                      const g = newData.data[i+1];
-                      const b = newData.data[i+2];
-                      newBrightness += (r + g + b) / 3;
-                      
-                      // Check if pixel differs from our background color
-                      if (Math.abs(r - 200) > 20 || Math.abs(g - 200) > 20 || Math.abs(b - 240) > 20) {
-                        hasContentNow = true;
-                      }
-                    }
-                    
-                    if (hasContentNow) {
-                      finalizeFrame(originalTime, true);
-                    } else {
-                      console.warn(`Frame at ${formatTime(originalTime)} still blank after retry. Trying one last approach.`);
-                      
-                      // One final attempt with different settings
-                      video.play().then(() => {
-                        setTimeout(() => {
-                          video.pause();
-                          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                          finalizeFrame(originalTime, true); // Just use whatever we have now
-                        }, 200);
-                      }).catch(() => {
-                        toast.error("Failed to capture frame");
-                      });
-                    }
-                  }, 300);
-                }, 300);
-              } else {
-                // Frame looks good, finalize it
-                finalizeFrame(originalTime, true);
-              }
-            }, 100); // Short play duration
-          }).catch(() => {
-            console.warn("Could not play video briefly, capturing static frame");
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            finalizeFrame(originalTime, true);
-          });
-        }, 1200); // Increased delay to 1200ms to ensure frame is fully loaded
-      }, 300); // Wait after seeking back to original position
-    });
-    
-    // Helper function to finalize frame capture
-    function finalizeFrame(timeInSeconds: number, success: boolean) {
-      if (!success || !canvas) {
-        toast.error("Failed to capture frame");
-        return;
-      }
-      
-      // Convert canvas to blob with high quality
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          toast.error("Failed to create frame image");
-          return;
+      // Use our advanced frame extraction to get a good quality frame
+      const extractedFrames = await extractFramesFromVideoUrl(
+        videoUrl, 
+        [timestamp],
+        undefined,
+        duration,
+        {
+          captureAttempts: 4,
+          captureOffsets: [-0.1, 0, 0.1, 0.2, -0.2, 0.5, -0.5],
+          minContentThreshold: 0.03
         }
+      );
+      
+      if (extractedFrames && extractedFrames.length > 0) {
+        const { frame, timestamp: extractedTimestamp } = extractedFrames[0];
         
+        // Create a URL for the blob
+        const imageUrl = URL.createObjectURL(frame);
+        
+        // Create a new extracted frame
+        const frameId = `frame-${Date.now()}-${extractedTimestamp}`;
+        
+        const newFrame: ExtractedFrame = {
+          id: frameId,
+          imageUrl,
+          timestamp: extractedTimestamp,
+          isPlaceholder: false
+        };
+        
+        // Create a captured frame with blob
+        const capturedFrame: CapturedFrameWithBlob = {
+          ...newFrame,
+          blob: frame
+        };
+        
+        // Add to captured frames
+        setCapturedFrames(prev => [...prev, capturedFrame]);
+        
+        // Add to selected frames
+        setSelectedFrames(prev => {
+          const newFrames = [...prev, newFrame];
+          // Sort frames by timestamp
+          return newFrames.sort((a, b) => timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp));
+        });
+        
+        // Add timemark to the seek bar
+        setCapturedTimemarks(prev => [...prev, currentTimePosition]);
+        
+        toast.success(`Frame captured at ${timestamp}`, {
+          id: 'capture-frame'
+        });
+      } else {
+        // Create placeholder if extraction failed
+        createPlaceholderFrame(currentTimePosition);
+        
+        toast.error(`Could not capture frame at ${timestamp}`, {
+          id: 'capture-frame'
+        });
+      }
+    } catch (error) {
+      console.error("Error capturing frame:", error);
+      toast.error(`Failed to capture frame: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        id: 'capture-frame'
+      });
+    } finally {
+      setIsCapturingFrame(false);
+    }
+  };
+  
+  // Create a placeholder frame when capture fails
+  const createPlaceholderFrame = (timeInSeconds: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      toast.error("Failed to create placeholder frame");
+      return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      toast.error("Failed to create placeholder frame");
+      return;
+    }
+    
+    // Set canvas size if not already set
+    canvas.width = 640;
+    canvas.height = 360;
+    
+    // Format timestamp
+    const timestamp = formatTime(timeInSeconds);
+    
+    // Draw placeholder
+    ctx.fillStyle = "#2563eb"; // Blue background
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add text explanation
+    ctx.fillStyle = "white";
+    ctx.font = "bold 24px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(`Frame at ${timestamp}`, canvas.width / 2, canvas.height / 2 - 15);
+    ctx.font = "18px Arial";
+    ctx.fillText("Could not extract frame from video", canvas.width / 2, canvas.height / 2 + 20);
+    
+    // Convert to blob
+    canvas.toBlob((blob) => {
+      if (blob) {
         // Generate unique ID for the frame
         const frameId = `frame-${Date.now()}`;
-        
-        // Format timestamp
-        const timestamp = formatTime(timeInSeconds);
         
         // Create a URL for the blob
         const imageUrl = URL.createObjectURL(blob);
@@ -477,7 +447,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         const newFrame: ExtractedFrame = {
           id: frameId,
           imageUrl,
-          timestamp
+          timestamp,
+          isPlaceholder: true
         };
         
         // Create a captured frame with blob
@@ -489,7 +460,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         // Add to captured frames
         setCapturedFrames(prev => [...prev, capturedFrame]);
         
-        // Auto-select the newly captured frame
+        // Add to selected frames
         setSelectedFrames(prev => {
           const newFrames = [...prev, newFrame];
           // Sort frames by timestamp
@@ -499,9 +470,11 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         // Add timemark to the seek bar
         setCapturedTimemarks(prev => [...prev, timeInSeconds]);
         
-        toast.success(`Frame captured at ${timestamp}`);
-      }, 'image/jpeg', 0.98); // Use higher JPEG quality (0.98 instead of 0.95)
-    }
+        toast.info(`Placeholder frame created at ${timestamp}`);
+      } else {
+        toast.error("Failed to create placeholder frame");
+      }
+    }, "image/jpeg", 0.95);
   };
   
   // Remove a frame from selection
@@ -532,32 +505,30 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   // Custom render for slider with captured frame markers
   const renderSliderWithMarkers = () => {
     return (
-      <div className="relative px-1">
-        {/* Frame markers */}
-        {capturedTimemarks.map((time, index) => {
-          const position = (time / (duration || 100)) * 100;
-          return (
-            <div
-              key={`marker-${index}`}
-              className="absolute top-0 w-1 h-4 bg-green-500 rounded-full z-10 transform -translate-x-1/2"
-              style={{ left: `${position}%` }}
-              title={`Frame at ${formatTime(time)}`}
-            />
-          );
-        })}
-        
-        {/* Slider component */}
-        <Slider
-          value={[seekingValue]}
-          min={0}
+      <div className="relative w-full">
+        <Slider 
+          value={[seekingValue]} 
+          min={0} 
           max={duration || 100}
           step={0.01}
           onValueChange={handleSeekChange}
           onValueCommit={handleSeekEnd}
           onPointerDown={handleSeekStart}
-          disabled={!isVideoLoaded || duration === 0}
-          className="cursor-pointer"
+          className="z-10"
         />
+        
+        {/* Timemark indicators */}
+        {capturedTimemarks.map((time, index) => (
+          <div 
+            key={index}
+            className="absolute top-1/2 w-1 h-4 bg-green-500 rounded-full transform -translate-y-1/2 z-0"
+            style={{ 
+              left: `${(time / (duration || 100)) * 100}%`,
+              marginLeft: -2 // Center the marker
+            }}
+            title={`Captured frame at ${formatTime(time)}`}
+          />
+        ))}
       </div>
     );
   };
@@ -600,6 +571,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               onLoadedData={handleVideoLoaded}
               onLoadedMetadata={handleVideoLoaded}
               onError={handleVideoError}
+              playsInline
             >
               Your browser does not support the video tag.
             </video>
@@ -652,10 +624,14 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                   size="sm"
                   onClick={captureFrame}
                   className="flex items-center space-x-1"
-                  disabled={!isVideoLoaded}
+                  disabled={!isVideoLoaded || isCapturingFrame}
                 >
-                  <Camera className="h-4 w-4 mr-1" />
-                  Capture Frame
+                  {isCapturingFrame ? (
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Camera className="h-4 w-4 mr-1" />
+                  )}
+                  {isCapturingFrame ? 'Capturing...' : 'Capture Frame'}
                 </Button>
               </div>
               
@@ -696,6 +672,11 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
+                        {frame.isPlaceholder && (
+                          <Badge className="absolute bottom-1 left-1 bg-amber-500" variant="secondary">
+                            Placeholder
+                          </Badge>
+                        )}
                       </div>
                     ))}
                   </div>
