@@ -1,4 +1,3 @@
-
 import { timestampToSeconds } from "./formatUtils";
 
 /**
@@ -343,34 +342,35 @@ export async function extractFramesFromVideoUrl(
       
       // Add seeked event listener
       video.addEventListener('seeked', handleSeeked);
-    }
-    
-    function finalizeFrame(currentTimestamp: string, success: boolean) {
-      if (!success || !ctx) {
-        callback(false);
-        return;
-      }
       
-      // Convert canvas to blob with high quality
-      canvas.toBlob((blob) => {
-        if (blob) {
-          frames.push({
-            timestamp: currentTimestamp,
-            frame: blob
-          });
-          
-          // Update progress
-          framesProcessed++;
-          if (progressCallback) {
-            progressCallback(framesProcessed, timestamps.length);
-          }
-          
-          callback(true);
-        } else {
-          console.error(`Failed to create blob for timestamp ${currentTimestamp}`);
+      // Define finalizeFrame inside extractFrameAtTime so it has access to callback
+      function finalizeFrame(currentTimestamp: string, success: boolean) {
+        if (!success || !ctx) {
           callback(false);
+          return;
         }
-      }, "image/jpeg", 0.98); // Use higher JPEG quality (0.98 instead of 0.95)
+        
+        // Convert canvas to blob with high quality
+        canvas.toBlob((blob) => {
+          if (blob) {
+            frames.push({
+              timestamp: currentTimestamp,
+              frame: blob
+            });
+            
+            // Update progress
+            framesProcessed++;
+            if (progressCallback) {
+              progressCallback(framesProcessed, timestamps.length);
+            }
+            
+            callback(true);
+          } else {
+            console.error(`Failed to create blob for timestamp ${currentTimestamp}`);
+            callback(false);
+          }
+        }, "image/jpeg", 0.98); // Use higher JPEG quality (0.98 instead of 0.95)
+      }
     }
     
     // Create a placeholder frame with text when all extraction attempts fail
