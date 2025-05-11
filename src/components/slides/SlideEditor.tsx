@@ -930,7 +930,7 @@ export const SlideEditor = () => {
         </Button>
       </div>
       
-      {/* Film strip at the bottom - card-style with centered titles - updated to take full height */}
+      {/* Film strip at the bottom - simplified cards with only centered titles */}
       <div className="h-40 border-t w-full flex-shrink-0">
         <div className="max-w-screen-xl mx-auto px-4 h-full">
           <ScrollArea orientation="horizontal" className="h-full w-full">
@@ -939,26 +939,13 @@ export const SlideEditor = () => {
                 <div 
                   key={slide.id}
                   onClick={() => goToSlide(index)}
-                  className={`h-full w-48 flex-shrink-0 cursor-pointer ${
+                  className={`h-full w-48 flex-shrink-0 cursor-pointer flex items-center justify-center ${
                     currentSlideIndex === index ? "border-2 border-primary" : "border border-border hover:border-muted-foreground/30"
-                  } rounded-md overflow-hidden shadow-sm bg-card`}
+                  } rounded-md overflow-hidden shadow-sm bg-card p-2`}
                 >
-                  {/* Thumbnail preview - use first image if available */}
-                  <div className="w-full h-3/4 overflow-hidden bg-muted/10 flex items-center justify-center">
-                    {(slide.imageUrl || (slide.imageUrls && slide.imageUrls.length > 0)) ? (
-                      <img 
-                        src={slide.imageUrl || slide.imageUrls![0]} 
-                        alt={`Slide ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : null}
-                  </div>
-                  
-                  {/* Slide title/number */}
-                  <div className={`px-2 py-1 text-xs truncate flex-grow flex items-center justify-center ${
-                    currentSlideIndex === index ? "bg-primary text-primary-foreground" : "bg-card"
-                  }`}>
-                    <span className="font-medium text-center">
+                  {/* Slide title centered with text wrap */}
+                  <div className="text-xs text-center overflow-hidden">
+                    <span className="font-medium">
                       {index + 1}. {slide.title}
                     </span>
                   </div>
