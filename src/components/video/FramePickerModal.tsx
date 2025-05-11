@@ -52,22 +52,40 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [isLoadingVideo, setIsLoadingVideo] = useState(true);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [loadAttempts, setLoadAttempts] = useState(0);
+  const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
   
   // Reset state when opening modal
   useEffect(() => {
     if (open) {
-      setSelectedFrames(existingFrames || []);
+      // Sort existing frames by timestamp if they exist
+      const sortedFrames = [...(existingFrames || [])].sort((a, b) => {
+        return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
+      });
+      
+      setSelectedFrames(sortedFrames);
       setVideoError(null);
       setIsVideoLoaded(false);
       setIsLoadingVideo(true);
       setLoadAttempts(0);
       setCurrentTime(0);
       setSeekingValue(0);
+      setCapturedTimemarks([]);
       
       // Try to load the video
       loadVideo();
     }
   }, [open, existingFrames]);
+  
+  // Utility function to convert timestamp string to seconds
+  const timeToSeconds = (timestamp: string): number => {
+    const parts = timestamp.split(':').map(Number);
+    if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    } else if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    return 0;
+  };
   
   // Function to load the video
   const loadVideo = async () => {
@@ -291,7 +309,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     loadVideo();
   };
   
-  // Capture current frame with improved method to prevent black frames
+  // Capture current frame with improved method to prevent white/black frames
   const captureFrame = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -314,31 +332,38 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         return;
       }
       
-      // Fill with white background first to ensure no transparency issues
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw the video frame
+      // Give the video a moment to ensure the frame is fully rendered
+      // Draw the video frame with proper context
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Check if canvas has content (not a black frame)
+      // Check if canvas has content (not a blank frame)
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       let hasContent = false;
+      let totalBrightness = 0;
       
-      for (let i = 0; i < imageData.data.length; i += 4) {
+      // Analyze a sample of pixels to detect content
+      const pixelCount = imageData.data.length / 4;
+      const sampleSize = Math.min(1000, pixelCount); // Analyze up to 1000 pixels
+      const step = Math.max(1, Math.floor(pixelCount / sampleSize));
+      
+      for (let i = 0; i < imageData.data.length; i += 4 * step) {
         const r = imageData.data[i];
         const g = imageData.data[i + 1];
         const b = imageData.data[i + 2];
+        const brightness = (r + g + b) / 3;
+        totalBrightness += brightness;
         
-        // If any pixel is not black, we have content
-        if (r > 10 || g > 10 || b > 10) {
+        // If any pixel has meaningful content, we're good
+        if (Math.abs(r - 255) > 10 || Math.abs(g - 255) > 10 || Math.abs(b - 255) > 10) {
           hasContent = true;
-          break;
         }
       }
       
-      if (!hasContent) {
-        toast.error("Frame appears to be black. Please try at a different position in the video.");
+      const avgBrightness = totalBrightness / (sampleSize * 255); // Normalize to 0-1
+      
+      // If the frame is too white (>95% brightness) or no content detected
+      if (avgBrightness > 0.95 || !hasContent) {
+        toast.error("Frame appears to be blank. Please try at a different position in the video.");
         return;
       }
       
@@ -375,7 +400,14 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         setCapturedFrames(prev => [...prev, capturedFrame]);
         
         // Auto-select the newly captured frame
-        setSelectedFrames(prev => [...prev, newFrame]);
+        setSelectedFrames(prev => {
+          const newFrames = [...prev, newFrame];
+          // Sort frames by timestamp
+          return newFrames.sort((a, b) => timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp));
+        });
+        
+        // Add timemark to the seek bar
+        setCapturedTimemarks(prev => [...prev, video.currentTime]);
         
         toast.success(`Frame captured at ${timestamp}`);
       }, 'image/jpeg', 0.95);
@@ -384,13 +416,60 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   
   // Remove a frame from selection
   const removeFrame = (frameId: string) => {
+    // Find the frame to remove
+    const frameToRemove = selectedFrames.find(frame => frame.id === frameId);
+    if (frameToRemove) {
+      // Remove from captured timemarks if it exists there
+      if (frameToRemove.timestamp) {
+        const timeInSeconds = timeToSeconds(frameToRemove.timestamp);
+        setCapturedTimemarks(prev => prev.filter(time => Math.abs(time - timeInSeconds) > 0.5));
+      }
+    }
+    
     setSelectedFrames(prev => prev.filter(frame => frame.id !== frameId));
   };
   
   // Apply selected frames to slide
   const handleApplyFrames = () => {
-    onFramesSelected(selectedFrames);
+    // Sort frames by timestamp before applying
+    const sortedFrames = [...selectedFrames].sort((a, b) => {
+      return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
+    });
+    onFramesSelected(sortedFrames);
     onClose();
+  };
+  
+  // Custom render for slider with captured frame markers
+  const renderSliderWithMarkers = () => {
+    return (
+      <div className="relative px-1">
+        {/* Frame markers */}
+        {capturedTimemarks.map((time, index) => {
+          const position = (time / (duration || 100)) * 100;
+          return (
+            <div
+              key={`marker-${index}`}
+              className="absolute top-0 w-1 h-4 bg-green-500 rounded-full z-10 transform -translate-x-1/2"
+              style={{ left: `${position}%` }}
+              title={`Frame at ${formatTime(time)}`}
+            />
+          );
+        })}
+        
+        {/* Slider component */}
+        <Slider
+          value={[seekingValue]}
+          min={0}
+          max={duration || 100}
+          step={0.01}
+          onValueChange={handleSeekChange}
+          onValueCommit={handleSeekEnd}
+          onPointerDown={handleSeekStart}
+          disabled={!isVideoLoaded || duration === 0}
+          className="cursor-pointer"
+        />
+      </div>
+    );
   };
   
   return (
@@ -490,19 +569,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                 </Button>
               </div>
               
-              {/* Video seek slider */}
+              {/* Video seek slider with markers */}
               <div className="px-1">
-                <Slider
-                  value={[seekingValue]}
-                  min={0}
-                  max={duration || 100}
-                  step={0.01}
-                  onValueChange={handleSeekChange}
-                  onValueCommit={handleSeekEnd}
-                  onPointerDown={handleSeekStart}
-                  disabled={!isVideoLoaded || duration === 0}
-                  className="cursor-pointer"
-                />
+                {renderSliderWithMarkers()}
               </div>
             </div>
           </div>
