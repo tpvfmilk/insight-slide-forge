@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -11,6 +10,7 @@ import { generateSlidesForProject } from "@/services/slideGenerationService";
 import { transcribeVideo, updateProject } from "@/services/uploadService";
 import { updateSlidesWithExtractedFrames } from "@/services/clientFrameExtractionService";
 import { fetchProjectVideos, ProjectVideo } from "@/services/projectVideoService";
+import { supabase } from "@/integrations/supabase/client";
 
 export const useProjectState = (projectId: string | undefined) => {
   const navigate = useNavigate();
