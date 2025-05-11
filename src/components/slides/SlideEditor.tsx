@@ -579,21 +579,35 @@ export const SlideEditor = () => {
     toast.success("Image removed from slide");
   };
   
-  const deleteCurrentSlide = () => {
+  const deleteSlideFromFilmstrip = (event: React.MouseEvent, slideIndex: number) => {
+    // Stop the click event from propagating to the slide card
+    event.stopPropagation();
+    
+    // Don't delete if it's the only slide
     if (slides.length <= 1) {
       toast.error("Cannot delete the only slide");
       return;
     }
     
-    const deletedSlide = slides[currentSlideIndex];
-    const updatedSlides = slides.filter((_, index) => index !== currentSlideIndex);
+    // Store the deleted slide for potential undo
+    const deletedSlide = slides[slideIndex];
+    
+    // Remove the slide from the array
+    const updatedSlides = slides.filter((_, index) => index !== slideIndex);
     setSlides(updatedSlides);
     
-    // Set current slide index to previous slide, or first slide if we deleted the first one
-    const newIndex = currentSlideIndex > 0 ? currentSlideIndex - 1 : 0;
-    setCurrentSlideIndex(newIndex);
+    // Set current slide index to previous slide if we deleted the current one,
+    // or adjust it if we deleted a slide before the current one
+    if (slideIndex === currentSlideIndex) {
+      // We deleted the current slide, go to previous one
+      const newIndex = currentSlideIndex > 0 ? currentSlideIndex - 1 : 0;
+      setCurrentSlideIndex(newIndex);
+    } else if (slideIndex < currentSlideIndex) {
+      // We deleted a slide before the current one, adjust the index
+      setCurrentSlideIndex(currentSlideIndex - 1);
+    }
     
-    // Save the deleted slide in case we need to undo
+    // Save the deleted slide for undo
     setLastDeletedSlide(deletedSlide);
     setShowUndoButton(true);
     
@@ -939,10 +953,22 @@ export const SlideEditor = () => {
                 <div 
                   key={slide.id}
                   onClick={() => goToSlide(index)}
-                  className={`h-full w-48 flex-shrink-0 cursor-pointer flex items-center justify-center ${
+                  className={`h-full w-48 flex-shrink-0 cursor-pointer flex flex-col items-center justify-center relative ${
                     currentSlideIndex === index ? "border-2 border-primary" : "border border-border hover:border-muted-foreground/30"
                   } rounded-md overflow-hidden shadow-sm bg-card p-2`}
                 >
+                  {/* Delete button in the top-right corner */}
+                  <Button
+                    variant="ghost" 
+                    size="icon"
+                    className="absolute top-1 right-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground transition-opacity"
+                    onClick={(e) => deleteSlideFromFilmstrip(e, index)}
+                    disabled={slides.length <= 1}
+                  >
+                    <X className="h-3 w-3" />
+                    <span className="sr-only">Delete slide</span>
+                  </Button>
+
                   {/* Slide title centered with text wrap */}
                   <div className="text-xs text-center overflow-hidden">
                     <span className="font-medium">
