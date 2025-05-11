@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
@@ -41,7 +42,7 @@ export const createProjectFromVideo = async (
     
     // Create a new project in the database
     const { data: project, error: projectError } = await supabase
-      .from<Project>('projects')
+      .from('projects')
       .insert({
         user_id: session.session.user.id,
         title: title,
@@ -61,7 +62,7 @@ export const createProjectFromVideo = async (
     }
     
     toast.success("Project created successfully!");
-    return project;
+    return project as Project;
   } catch (error) {
     console.error("Error creating project:", error);
     toast.error("Failed to create project");
@@ -84,7 +85,7 @@ export const createProjectFromTranscript = async (
     
     // Create a new project in the database
     const { data: project, error: projectError } = await supabase
-      .from<Project>('projects')
+      .from('projects')
       .insert({
         user_id: session.session.user.id,
         title: title,
@@ -102,7 +103,7 @@ export const createProjectFromTranscript = async (
     }
     
     toast.success("Project created successfully!");
-    return project;
+    return project as Project;
   } catch (error) {
     console.error("Error creating project:", error);
     toast.error("Failed to create project");
@@ -160,7 +161,7 @@ export const updateProject = async (projectId: string, updates: any): Promise<bo
     
     // Update the project in the database
     const { error: projectError } = await supabase
-      .from<Project>('projects')
+      .from('projects')
       .update(updates)
       .eq('id', projectId);
     

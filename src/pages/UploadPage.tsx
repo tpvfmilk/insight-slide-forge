@@ -1,7 +1,7 @@
 
 import { InsightLayout } from "@/components/layout/InsightLayout";
-import { VideoUpload } from "@/components/upload/VideoUpload";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { UploadForm } from "@/components/upload/UploadForm";
 
 const UploadPage = () => {
   return (
@@ -14,17 +14,7 @@ const UploadPage = () => {
           </p>
         </div>
         
-        <Card className="max-w-3xl mx-auto">
-          <CardHeader>
-            <CardTitle>Upload Video Content</CardTitle>
-            <CardDescription>
-              Upload a video to create professional study slides for licensure exam preparation
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <VideoUpload />
-          </CardContent>
-        </Card>
+        <UploadForm />
       </div>
     </InsightLayout>
   );

@@ -5,11 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowRight, Youtube, RefreshCw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { createProjectFromUrl } from "@/services/uploadService";
+import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
-import { SliderControl } from "./SliderControl";
 
 export const YoutubeUpload = () => {
   const [videoUrl, setVideoUrl] = useState<string>("");
@@ -17,7 +16,6 @@ export const YoutubeUpload = () => {
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   const navigate = useNavigate();
 
   const handleYouTubeSubmit = async (e: React.FormEvent) => {
@@ -60,25 +58,16 @@ export const YoutubeUpload = () => {
     }, 300);
     
     try {
-      // Create project from URL with slides per minute
-      const project = await createProjectFromUrl(
-        videoUrl, 
-        title, 
-        contextPrompt,
-        slidesPerMinute
-      );
+      // For now, just show a toast since we removed the createProjectFromUrl function
+      toast.info("YouTube/Vimeo integration is currently under maintenance.");
       
       clearInterval(interval);
       setUploadProgress(100);
       
       setTimeout(() => {
         setIsUploading(false);
-        
-        if (project) {
-          toast.success("URL processed successfully!");
-          navigate(`/projects/${project.id}`);
-        }
-      }, 500);
+        toast.info("Please use video upload for now.");
+      }, 2000);
     } catch (error) {
       clearInterval(interval);
       setIsUploading(false);
@@ -132,14 +121,6 @@ export const YoutubeUpload = () => {
       </div>
 
       <div className="space-y-4 mt-4">
-        <div>
-          <Label className="mb-2 block">Slides per minute</Label>
-          <SliderControl 
-            value={slidesPerMinute}
-            onChange={setSlidesPerMinute}
-          />
-        </div>
-        
         <div>
           <Label className="mb-2 block">Add series or content context (optional)</Label>
           <ContextPromptInput 

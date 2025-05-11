@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { FileVideo, Upload, RefreshCw, FileText } from "lucide-react";
+import { FileVideo, Upload, RefreshCw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
@@ -17,7 +17,6 @@ export const CombinedUpload = () => {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>("");
   const [showDeveloperOptions, setShowDeveloperOptions] = useState<boolean>(false);
-  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(0); // Only used in dev mode
   const videoFileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -70,18 +69,12 @@ export const CombinedUpload = () => {
     }, 300);
     
     try {
-      // Only pass slidesPerMinute if we're in developer mode and it's set
-      const slidesPerMinuteValue = showDeveloperOptions && slidesPerMinute > 0 
-        ? slidesPerMinute
-        : undefined;
-
       // Create project from video, passing the transcript text
       const project = await createProjectFromVideo(
         videoFile, 
-        undefined, 
+        videoFileName || "Video Project",
         contextPrompt,
-        transcriptText,
-        slidesPerMinuteValue // Will be undefined unless in dev mode
+        transcriptText
       );
       
       clearInterval(interval);
@@ -154,26 +147,15 @@ export const CombinedUpload = () => {
         <div className="p-4 border border-amber-300 rounded-lg bg-amber-50 dark:bg-amber-950/20">
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-1">
             <span className="bg-amber-200 dark:bg-amber-800 px-1 text-xs rounded">DEV</span>
-            Override Slides Per Minute
+            Developer Options
           </h3>
-          <div className="flex gap-2 items-center">
-            <input
-              type="number"
-              min="1"
-              max="20"
-              value={slidesPerMinute}
-              onChange={(e) => setSlidesPerMinute(parseInt(e.target.value) || 0)}
-              className="w-16 px-2 py-1 border rounded"
-            />
-            <span className="text-xs text-muted-foreground">(1-20, 0 for auto)</span>
-          </div>
         </div>
       )}
 
       <div className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="transcript-text" className="text-sm font-medium flex items-center gap-2">
-            <FileText className="h-4 w-4" />
+            <FileVideo className="h-4 w-4" />
             Additional Transcript (optional)
           </label>
           <Textarea 

@@ -3,11 +3,10 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowRight, Image, Loader2 } from "lucide-react";
-import { createProjectFromTranscript, uploadFile } from "@/services/uploadService";
+import { createProjectFromTranscript } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
-import { SliderControl } from "./SliderControl";
 
 export const TranscriptUpload = () => {
   const [transcriptText, setTranscriptText] = useState<string>("");
@@ -15,7 +14,6 @@ export const TranscriptUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -29,13 +27,11 @@ export const TranscriptUpload = () => {
     
     try {
       setIsUploading(true);
-      // Create project from transcript text with slides per minute
+      // Create project from transcript text
       const project = await createProjectFromTranscript(
-        transcriptText, 
-        undefined, // title parameter
-        contextPrompt, // contextPrompt parameter
-        imageFile, // optional image file
-        slidesPerMinute // slides per minute
+        "Transcript Project", // Default title
+        transcriptText,
+        contextPrompt
       );
       
       if (project) {
@@ -112,11 +108,6 @@ export const TranscriptUpload = () => {
       </div>
       
       <div className="space-y-4 mt-4">
-        <SliderControl 
-          value={slidesPerMinute}
-          onChange={setSlidesPerMinute}
-        />
-        
         <ContextPromptInput 
           value={contextPrompt}
           onChange={setContextPrompt}
