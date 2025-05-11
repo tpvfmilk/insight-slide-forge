@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -319,58 +318,149 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     video.pause();
     setIsPlaying(false);
     
-    // Force the browser to render the current frame
-    setTimeout(() => {
+    // Store original time before any seeking
+    const originalTime = video.currentTime;
+    
+    // Use requestAnimationFrame for more reliable timing
+    requestAnimationFrame(() => {
       // Set canvas dimensions to match video
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       
-      // Draw the current frame on the canvas
       const ctx = canvas.getContext('2d', { alpha: false });
       if (!ctx) {
         toast.error("Failed to capture frame");
         return;
       }
       
-      // Give the video a moment to ensure the frame is fully rendered
-      // Draw the video frame with proper context
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Draw white background to avoid transparency issues
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Check if canvas has content (not a blank frame)
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      let hasContent = false;
-      let totalBrightness = 0;
+      // First try with a small offset to avoid exact boundary issues
+      // Scrub forward by 0.1 seconds to ensure frame loading
+      video.currentTime = originalTime + 0.1;
       
-      // Analyze a sample of pixels to detect content
-      const pixelCount = imageData.data.length / 4;
-      const sampleSize = Math.min(1000, pixelCount); // Analyze up to 1000 pixels
-      const step = Math.max(1, Math.floor(pixelCount / sampleSize));
-      
-      for (let i = 0; i < imageData.data.length; i += 4 * step) {
-        const r = imageData.data[i];
-        const g = imageData.data[i + 1];
-        const b = imageData.data[i + 2];
-        const brightness = (r + g + b) / 3;
-        totalBrightness += brightness;
+      // After scrubbing forward, go back to original position and capture
+      setTimeout(() => {
+        video.currentTime = originalTime;
         
-        // If any pixel has meaningful content, we're good
-        if (Math.abs(r - 255) > 10 || Math.abs(g - 255) > 10 || Math.abs(b - 255) > 10) {
-          hasContent = true;
-        }
-      }
-      
-      const avgBrightness = totalBrightness / (sampleSize * 255); // Normalize to 0-1
-      
-      // If the frame is too white (>95% brightness) or no content detected
-      if (avgBrightness > 0.95 || !hasContent) {
-        toast.error("Frame appears to be blank. Please try at a different position in the video.");
+        // Give the video 1200ms to ensure the frame is fully loaded
+        // Using longer delay as in videoFrameExtractor.ts for better reliability
+        setTimeout(() => {
+          // Play the video for a fraction of a second to ensure the frame is loaded
+          video.play().then(() => {
+            setTimeout(() => {
+              video.pause();
+              
+              // Draw the current frame on the canvas
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              
+              // Check if canvas has content (not a blank frame)
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              let hasContent = false;
+              let totalBrightness = 0;
+              
+              // More aggressive check for content by sampling pixels throughout the image
+              const pixelCount = imageData.data.length / 4;
+              const sampleSize = Math.min(1000, pixelCount);
+              const step = Math.max(1, Math.floor(pixelCount / sampleSize));
+              
+              for (let i = 0; i < imageData.data.length; i += 4 * step) {
+                const r = imageData.data[i];
+                const g = imageData.data[i + 1];
+                const b = imageData.data[i + 2];
+                const brightness = (r + g + b) / 3;
+                totalBrightness += brightness;
+                
+                // If any pixel has meaningful content, we're good
+                if ((r < 240 || g < 240 || b < 240) && (r > 15 || g > 15 || b > 15)) {
+                  hasContent = true;
+                }
+              }
+              
+              const avgBrightness = totalBrightness / (sampleSize * 255); // Normalize to 0-1
+              
+              // If the frame is too white (>95% brightness) or too dark (<5% brightness)
+              if (avgBrightness > 0.95 || avgBrightness < 0.05 || !hasContent) {
+                console.warn(`Frame at ${formatTime(originalTime)} appears to be blank (brightness: ${avgBrightness.toFixed(2)}). Trying to fix...`);
+                
+                // Try forward/back seek approach with a larger offset
+                video.currentTime = originalTime + 0.5; // Skip forward
+                
+                // After seeking forward, seek back and try to capture again
+                setTimeout(() => {
+                  video.currentTime = originalTime; // Back to original time
+                  
+                  setTimeout(() => {
+                    // Draw a colorful background so we can detect if new content is drawn
+                    ctx.fillStyle = "rgb(200, 200, 240)";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Try to draw the video frame again
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Check again if we have content now
+                    const newData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    let hasContentNow = false;
+                    let newBrightness = 0;
+                    
+                    // Sample pixels again
+                    for (let i = 0; i < newData.data.length; i += 4 * step) {
+                      const r = newData.data[i];
+                      const g = newData.data[i+1];
+                      const b = newData.data[i+2];
+                      newBrightness += (r + g + b) / 3;
+                      
+                      // Check if pixel differs from our background color
+                      if (Math.abs(r - 200) > 20 || Math.abs(g - 200) > 20 || Math.abs(b - 240) > 20) {
+                        hasContentNow = true;
+                      }
+                    }
+                    
+                    if (hasContentNow) {
+                      finalizeFrame(originalTime, true);
+                    } else {
+                      console.warn(`Frame at ${formatTime(originalTime)} still blank after retry. Trying one last approach.`);
+                      
+                      // One final attempt with different settings
+                      video.play().then(() => {
+                        setTimeout(() => {
+                          video.pause();
+                          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                          finalizeFrame(originalTime, true); // Just use whatever we have now
+                        }, 200);
+                      }).catch(() => {
+                        toast.error("Failed to capture frame");
+                      });
+                    }
+                  }, 300);
+                }, 300);
+              } else {
+                // Frame looks good, finalize it
+                finalizeFrame(originalTime, true);
+              }
+            }, 100); // Short play duration
+          }).catch(() => {
+            console.warn("Could not play video briefly, capturing static frame");
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            finalizeFrame(originalTime, true);
+          });
+        }, 1200); // Increased delay to 1200ms to ensure frame is fully loaded
+      }, 300); // Wait after seeking back to original position
+    });
+    
+    // Helper function to finalize frame capture
+    function finalizeFrame(timeInSeconds: number, success: boolean) {
+      if (!success || !canvas) {
+        toast.error("Failed to capture frame");
         return;
       }
       
-      // Convert canvas to blob
+      // Convert canvas to blob with high quality
       canvas.toBlob((blob) => {
         if (!blob) {
-          toast.error("Failed to capture frame");
+          toast.error("Failed to create frame image");
           return;
         }
         
@@ -378,7 +468,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         const frameId = `frame-${Date.now()}`;
         
         // Format timestamp
-        const timestamp = formatTime(video.currentTime);
+        const timestamp = formatTime(timeInSeconds);
         
         // Create a URL for the blob
         const imageUrl = URL.createObjectURL(blob);
@@ -407,11 +497,11 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         });
         
         // Add timemark to the seek bar
-        setCapturedTimemarks(prev => [...prev, video.currentTime]);
+        setCapturedTimemarks(prev => [...prev, timeInSeconds]);
         
         toast.success(`Frame captured at ${timestamp}`);
-      }, 'image/jpeg', 0.95);
-    }, 300); // Small delay to ensure the frame is fully rendered
+      }, 'image/jpeg', 0.98); // Use higher JPEG quality (0.98 instead of 0.95)
+    }
   };
   
   // Remove a frame from selection
