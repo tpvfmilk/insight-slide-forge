@@ -1,13 +1,14 @@
+
 import { Button } from "@/components/ui/button";
 import { Project } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { 
-  Scissors, 
   Loader2, 
   ListVideo, 
   Brain, 
   Image,
-  Wand2
+  Wand2,
+  Film
 } from "lucide-react";
 
 interface ActionButtonsProps {
@@ -45,26 +46,6 @@ export const ActionButtons = ({
 }: ActionButtonsProps) => {
   return (
     <>
-      {needsFrameExtraction && (
-        <Button 
-          variant="outline" 
-          disabled={isExtractingFrames}
-          onClick={handleExtractFrames}
-        >
-          {isExtractingFrames ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Extracting Frames...
-            </>
-          ) : (
-            <>
-              <Scissors className="mr-2 h-4 w-4" />
-              Extract Frames
-            </>
-          )}
-        </Button>
-      )}
-      
       {needsTranscription && (
         <Button 
           variant="outline"
