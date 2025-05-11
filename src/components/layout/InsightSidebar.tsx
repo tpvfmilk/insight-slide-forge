@@ -63,7 +63,7 @@ export function InsightSidebar({
         <Separator className="my-4" />
       </div>
 
-      <div className="border-t">
+      <div className="border-t my-0 py-0">
         <StorageUsageBar />
       </div>
 
