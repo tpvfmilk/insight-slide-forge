@@ -84,13 +84,46 @@ serve(async (req) => {
     for (const bucket of buckets) {
       console.log(`Checking bucket: ${bucket}`)
       
-      // List all files in the bucket with larger limit
-      const { data: files, error: listError } = await supabaseAdmin
+      // First, list folders for user
+      const { data: userFolders, error: folderListError } = await supabaseAdmin
+        .storage
+        .from(bucket)
+        .list(`${user.id}/`, {
+          limit: 100,
+          sortBy: { column: 'name', order: 'asc' },
+        });
+        
+      if (folderListError) {
+        console.error(`Error listing folders in ${bucket} for user ${user.id}:`, folderListError);
+        // Continue with next bucket
+        continue;
+      }
+
+      if (shouldForceDelete) {
+        console.log(`Force deleting all files for user ${user.id} in bucket ${bucket}`);
+        
+        // For force delete all, we just delete the entire user folder
+        const { data: deleteResult, error: deleteError } = await supabaseAdmin
+          .storage
+          .from(bucket)
+          .remove([`${user.id}`]);
+          
+        if (deleteError) {
+          console.error(`Error force deleting user folder in ${bucket}:`, deleteError);
+        } else {
+          console.log(`Successfully deleted user folder in ${bucket}`);
+          deletedFilesCount += deleteResult?.length || 0;
+        }
+        
+        continue;
+      }
+      
+      // Regular cleanup mode - List all files in the bucket
+      const { data: allFiles, error: listError } = await supabaseAdmin
         .storage
         .from(bucket)
         .list(undefined, {
           limit: 10000,  // Increased limit to catch more files
-          offset: 0,
         })
 
       if (listError) {
@@ -98,57 +131,48 @@ serve(async (req) => {
         continue
       }
 
-      if (!files || files.length === 0) {
+      if (!allFiles || allFiles.length === 0) {
         console.log(`No files found in bucket ${bucket}`)
         continue
       }
 
-      console.log(`Found ${files.length} files in bucket ${bucket}`)
+      console.log(`Found ${allFiles.length} files in bucket ${bucket}`)
 
+      // Filter files that belong to this user
+      const userFiles = allFiles.filter(file => 
+        file.name.startsWith(`${user.id}/`) || 
+        validProjectIds.some(id => file.name.includes(`project_${id}/`))
+      );
+      
+      console.log(`Found ${userFiles.length} files belonging to user in ${bucket}`);
+      
       // Files to delete
-      const filesToDelete = []
+      const filesToDelete = [];
 
-      for (const file of files) {
-        let shouldDelete = false
+      // In regular cleanup mode, decide what to delete
+      for (const file of userFiles) {
+        if (file.id === null) continue; // Skip if it's a folder
         
-        // Skip if it's a folder
-        if (file.id === null) continue
-
-        // Check if the file belongs to this user by path
-        const belongsToUser = file.name.includes(`${user.id}/`);
+        let shouldDelete = false;
         
-        if (!belongsToUser) {
-          // Skip files not belonging to this user
-          continue;
-        }
-        
-        // Force delete all user files if requested
-        if (shouldForceDelete) {
-          console.log(`Force deleting: ${file.name}`);
-          shouldDelete = true;
-        }
-        // Normal cleanup mode
-        else {
-          // Check if file belongs to user by naming convention and if it's orphaned
-          if (bucket === 'video_uploads') {
-            // Check if the file is a source for any project
-            if (!validSourcePaths.includes(file.name)) {
-              shouldDelete = true;
+        if (bucket === 'video_uploads') {
+          // Check if the file is a source for any project
+          if (!validSourcePaths.includes(file.name)) {
+            shouldDelete = true;
+          }
+        } else if (bucket === 'slide_stills') {
+          // Check if associated with any valid project
+          let isProjectFile = false;
+          for (const projectId of validProjectIds) {
+            if (file.name.includes(`project_${projectId}/`)) {
+              isProjectFile = true;
+              break;
             }
-          } else if (bucket === 'slide_stills') {
-            // Check if associated with any project
-            let isProjectFile = false;
-            for (const projectId of validProjectIds) {
-              if (file.name.includes(`project_${projectId}/`)) {
-                isProjectFile = true;
-                break;
-              }
-            }
-            
-            // If it's not associated with any valid project
-            if (!isProjectFile) {
-              shouldDelete = true;
-            }
+          }
+          
+          // If it's not associated with any valid project
+          if (!isProjectFile) {
+            shouldDelete = true;
           }
         }
 

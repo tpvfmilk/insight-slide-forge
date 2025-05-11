@@ -23,7 +23,6 @@ export function CleanupStorageButton() {
       toast.info("Cleaning up storage...");
       
       // Call the cleanup function with forceDeleteAll=true to completely wipe storage
-      // This is more aggressive than the previous forceCleanup option
       const response = await supabase.functions.invoke("cleanup-orphaned-files", {
         method: "POST",
         body: { forceDeleteAll: true }

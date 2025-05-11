@@ -11,8 +11,6 @@ import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { clientExtractFramesFromVideo } from "@/services/clientFrameExtractionService";
-import { useEffect } from "react";
-import { fetchProjectVideos, createProjectVideo } from "@/services/projectVideoService";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -42,7 +40,6 @@ const ProjectPage = () => {
     handleTranscribeVideo,
     handleExtractFrames,
     handleManualFrameSelectionComplete,
-    projectVideos,
     totalVideoDuration
   } = useProjectState(projectId);
   
@@ -76,43 +73,6 @@ const ProjectPage = () => {
       toast.error("Failed to extract frames");
     }
   };
-
-  // Check if main video exists in project_videos, if not, add it
-  useEffect(() => {
-    if (project && projectId && project.source_type === 'video' && project.source_file_path) {
-      const checkMainVideo = async () => {
-        try {
-          const videos = await fetchProjectVideos(projectId);
-          
-          // Check if source_file_path exists in any of the videos
-          const mainVideoExists = videos.some(v => v.source_file_path === project.source_file_path);
-          
-          if (!mainVideoExists) {
-            console.log("Main video not found in project_videos, adding it now...");
-            // Add the main video to project_videos
-            await createProjectVideo({
-              project_id: projectId,
-              source_file_path: project.source_file_path,
-              title: project.title || "Main Video",
-              description: "Original project video",
-              display_order: 0,
-              video_metadata: project.video_metadata,
-              extracted_frames: project.extracted_frames
-            });
-            console.log("Main video added to project_videos");
-          }
-        } catch (error) {
-          console.error("Error checking/adding main video:", error);
-        }
-      };
-      
-      checkMainVideo();
-    }
-  }, [project, projectId]);
-
-  const handleVideoAdded = () => {
-    loadProject(); // Reload the project to get updated video list
-  };
   
   return (
     <InsightLayout>
@@ -122,7 +82,6 @@ const ProjectPage = () => {
             project={project} 
             isLoading={isLoading}
             videoFileName={videoFileName}
-            onVideoAdded={handleVideoAdded}
             totalVideoDuration={totalVideoDuration}
           />
           
@@ -153,7 +112,6 @@ const ProjectPage = () => {
               extractedFrames={extractedFrames}
               isTranscriptOnlyProject={isTranscriptOnlyProject}
               refreshProject={loadProject}
-              videosCount={projectVideos?.length || 0}
               totalDuration={totalVideoDuration}
             />
           </div>

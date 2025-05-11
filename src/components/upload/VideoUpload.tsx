@@ -1,7 +1,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { FileVideo, Upload, RefreshCw, ArrowUp, ArrowDown } from "lucide-react";
+import { FileVideo, Upload } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
@@ -11,113 +11,62 @@ import { SliderControl } from "./SliderControl";
 import { FileUploader } from "@/components/ui/file-uploader";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { createProjectVideo } from "@/services/projectVideoService";
-import { supabase } from "@/integrations/supabase/client";
-
-interface VideoFileWithDetails {
-  file: File;
-  title: string;
-}
 
 export const VideoUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
-  const [videoFiles, setVideoFiles] = useState<VideoFileWithDetails[]>([]);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>("");
   const navigate = useNavigate();
   
   // Set default title from filename when a file is selected
   useEffect(() => {
-    if (videoFiles.length === 1) {
-      const filename = videoFiles[0].file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+    if (videoFile) {
+      const filename = videoFile.file.name.replace(/\.[^/.]+$/, ""); // Remove extension
       if (!title) {
         setTitle(filename);
       }
     }
-  }, [videoFiles]);
+  }, [videoFile]);
   
   const handleFileSelected = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     
-    // Check each file
-    const validFiles: VideoFileWithDetails[] = [];
+    const file = files[0]; // Only use the first file
     
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      // Check if the file is a video
-      if (!file.type.startsWith('video/')) {
-        toast.error(`${file.name} is not a valid video file`);
-        continue;
-      }
-      
-      // Check file size (limit to 100MB)
-      if (file.size > 100 * 1024 * 1024) {
-        toast.error(`${file.name} is too large (max 100MB allowed)`);
-        continue;
-      }
-      
-      validFiles.push({
-        file,
-        title: file.name.replace(/\.[^/.]+$/, "") // Default title from filename without extension
-      });
+    // Check if the file is a video
+    if (!file.type.startsWith('video/')) {
+      toast.error(`${file.name} is not a valid video file`);
+      return;
     }
     
-    if (validFiles.length > 0) {
-      setVideoFiles(prev => [...prev, ...validFiles]);
+    // Check file size (limit to 100MB)
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error(`${file.name} is too large (max 100MB allowed)`);
+      return;
     }
-  };
-  
-  const handleRemoveFile = (index: number) => {
-    setVideoFiles(prev => {
-      const updated = [...prev];
-      updated.splice(index, 1);
-      return updated;
-    });
-  };
-  
-  // Handle video title change
-  const updateVideoTitle = (index: number, newTitle: string) => {
-    setVideoFiles(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], title: newTitle };
-      return updated;
-    });
-  };
-  
-  // Move a video up in the list (decrease index)
-  const moveUp = (index: number) => {
-    if (index <= 0) return; // Can't move the first item up
     
-    setVideoFiles(prev => {
-      const updated = [...prev];
-      const temp = updated[index];
-      updated[index] = updated[index - 1];
-      updated[index - 1] = temp;
-      return updated;
+    setVideoFile({
+      file,
+      title: file.name.replace(/\.[^/.]+$/, ""), // Default title from filename without extension
+      description: "",
+      uploadProgress: 0,
+      uploading: false,
+      error: null
     });
   };
   
-  // Move a video down in the list (increase index)
-  const moveDown = (index: number) => {
-    if (index >= videoFiles.length - 1) return; // Can't move the last item down
-    
-    setVideoFiles(prev => {
-      const updated = [...prev];
-      const temp = updated[index];
-      updated[index] = updated[index + 1];
-      updated[index + 1] = temp;
-      return updated;
-    });
+  const handleRemoveFile = () => {
+    setVideoFile(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (videoFiles.length === 0) {
-      toast.error("Please select at least one video file");
+    if (!videoFile) {
+      toast.error("Please select a video file");
       return;
     }
     
@@ -143,78 +92,16 @@ export const VideoUpload = () => {
     }, 300);
     
     try {
-      console.log("Creating project from video file:", videoFiles[0].file.name);
+      console.log("Creating project from video file:", videoFile.file.name);
       
-      // Currently, we still only use the first video for main project creation
-      // This is to maintain backward compatibility with the existing project structure
+      // Create project from the single video file
       const project = await createProjectFromVideo(
-        videoFiles[0].file, 
+        videoFile.file, 
         title, 
         contextPrompt,
         "", // No transcript
         slidesPerMinute
       );
-      
-      // Now add all videos to project_videos table
-      if (project && project.id) {
-        try {
-          // First add the main video to the project_videos table with display order 0
-          await createProjectVideo({
-            project_id: project.id,
-            source_file_path: project.source_file_path || '',
-            title: videoFiles[0].title || "Main Video",
-            description: "Original project video",
-            display_order: 0,
-            video_metadata: project.video_metadata,
-            extracted_frames: null
-          });
-          
-          console.log("Added main video to project_videos table");
-          
-          // Then add any additional videos with incrementing display orders
-          for (let i = 1; i < videoFiles.length; i++) {
-            const videoFile = videoFiles[i];
-            
-            // Upload the additional video
-            const filePath = `project_videos/${project.id}/${Date.now()}_${videoFile.file.name}`;
-            
-            const { data: uploadData, error: uploadError } = await supabase.storage
-              .from('video_uploads')
-              .upload(filePath, videoFile.file, {
-                cacheControl: '3600',
-                upsert: false,
-              });
-              
-            if (uploadError) {
-              console.error(`Error uploading additional video ${i}:`, uploadError);
-              continue;
-            }
-            
-            // Create a simple video metadata object
-            const videoMetadata = {
-              original_file_name: videoFile.file.name,
-              file_type: videoFile.file.type,
-              file_size: videoFile.file.size,
-            };
-            
-            // Add to project_videos
-            await createProjectVideo({
-              project_id: project.id,
-              source_file_path: filePath,
-              title: videoFile.title || videoFile.file.name,
-              description: `Additional project video ${i}`,
-              display_order: i,
-              video_metadata: videoMetadata,
-              extracted_frames: null
-            });
-            
-            console.log(`Added additional video ${i} to project_videos table`);
-          }
-        } catch (error) {
-          console.error("Error adding videos to project_videos:", error);
-          // Don't throw here, we'll still proceed with the project
-        }
-      }
       
       clearInterval(interval);
       setUploadProgress(100);
@@ -251,97 +138,25 @@ export const VideoUpload = () => {
         </div>
 
         <div className="space-y-2">
-          <Label>Upload Videos</Label>
+          <Label>Upload Video</Label>
           <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/50">
             <FileVideo className="h-8 w-8 text-muted-foreground mb-4" />
-            <h3 className="font-medium mb-1">Upload video files</h3>
+            <h3 className="font-medium mb-1">Upload a video file</h3>
             <p className="text-sm text-muted-foreground mb-4 text-center">
-              MP4 or WebM format, up to 100MB each
+              MP4 or WebM format, up to 100MB
             </p>
             
             <FileUploader
               onFilesSelected={handleFileSelected}
-              selectedFiles={videoFiles.map(vf => vf.file)}
+              selectedFiles={videoFile ? [videoFile.file] : []}
               onRemoveFile={handleRemoveFile}
               accept="video/*"
               maxSize={100}
-              multiple={true}
+              multiple={false}
               className="w-full"
-              showPreview={false}
+              showPreview={true}
               disabled={isUploading}
             />
-            
-            {videoFiles.length > 0 && (
-              <div className="w-full mt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-sm font-medium">Selected Videos ({videoFiles.length})</h4>
-                  <p className="text-xs text-muted-foreground">Use arrows to reorder</p>
-                </div>
-                
-                <div className="space-y-2 max-h-[240px] overflow-y-auto rounded-md border p-2">
-                  {videoFiles.map((videoFile, index) => (
-                    <div
-                      key={`${videoFile.file.name}-${index}`}
-                      className="flex items-center gap-2 p-2 rounded-md bg-background"
-                    >
-                      {/* Order number badge */}
-                      <div className="flex items-center justify-center bg-muted w-6 h-6 rounded-full text-xs font-medium">
-                        {index + 1}
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <input
-                          type="text"
-                          value={videoFile.title}
-                          onChange={(e) => updateVideoTitle(index, e.target.value)}
-                          className="w-full text-sm border-none bg-transparent p-0 focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                          placeholder="Video title"
-                          disabled={isUploading}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          {(videoFile.file.size / (1024 * 1024)).toFixed(2)} MB
-                        </p>
-                      </div>
-                      
-                      {/* Reordering buttons */}
-                      <div className="flex flex-col gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => moveUp(index)}
-                          disabled={isUploading || index === 0}
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                        >
-                          <ArrowUp className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => moveDown(index)}
-                          disabled={isUploading || index === videoFiles.length - 1}
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground disabled:opacity-30"
-                        >
-                          <ArrowDown className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                      
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 rounded-full"
-                        onClick={() => handleRemoveFile(index)}
-                        disabled={isUploading}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -374,10 +189,10 @@ export const VideoUpload = () => {
         <div className="flex justify-end">
           <Button 
             type="submit" 
-            disabled={videoFiles.length === 0 || !title.trim()}
+            disabled={!videoFile || !title.trim()}
           >
             <Upload className="h-4 w-4 mr-2" />
-            Upload {videoFiles.length > 1 ? `${videoFiles.length} Videos` : 'Video'}
+            Upload Video
           </Button>
         </div>
       )}
