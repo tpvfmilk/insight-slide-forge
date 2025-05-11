@@ -122,11 +122,9 @@ async function generateSlidesFromTranscript(
 
 1. **Content Slides**:
    - Break the transcript into slides using logical topic breaks or chapter changes
-   - Aim for 1–3 slides per minute of video content
    - Each slide must include:
      - A short, clear **title**
      - 2–5 **bullet points** with concise transcript-based information
-     - Placeholder: "[Insert Frame]" (user adds image later)
 
 2. **Question Slides**:
    Detect and handle both styles of questions:
@@ -147,7 +145,6 @@ async function generateSlidesFromTranscript(
 3. **Explanation Slides**:
    - Only use **verbatim or paraphrased content from the transcript**
    - Break into multiple slides as needed
-   - Include "[Insert Frame]" placeholder
 
 4. **Important Guidelines**:
    - Do not add your own knowledge
@@ -184,7 +181,7 @@ Expected JSON format:
   {
     "id": "slide-1",
     "title": "Introduction to the Topic",
-    "content": "- Key point 1\\n- Key point 2\\n- Key point 3\\n[Insert Frame]",
+    "content": "- Key point 1\\n- Key point 2\\n- Key point 3",
     "timestamp": "05:30",
     "transcriptTimestamps": ["05:20", "05:35", "05:50"]
   },
