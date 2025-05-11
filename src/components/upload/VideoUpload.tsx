@@ -7,7 +7,6 @@ import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
-import { SliderControl } from "./SliderControl";
 import { FileUploader } from "@/components/ui/file-uploader";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -16,7 +15,6 @@ export const VideoUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [contextPrompt, setContextPrompt] = useState<string>("");
-  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>("");
   const navigate = useNavigate();
@@ -92,8 +90,7 @@ export const VideoUpload = () => {
         videoFile, 
         title, 
         contextPrompt,
-        "", // No transcript
-        slidesPerMinute
+        "" // No transcript
       );
       
       clearInterval(interval);
@@ -151,14 +148,6 @@ export const VideoUpload = () => {
               disabled={isUploading}
             />
           </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="mb-2 block">Slides per minute</Label>
-          <SliderControl 
-            value={slidesPerMinute}
-            onChange={setSlidesPerMinute}
-          />
         </div>
         
         <div className="space-y-2">

@@ -25,10 +25,10 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
     // Ensure storage buckets are initialized before generating slides
     await initializeStorage();
     
-    // Fetch the project to get context_prompt and slides_per_minute if available
+    // Fetch the project to get context_prompt if available
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('context_prompt, transcript, source_type, slides_per_minute, source_file_path, video_metadata, title')
+      .select('context_prompt, transcript, source_type, source_file_path, video_metadata, title')
       .eq('id', projectId)
       .single();
       
@@ -71,7 +71,6 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
     console.log("Calling generate-slides edge function with params:", {
       projectId,
       contextPrompt: project?.context_prompt || '',
-      slidesPerMinute: project?.slides_per_minute || 6, 
       videoDuration: totalVideoDuration,
       presentationTitle: project?.title || 'Presentation'
     });
@@ -81,7 +80,6 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
       body: {
         projectId,
         contextPrompt: project?.context_prompt || '',
-        slidesPerMinute: project?.slides_per_minute || 6,
         videoDuration: totalVideoDuration,
         presentationTitle: project?.title || 'Presentation'
       }

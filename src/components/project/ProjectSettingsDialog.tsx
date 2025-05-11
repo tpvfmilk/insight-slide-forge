@@ -7,15 +7,12 @@ import { DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog
 import { Settings } from "lucide-react";
 import { Project } from "@/services/projectService";
 import { TranscriptDialog } from "@/components/project/TranscriptDialog";
-import { DensityDialog } from "@/components/project/DensityDialog";
 import { ContextDialog } from "@/components/project/ContextDialog";
 
 interface ProjectSettingsDialogProps {
   project: Project | null;
   transcript: string;
   setTranscript: (transcript: string) => void;
-  slidesPerMinute: number;
-  setSlidesPerMinute: (value: number) => void;
   contextPrompt: string;
   setContextPrompt: (value: string) => void;
 }
@@ -24,8 +21,6 @@ export const ProjectSettingsDialog = ({
   project,
   transcript,
   setTranscript,
-  slidesPerMinute,
-  setSlidesPerMinute,
   contextPrompt,
   setContextPrompt,
 }: ProjectSettingsDialogProps) => {
@@ -51,9 +46,8 @@ export const ProjectSettingsDialog = ({
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
-          <TabsList className="grid grid-cols-3 mb-4">
+          <TabsList className="grid grid-cols-2 mb-4">
             <TabsTrigger value="transcript">Transcript</TabsTrigger>
-            <TabsTrigger value="density">Slide Density</TabsTrigger>
             <TabsTrigger value="context">Context</TabsTrigger>
           </TabsList>
           
@@ -68,14 +62,6 @@ export const ProjectSettingsDialog = ({
                   handleClose();
                 }
               }}
-            />
-          </TabsContent>
-          
-          <TabsContent value="density" className="focus:outline-none">
-            <DensityDialog 
-              project={project}
-              slidesPerMinute={slidesPerMinute}
-              setSlidesPerMinute={setSlidesPerMinute}
             />
           </TabsContent>
           

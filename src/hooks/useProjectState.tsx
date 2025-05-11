@@ -20,7 +20,6 @@ export const useProjectState = (projectId: string | undefined) => {
   const [isExtractingFrames, setIsExtractingFrames] = useState<boolean>(false);
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [transcript, setTranscript] = useState<string>("");
-  const [slidesPerMinute, setSlidesPerMinute] = useState<number>(6);
   const [title, setTitle] = useState<string>("");
   const [videoFileName, setVideoFileName] = useState<string>("");
   const [needsFrameExtraction, setNeedsFrameExtraction] = useState<boolean>(false);
@@ -56,7 +55,6 @@ export const useProjectState = (projectId: string | undefined) => {
       setContextPrompt(projectData.context_prompt || "");
       // Make sure the transcript state is properly set from the project data
       setTranscript(projectData.transcript || "");
-      setSlidesPerMinute(projectData.slides_per_minute || 6);
       setTitle(projectData.title || "Untitled Project");
       
       // Extract video metadata if it exists
@@ -287,8 +285,6 @@ export const useProjectState = (projectId: string | undefined) => {
     setContextPrompt,
     transcript,
     setTranscript,
-    slidesPerMinute,
-    setSlidesPerMinute,
     title,
     setTitle,
     videoFileName,

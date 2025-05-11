@@ -19,7 +19,7 @@ serve(async (req) => {
   }
 
   try {
-    const { projectId, contextPrompt = '', slidesPerMinute = 6, videoDuration = 0, presentationTitle = 'Presentation' } = await req.json();
+    const { projectId, contextPrompt = '', videoDuration = 0, presentationTitle = 'Presentation' } = await req.json();
     
     if (!projectId) {
       return new Response(
@@ -50,31 +50,8 @@ serve(async (req) => {
       );
     }
     
-    // Calculate number of slides based on duration or default to a reasonable number
-    let targetNumSlides = 10;
-    
-    if (videoDuration && slidesPerMinute) {
-      // Calculate from total video duration and slides per minute
-      const durationInMinutes = videoDuration / 60;
-      targetNumSlides = Math.max(5, Math.round(durationInMinutes * slidesPerMinute));
-      console.log(`Using video duration: ${videoDuration}s (${durationInMinutes.toFixed(2)} min) with ${slidesPerMinute} slides/min = ${targetNumSlides} slides`);
-    } else if (project.video_metadata?.duration && slidesPerMinute) {
-      // Fallback to main video duration if available
-      const duration = project.video_metadata.duration as number;
-      const durationInMinutes = duration / 60;
-      targetNumSlides = Math.max(5, Math.round(durationInMinutes * slidesPerMinute));
-      console.log(`Using project video metadata duration: ${duration}s with ${slidesPerMinute} slides/min = ${targetNumSlides} slides`);
-    } else {
-      // If no duration, estimate based on transcript length
-      const wordCount = project.transcript.split(/\s+/).length;
-      const estimatedMinutes = wordCount / 150;
-      targetNumSlides = Math.max(5, Math.round(estimatedMinutes * slidesPerMinute));
-      console.log(`Estimated ${targetNumSlides} slides from transcript word count (${wordCount} words)`);
-    }
-    
-    // Cap the number of slides to a reasonable maximum to avoid token limits
-    targetNumSlides = Math.min(targetNumSlides, 30);
-    console.log(`Final target slides: ${targetNumSlides}`);
+    // We'll let OpenAI decide on the number of slides based on content
+    console.log(`Using video duration: ${videoDuration}s`);
     
     console.log(`Using transcript from project: ${project.transcript.substring(0, 100)}...`);
     
@@ -85,9 +62,9 @@ serve(async (req) => {
     // Generate the slides using OpenAI
     const slides = await generateSlidesFromTranscript(
       project.transcript, 
-      targetNumSlides, 
       contextPrompt,
-      finalPresentationTitle
+      finalPresentationTitle,
+      videoDuration
     );
     
     if (!slides) {
@@ -132,10 +109,10 @@ serve(async (req) => {
  * Generate slides from transcript using OpenAI
  */
 async function generateSlidesFromTranscript(
-  transcript: string, 
-  targetNumSlides: number,
+  transcript: string,
   contextPrompt: string = "",
-  presentationTitle: string = "Presentation"
+  presentationTitle: string = "Presentation",
+  videoDuration: number = 0
 ): Promise<any[] | null> {
   try {
     // Prepare the system prompt with instructions for professional study slides
@@ -145,7 +122,7 @@ async function generateSlidesFromTranscript(
 
 1. **Content Slides**:
    - Break the transcript into slides using logical topic breaks or chapter changes
-   - Aim for 1–3 slides per minute of video content (target approximately ${targetNumSlides} total slides)
+   - Aim for 1–3 slides per minute of video content
    - Each slide must include:
      - A short, clear **title**
      - 2–5 **bullet points** with concise transcript-based information
@@ -179,11 +156,17 @@ async function generateSlidesFromTranscript(
    - All content must come directly from the transcript`;
 
     // Prepare the user prompt
-    let userPrompt = `Based on this transcript, create a ${targetNumSlides}-slide presentation titled "${presentationTitle}":`;
+    let userPrompt = `Based on this transcript, create a presentation titled "${presentationTitle}":`;
     
     // Add context prompt if provided
     if (contextPrompt && contextPrompt.trim()) {
       userPrompt += `\n\nAdditional context: ${contextPrompt}\n\n`;
+    }
+    
+    // Add video duration if available
+    if (videoDuration > 0) {
+      const durationInMinutes = Math.round(videoDuration / 60);
+      userPrompt += `\n\nThe video is approximately ${durationInMinutes} minutes long. Create an appropriate number of slides based on the content.`;
     }
     
     userPrompt += `\n\nTranscript:\n${transcript}\n\n`;

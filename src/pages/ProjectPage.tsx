@@ -26,8 +26,6 @@ const ProjectPage = () => {
     setContextPrompt,
     transcript,
     setTranscript,
-    slidesPerMinute,
-    setSlidesPerMinute,
     videoFileName,
     needsFrameExtraction,
     allTimestamps,
@@ -91,8 +89,6 @@ const ProjectPage = () => {
               project={project}
               transcript={transcript}
               setTranscript={setTranscript}
-              slidesPerMinute={slidesPerMinute}
-              setSlidesPerMinute={setSlidesPerMinute}
               contextPrompt={contextPrompt}
               setContextPrompt={setContextPrompt}
             />
