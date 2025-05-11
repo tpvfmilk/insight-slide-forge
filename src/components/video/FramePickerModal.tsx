@@ -3,11 +3,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, Camera, Trash2, Plus, RefreshCw, AlertCircle } from "lucide-react";
+import { Play, Pause, Camera, Trash2, Plus, RefreshCw, AlertCircle, Rewind, FastForward } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
+import { Slider } from "@/components/ui/slider";
 
 // Create a separate interface for frames with blobs that extends ExtractedFrame
 interface CapturedFrameWithBlob {
@@ -41,6 +42,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [capturedFrames, setCapturedFrames] = useState<CapturedFrameWithBlob[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [seekingValue, setSeekingValue] = useState(0);
+  const [isSeeking, setIsSeeking] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
@@ -57,6 +61,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       setIsVideoLoaded(false);
       setIsLoadingVideo(true);
       setLoadAttempts(0);
+      setCurrentTime(0);
+      setSeekingValue(0);
       
       // Try to load the video
       loadVideo();
@@ -151,13 +157,32 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     if (!video) return;
     
     const updateTime = () => {
-      setCurrentTime(video.currentTime);
+      if (!isSeeking) {
+        setCurrentTime(video.currentTime);
+        setSeekingValue(video.currentTime);
+      }
     };
     
     video.addEventListener('timeupdate', updateTime);
     
     return () => {
       video.removeEventListener('timeupdate', updateTime);
+    };
+  }, [isSeeking]);
+
+  // Handle video duration
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleLoadedMetadata = () => {
+      setDuration(video.duration);
+    };
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    
+    return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
     };
   }, []);
   
@@ -197,6 +222,44 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       video.removeEventListener('ended', handleEnded);
     };
   }, []);
+
+  // Seek back 5 seconds
+  const seekBack = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    video.currentTime = Math.max(0, video.currentTime - 5);
+    setCurrentTime(video.currentTime);
+    setSeekingValue(video.currentTime);
+  };
+
+  // Seek forward 5 seconds
+  const seekForward = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    video.currentTime = Math.min(video.duration, video.currentTime + 5);
+    setCurrentTime(video.currentTime);
+    setSeekingValue(video.currentTime);
+  };
+
+  // Handle seeking via slider
+  const handleSeekStart = () => {
+    setIsSeeking(true);
+  };
+
+  const handleSeekChange = (value: number[]) => {
+    setSeekingValue(value[0]);
+  };
+
+  const handleSeekEnd = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    video.currentTime = seekingValue;
+    setCurrentTime(seekingValue);
+    setIsSeeking(false);
+  };
   
   // Format time display (seconds to MM:SS)
   const formatTime = (timeInSeconds: number): string => {
@@ -210,6 +273,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     setIsVideoLoaded(true);
     setVideoError(null);
     setIsLoadingVideo(false);
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+    }
   };
   
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
@@ -225,66 +291,95 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     loadVideo();
   };
   
-  // Capture current frame
+  // Capture current frame with improved method to prevent black frames
   const captureFrame = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || !projectId) return;
     
-    // Pause the video
+    // Pause the video to ensure stable frame
     video.pause();
     setIsPlaying(false);
     
-    // Set canvas dimensions to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Draw the current frame on the canvas
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      toast.error("Failed to capture frame");
-      return;
-    }
-    
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Convert canvas to blob
-    canvas.toBlob((blob) => {
-      if (!blob) {
+    // Force the browser to render the current frame
+    setTimeout(() => {
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Draw the current frame on the canvas
+      const ctx = canvas.getContext('2d', { alpha: false });
+      if (!ctx) {
         toast.error("Failed to capture frame");
         return;
       }
       
-      // Generate unique ID for the frame
-      const frameId = `frame-${Date.now()}`;
+      // Fill with white background first to ensure no transparency issues
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Format timestamp
-      const timestamp = formatTime(video.currentTime);
+      // Draw the video frame
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Create a URL for the blob
-      const imageUrl = URL.createObjectURL(blob);
+      // Check if canvas has content (not a black frame)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let hasContent = false;
       
-      // Create a new extracted frame
-      const newFrame: ExtractedFrame = {
-        id: frameId,
-        imageUrl,
-        timestamp
-      };
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        const r = imageData.data[i];
+        const g = imageData.data[i + 1];
+        const b = imageData.data[i + 2];
+        
+        // If any pixel is not black, we have content
+        if (r > 10 || g > 10 || b > 10) {
+          hasContent = true;
+          break;
+        }
+      }
       
-      // Create a captured frame with blob
-      const capturedFrame: CapturedFrameWithBlob = {
-        ...newFrame,
-        blob
-      };
+      if (!hasContent) {
+        toast.error("Frame appears to be black. Please try at a different position in the video.");
+        return;
+      }
       
-      // Add to captured frames
-      setCapturedFrames(prev => [...prev, capturedFrame]);
-      
-      // Auto-select the newly captured frame
-      setSelectedFrames(prev => [...prev, newFrame]);
-      
-      toast.success(`Frame captured at ${timestamp}`);
-    }, 'image/jpeg', 0.95);
+      // Convert canvas to blob
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error("Failed to capture frame");
+          return;
+        }
+        
+        // Generate unique ID for the frame
+        const frameId = `frame-${Date.now()}`;
+        
+        // Format timestamp
+        const timestamp = formatTime(video.currentTime);
+        
+        // Create a URL for the blob
+        const imageUrl = URL.createObjectURL(blob);
+        
+        // Create a new extracted frame
+        const newFrame: ExtractedFrame = {
+          id: frameId,
+          imageUrl,
+          timestamp
+        };
+        
+        // Create a captured frame with blob
+        const capturedFrame: CapturedFrameWithBlob = {
+          ...newFrame,
+          blob
+        };
+        
+        // Add to captured frames
+        setCapturedFrames(prev => [...prev, capturedFrame]);
+        
+        // Auto-select the newly captured frame
+        setSelectedFrames(prev => [...prev, newFrame]);
+        
+        toast.success(`Frame captured at ${timestamp}`);
+      }, 'image/jpeg', 0.95);
+    }, 300); // Small delay to ensure the frame is fully rendered
   };
   
   // Remove a frame from selection
@@ -341,37 +436,74 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
             </video>
             
             {/* Video controls overlay */}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex items-center space-x-4">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={togglePlayPause}
-                className="text-white hover:bg-white/20"
-                disabled={!isVideoLoaded}
-              >
-                {isPlaying ? (
-                  <Pause className="h-5 w-5" />
-                ) : (
-                  <Play className="h-5 w-5" />
-                )}
-              </Button>
-              
-              <div className="text-white text-sm">
-                {formatTime(currentTime)}
+            <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
+              <div className="flex items-center space-x-4 w-full">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={seekBack}
+                  className="text-white hover:bg-white/20"
+                  disabled={!isVideoLoaded}
+                >
+                  <Rewind className="h-5 w-5" />
+                </Button>
+
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={togglePlayPause}
+                  className="text-white hover:bg-white/20"
+                  disabled={!isVideoLoaded}
+                >
+                  {isPlaying ? (
+                    <Pause className="h-5 w-5" />
+                  ) : (
+                    <Play className="h-5 w-5" />
+                  )}
+                </Button>
+                
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={seekForward}
+                  className="text-white hover:bg-white/20"
+                  disabled={!isVideoLoaded}
+                >
+                  <FastForward className="h-5 w-5" />
+                </Button>
+                
+                <div className="text-white text-sm">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </div>
+                
+                <div className="flex-1"></div>
+                
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={captureFrame}
+                  className="flex items-center space-x-1"
+                  disabled={!isVideoLoaded}
+                >
+                  <Camera className="h-4 w-4 mr-1" />
+                  Capture Frame
+                </Button>
               </div>
               
-              <div className="flex-1"></div>
-              
-              <Button 
-                variant="secondary" 
-                size="sm"
-                onClick={captureFrame}
-                className="flex items-center space-x-1"
-                disabled={!isVideoLoaded}
-              >
-                <Camera className="h-4 w-4 mr-1" />
-                Capture Frame
-              </Button>
+              {/* Video seek slider */}
+              <div className="px-1">
+                <Slider
+                  value={[seekingValue]}
+                  min={0}
+                  max={duration || 100}
+                  step={0.01}
+                  onValueChange={handleSeekChange}
+                  onValueCommit={handleSeekEnd}
+                  onPointerDown={handleSeekStart}
+                  disabled={!isVideoLoaded || duration === 0}
+                  className="cursor-pointer"
+                />
+              </div>
             </div>
           </div>
           
