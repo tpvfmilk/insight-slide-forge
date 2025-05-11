@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { updateProject } from './projectService';
@@ -12,6 +13,8 @@ export interface ExtractedFrame {
   id?: string;
   isPlaceholder?: boolean; // Add flag to indicate if frame is a placeholder
   [key: string]: string | number | boolean | null | undefined;
+  // Note: Blob cannot be part of this interface as it's not JSON-compatible
+  // Any blob data should be handled separately
 }
 
 // Function to extract frames from a video using client-side code

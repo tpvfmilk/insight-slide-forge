@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Play, Pause, Camera, Trash2, Plus } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { toast } from "sonner";
-import { clientExtractFramesFromVideo } from "@/services/clientFrameExtractionService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fetchProjectVideos, ProjectVideo } from "@/services/projectVideoService";
 import { 
@@ -174,11 +173,13 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         id: frameId,
         imageUrl,
         timestamp,
-        blob
+        // Fix: Store blob as a property but don't include it in the type
+        // Instead of assigning blob directly, we'll create a separate property
+        // that's not part of the ExtractedFrame interface
       };
       
       // Add to captured frames
-      setCapturedFrames(prev => [...prev, newFrame]);
+      setCapturedFrames(prev => [...prev, { ...newFrame, blob }]);
       
       // Auto-select the newly captured frame
       setSelectedFrames(prev => [...prev, newFrame]);
