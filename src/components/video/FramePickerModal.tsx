@@ -46,7 +46,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isLoadingVideo, setIsLoadingVideo] = useState(true);
-  const [videoUrl, setVideoUrl] = useState<string | null>(videoPath);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [loadAttempts, setLoadAttempts] = useState(0);
   
   // Reset state when opening modal
@@ -57,60 +57,93 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       setIsVideoLoaded(false);
       setIsLoadingVideo(true);
       setLoadAttempts(0);
-      setVideoUrl(videoPath);
       
-      // Give a moment for the video element to be created in the DOM
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.load();
-        }
-      }, 100);
+      // Try to load the video
+      loadVideo();
     }
-  }, [open, existingFrames, videoPath]);
+  }, [open, existingFrames]);
   
-  // Attempt to reload video with a fresh signed URL if initial load fails
-  useEffect(() => {
-    if (loadAttempts > 0 && loadAttempts <= 3) {
-      (async () => {
-        try {
-          console.log(`Retrying video load (attempt ${loadAttempts})`);
-          setIsLoadingVideo(true);
-          
-          // Try to get a fresh signed URL from storage
-          let filePath = videoPath;
-          
-          // If path includes '/', extract the actual file path without bucket name
-          let bucket = 'video_uploads';
-          if (videoPath.includes('/')) {
-            const pathParts = videoPath.split('/');
-            if (pathParts.length > 1) {
-              filePath = pathParts.pop() || '';
-              bucket = pathParts.join('/');
+  // Function to load the video
+  const loadVideo = async () => {
+    if (!videoPath) {
+      setVideoError("No video path provided");
+      setIsLoadingVideo(false);
+      return;
+    }
+    
+    setIsLoadingVideo(true);
+    setVideoError(null);
+    
+    try {
+      console.log(`Attempting to load video from path: ${videoPath}`);
+      
+      // Extract bucket and file path
+      let bucket = 'video_uploads';
+      let filePath = videoPath;
+      
+      // If path includes '/', extract the actual file path without bucket name
+      if (videoPath.includes('/')) {
+        const pathParts = videoPath.split('/');
+        if (pathParts.length > 1) {
+          filePath = pathParts.pop() || '';
+          bucket = pathParts.join('/');
+        }
+      }
+      
+      console.log(`Getting signed URL for ${bucket}/${filePath}`);
+      
+      // Get a fresh signed URL with longer expiry
+      const { data, error } = await supabase
+        .storage
+        .from(bucket)
+        .createSignedUrl(filePath, 7200); // 2 hour expiry
+        
+      if (error || !data?.signedUrl) {
+        console.error("Error getting signed URL:", error);
+        
+        // Try alternate methods to get video URL
+        if (projectId) {
+          // If we have project ID, try to get source URL from project
+          const { data: projectData } = await supabase
+            .from('projects')
+            .select('source_url, source_file_path')
+            .eq('id', projectId)
+            .single();
+            
+          if (projectData?.source_url) {
+            console.log("Using project source URL as fallback");
+            setVideoUrl(projectData.source_url);
+            return;
+          } else if (projectData?.source_file_path) {
+            // Try with the source file path from project
+            const altPath = projectData.source_file_path;
+            const altBucket = 'video_uploads';
+            
+            const { data: altData, error: altError } = await supabase
+              .storage
+              .from(altBucket)
+              .createSignedUrl(altPath, 7200);
+              
+            if (!altError && altData?.signedUrl) {
+              console.log("Using alternate file path from project");
+              setVideoUrl(altData.signedUrl);
+              return;
             }
           }
-          
-          console.log(`Getting signed URL for ${bucket}/${filePath}`);
-          
-          const { data, error } = await supabase
-            .storage
-            .from(bucket)
-            .createSignedUrl(filePath, 3600); // 1 hour expiry
-            
-          if (error || !data?.signedUrl) {
-            throw new Error("Couldn't create access link for video");
-          }
-          
-          console.log("Got new signed URL for video");
-          setVideoUrl(data.signedUrl);
-        } catch (error) {
-          console.error("Error getting fresh video URL:", error);
-          setVideoError("Failed to access video. The video might be unavailable or the format is not supported.");
-        } finally {
-          setIsLoadingVideo(false);
         }
-      })();
+        
+        throw new Error("Couldn't create access link for video");
+      }
+      
+      console.log("Got signed URL for video");
+      setVideoUrl(data.signedUrl);
+    } catch (error) {
+      console.error("Error getting fresh video URL:", error);
+      setVideoError("Failed to access video. The video might be unavailable or the format is not supported.");
+    } finally {
+      setIsLoadingVideo(false);
     }
-  }, [loadAttempts, videoPath]);
+  };
   
   // Update time display when video is playing
   useEffect(() => {
@@ -188,9 +221,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   
   // Retry loading video
   const retryLoadVideo = () => {
-    if (videoRef.current) {
-      setLoadAttempts(prev => prev + 1);
-    }
+    setLoadAttempts(prev => prev + 1);
+    loadVideo();
   };
   
   // Capture current frame
@@ -302,6 +334,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               className="w-full h-full"
               crossOrigin="anonymous"
               onLoadedData={handleVideoLoaded}
+              onLoadedMetadata={handleVideoLoaded}
               onError={handleVideoError}
             >
               Your browser does not support the video tag.
@@ -368,7 +401,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                           variant="destructive"
                           size="icon"
                           className="h-6 w-6 absolute top-1 right-1"
-                          onClick={() => removeFrame(frame.id)}
+                          onClick={() => removeFrame(frame.id as string)}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
