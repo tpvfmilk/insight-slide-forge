@@ -192,7 +192,7 @@ export async function extractFramesFromVideoUrl(
     }
     
     // Extract frame at a specific time
-    function extractFrameAtTime(seconds: number, currentTimestamp: string, onComplete: (success: boolean) => void) {
+    function extractFrameAtTime(seconds: number, currentTimestamp: string, callback: (success: boolean) => void) {
       // Set current time and wait for seeking to complete
       video.currentTime = seconds;
       
@@ -304,7 +304,7 @@ export async function extractFramesFromVideoUrl(
                             finalizeFrame(currentTimestamp, true); // Just use whatever we have now
                           }, 200);
                         }).catch(() => {
-                          onComplete(false);
+                          callback(false);
                         });
                       }
                     }, 300);
@@ -320,7 +320,7 @@ export async function extractFramesFromVideoUrl(
             });
           } else {
             console.error("Canvas context is null");
-            onComplete(false);
+            callback(false);
           }
         }, 800); // Longer delay to ensure frame is fully loaded
       };
@@ -331,7 +331,7 @@ export async function extractFramesFromVideoUrl(
     
     function finalizeFrame(currentTimestamp: string, success: boolean) {
       if (!success || !ctx) {
-        onComplete(false);
+        callback(false);
         return;
       }
       
@@ -349,10 +349,10 @@ export async function extractFramesFromVideoUrl(
             progressCallback(framesProcessed, timestamps.length);
           }
           
-          onComplete(true);
+          callback(true);
         } else {
           console.error(`Failed to create blob for timestamp ${currentTimestamp}`);
-          onComplete(false);
+          callback(false);
         }
       }, "image/jpeg", 0.98); // Use higher JPEG quality (0.98 instead of 0.95)
     }
