@@ -930,8 +930,8 @@ export const SlideEditor = () => {
         </Button>
       </div>
       
-      {/* Film strip at the bottom - now constrained to match main content width */}
-      <div className="h-28 border-t w-full">
+      {/* Film strip at the bottom - now constrained to match main content width and with increased height */}
+      <div className="h-40 border-t w-full">
         <div className="max-w-screen-xl mx-auto px-4">
           <ScrollArea orientation="horizontal" className="h-full w-full">
             <div className="flex gap-2 p-2 h-full min-w-max">
