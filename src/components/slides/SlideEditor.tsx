@@ -714,7 +714,7 @@ export const SlideEditor = () => {
       </div>
 
       {/* Main slide editing area with responsive layout and max width */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 w-full overflow-hidden">
         <div className="max-w-screen-xl mx-auto p-4">
           <div className="flex flex-col lg:flex-row gap-6">
             {/* Left side - Images */}
