@@ -66,7 +66,6 @@ serve(async (req) => {
       console.log(`Using project video metadata duration: ${duration}s with ${slidesPerMinute} slides/min = ${targetNumSlides} slides`);
     } else {
       // If no duration, estimate based on transcript length
-      // Average read speed is about 150 words per minute, average slide might contain ~30 words
       const wordCount = project.transcript.split(/\s+/).length;
       const estimatedMinutes = wordCount / 150;
       targetNumSlides = Math.max(5, Math.round(estimatedMinutes * slidesPerMinute));
@@ -139,19 +138,45 @@ async function generateSlidesFromTranscript(
   presentationTitle: string = "Presentation"
 ): Promise<any[] | null> {
   try {
-    // Prepare the system prompt with instructions for handling multiple video sections
-    const systemPrompt = `You are a professional presentation creator. Create a presentation based on the provided transcript.
-    
-Key requirements:
-1. Create exactly ${targetNumSlides} slides.
-2. The transcript may contain multiple video sections marked by "## [Video Title]".
-3. Create slides that span the entire content, distributing them proportionally across all video sections.
-4. For each slide, extract the most relevant timestamp from the transcript in the format [MM:SS].
-5. Each slide must include: id, title (short and concise), content (bullet points), and timestamp if available.
-6. Don't focus only on the beginning of the transcript; cover the entire content.
-7. If the transcript has sections marked with ##, ensure slides cover content from all sections.
+    // Prepare the system prompt with instructions for professional study slides
+    const systemPrompt = `You are an AI assistant that creates professional-quality study slides from a structured video transcript and chapter metadata. The slides are for professionals studying for licensure exams.
 
-Your output should be valid JSON - an array of slide objects.`;
+# Slide Creation Rules:
+
+1. **Content Slides**:
+   - Break the transcript into slides using logical topic breaks or chapter changes
+   - Aim for 1–3 slides per minute of video content (target approximately ${targetNumSlides} total slides)
+   - Each slide must include:
+     - A short, clear **title**
+     - 2–5 **bullet points** with concise transcript-based information
+     - Placeholder: "[Insert Frame]" (user adds image later)
+
+2. **Question Slides**:
+   Detect and handle both styles of questions:
+
+   **A. Multiple Choice Questions (MCQs)**  
+   - Slide 1: Present the question clearly with answer choices (A–D format if applicable)
+   - Slide 2: "Correct Answer" with:
+     - The correct letter (e.g., **Correct Answer: C**)  
+     - 1–2 sentence explanation
+   - Follow with **Explanation Slides** that elaborate on the concept using transcript content
+
+   **B. Direct-Answer Questions (No A–D choices)**  
+   - Slide 1: Present the question text and leave space for the user to consider the answer  
+   - Slide 2: "Correct Answer" box with the exact answer provided in the video (verbatim if possible)  
+     - Include 1–2 sentence explanation  
+   - Follow with **Explanation Slides** from the related portion of the transcript
+
+3. **Explanation Slides**:
+   - Only use **verbatim or paraphrased content from the transcript**
+   - Break into multiple slides as needed
+   - Include "[Insert Frame]" placeholder
+
+4. **Important Guidelines**:
+   - Do not add your own knowledge
+   - Do not skip explanations
+   - Do not fabricate options or answers
+   - All content must come directly from the transcript`;
 
     // Prepare the user prompt
     let userPrompt = `Based on this transcript, create a ${targetNumSlides}-slide presentation titled "${presentationTitle}":`;
@@ -164,22 +189,36 @@ Your output should be valid JSON - an array of slide objects.`;
     userPrompt += `\n\nTranscript:\n${transcript}\n\n`;
     
     userPrompt += `
-Remember:
-- Create exactly ${targetNumSlides} slides
-- Distribute slides evenly across all video sections
-- Include relevant timestamps for each slide
-- Format as valid JSON array of slide objects
+Each slide must be formatted as a JSON object with these fields:
+- id: unique identifier (e.g., "slide-1")
+- title: clear slide title
+- content: bullet points or formatted content
+- timestamp: relevant timestamp from transcript if available
+- transcriptTimestamps: array of relevant timestamps (optional)
 
 Expected JSON format:
 [
   {
     "id": "slide-1",
-    "title": "Slide Title",
-    "content": "- Bullet point 1\\n- Bullet point 2\\n- Bullet point 3",
+    "title": "Introduction to the Topic",
+    "content": "- Key point 1\\n- Key point 2\\n- Key point 3\\n[Insert Frame]",
     "timestamp": "05:30",
     "transcriptTimestamps": ["05:20", "05:35", "05:50"]
   },
-  ...
+  {
+    "id": "slide-2",
+    "title": "Sample Question",
+    "content": "What is the recommended action in this scenario?\\nA. Option A\\nB. Option B\\nC. Option C\\nD. Option D",
+    "timestamp": "06:45",
+    "transcriptTimestamps": ["06:45"]
+  },
+  {
+    "id": "slide-3",
+    "title": "Correct Answer",
+    "content": "✅ **Correct Answer: C**\\n\\nThis is correct because [explanation from transcript].",
+    "timestamp": "07:10",
+    "transcriptTimestamps": ["07:10"]
+  }
 ]`;
     
     // Call OpenAI API to generate the slides

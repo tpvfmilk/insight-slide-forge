@@ -10,7 +10,7 @@ const UploadPage = () => {
         <div>
           <h1 className="text-3xl font-bold">Upload</h1>
           <p className="text-muted-foreground">
-            Upload a video for slide generation
+            Upload a video for professional study slide generation
           </p>
         </div>
         
@@ -18,7 +18,7 @@ const UploadPage = () => {
           <CardHeader>
             <CardTitle>Upload Video Content</CardTitle>
             <CardDescription>
-              Upload a video for slide generation
+              Upload a video to create professional study slides for licensure exam preparation
             </CardDescription>
           </CardHeader>
           <CardContent>
