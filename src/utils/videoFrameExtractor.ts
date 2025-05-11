@@ -49,6 +49,9 @@ export async function extractFramesFromVideoUrl(
     // Temporarily add to DOM but hidden
     document.body.appendChild(video);
     
+    // Track load state
+    let isVideoElementReady = false;
+    
     // Array to store extracted frames
     const frames: Array<{ timestamp: string; frame: Blob }> = [];
     
@@ -62,82 +65,77 @@ export async function extractFramesFromVideoUrl(
     // Track failed extraction attempts to retry with a different approach
     const failedExtractions: string[] = [];
     
-    // Set up video event handlers with more reliable loading sequence
-    const setupVideoHandlers = () => {
-      video.onloadedmetadata = function() {
-        console.log(`Video metadata loaded. Duration: ${video.duration}s, Dimensions: ${video.videoWidth}x${video.videoHeight}`);
-        
-        // Set canvas dimensions as soon as we know video size
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx = canvas.getContext("2d", { 
-            alpha: false, // No transparency needed
-            willReadFrequently: true // Optimize for pixel reading
-          });
-        }
-        
-        video.onloadeddata = onVideoFullyLoaded;
+    // Setup complete promise to ensure we're fully ready before extraction
+    const setupComplete = new Promise<void>((setupResolve) => {
+      // Set up video event handlers with more reliable loading sequence
+      const setupVideoHandlers = () => {
+        video.onloadedmetadata = function() {
+          console.log(`Video metadata loaded. Duration: ${video.duration}s, Dimensions: ${video.videoWidth}x${video.videoHeight}`);
+          
+          // Set canvas dimensions as soon as we know video size
+          if (video.videoWidth > 0 && video.videoHeight > 0) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx = canvas.getContext("2d", { 
+              alpha: false, // No transparency needed
+              willReadFrequently: true // Optimize for pixel reading
+            });
+          }
+          
+          video.onloadeddata = onVideoFullyLoaded;
+        };
       };
-    };
-    
-    function onVideoFullyLoaded() {
-      console.log(`Video loaded fully. Dimensions: ${video.videoWidth}x${video.videoHeight}`);
       
-      // Verify we have a valid video size before proceeding
-      if (video.videoWidth <= 1 || video.videoHeight <= 1) {
-        console.warn("Video dimensions are invalid, waiting for valid dimensions");
+      function onVideoFullyLoaded() {
+        console.log(`Video loaded fully. Dimensions: ${video.videoWidth}x${video.videoHeight}`);
         
-        // Try playing briefly to force dimensions to update
-        video.play().then(() => {
-          setTimeout(() => {
-            video.pause();
+        // Verify we have a valid video size before proceeding
+        if (video.videoWidth <= 1 || video.videoHeight <= 1) {
+          console.warn("Video dimensions are invalid, waiting for valid dimensions");
+          
+          // Try playing briefly to force dimensions to update
+          video.play().then(() => {
+            setTimeout(() => {
+              video.pause();
+              
+              if (video.videoWidth > 1 && video.videoHeight > 1) {
+                // Now we have valid dimensions
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
+                isVideoElementReady = true;
+                setupResolve();
+              } else {
+                video.src = videoUrl; // Reload the video
+                video.load(); // Force reload
+              }
+            }, 500);
+          }).catch(err => {
+            console.warn("Could not play video to get dimensions:", err);
             
-            if (video.videoWidth > 1 && video.videoHeight > 1) {
-              // Now we have valid dimensions
-              canvas.width = video.videoWidth;
-              canvas.height = video.videoHeight;
-              ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
-              initializeProcessing();
-            } else {
-              cleanupAndReject("Could not get valid video dimensions");
-            }
-          }, 500);
-        }).catch(err => {
-          console.warn("Could not play video to get dimensions:", err);
-          cleanupAndReject("Failed to initialize video playback");
-        });
-      } else {
-        // Ensure canvas is properly sized
-        if (!ctx || canvas.width <= 1 || canvas.height <= 1) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
+            // Try manual size setting as fallback
+            canvas.width = 1280; // Default HD width
+            canvas.height = 720; // Default HD height
+            ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
+            isVideoElementReady = true;
+            setupResolve();
+          });
+        } else {
+          // Ensure canvas is properly sized
+          if (!ctx || canvas.width <= 1 || canvas.height <= 1) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
+          }
+          
+          isVideoElementReady = true;
+          setupResolve();
         }
-        
-        initializeProcessing();
-      }
-    }
-    
-    function initializeProcessing() {
-      if (!ctx) {
-        cleanupAndReject("Failed to get canvas context");
-        return;
       }
       
-      // Play video briefly to ensure decoder is initialized
-      video.play().then(() => {
-        // Let it play for a bit to ensure decoder is fully initialized
-        setTimeout(() => {
-          video.pause();
-          processTimestamps();
-        }, 1000); // Longer preroll to better initialize video decoder
-      }).catch(err => {
-        console.warn("Could not play video to initialize:", err);
-        // Try to continue anyway
-        processTimestamps();
-      });
-    }
+      // Start the setup process
+      setupVideoHandlers();
+    });
     
     function processTimestamps() {
       // Get actual video duration from the loaded video
@@ -304,8 +302,8 @@ export async function extractFramesFromVideoUrl(
           setTimeout(() => {
             video.pause();
             // Allow a bit of time for the pause to take effect
-            setTimeout(resolve, 20);
-          }, 100);
+            setTimeout(resolve, 50);
+          }, 300);
         }).catch(() => {
           // If play fails, resolve anyway after a short delay
           setTimeout(resolve, 50);
@@ -315,6 +313,17 @@ export async function extractFramesFromVideoUrl(
     
     // Extract frame with a preroll sequence to ensure decoder is ready
     function extractFrameWithPreroll(seconds: number, timestamp: string, callback: (success: boolean, frameBlob?: Blob) => void) {
+      // Ensure video is set to specific quality options if possible
+      try {
+        // @ts-ignore - Some browsers support these properties
+        if (video.videoWidth > 0 && video.hasOwnProperty('webkitDecodedFrameCount')) {
+          // @ts-ignore - Force high quality decoding on webkit
+          video.webkitPreservesPitch = true;
+        }
+      } catch (e) {
+        // Ignore errors for unsupported browsers
+      }
+
       // Seek to slightly before the target time
       const prerollTime = Math.max(0, seconds - 1.0);
       
@@ -353,7 +362,7 @@ export async function extractFramesFromVideoUrl(
                   forceFrameRender().then(() => {
                     captureAndAnalyzeFrame(timestamp, seconds, callback);
                   });
-                }, 1200); // Increased delay for reliable frame loading
+                }, 1500); // Increased delay for reliable frame loading
               };
               
               // Add event listener for the main seek
@@ -392,54 +401,299 @@ export async function extractFramesFromVideoUrl(
         return;
       }
       
-      // Force a frame render with play/pause cycle
-      forceFrameRender().then(() => {
-        // Clear the canvas before drawing new content
-        ctx!.clearRect(0, 0, canvas.width, canvas.height);
+      // Use multiple capture techniques
+      captureWithTechniques(timestamp, seconds, 0, callback);
+    }
+    
+    // Try different capture techniques
+    function captureWithTechniques(timestamp: string, seconds: number, techniqueIndex: number, callback: (success: boolean, frameBlob?: Blob) => void) {
+      // Array of different capture techniques to try
+      const techniques = [
+        captureWithDrawImage,
+        captureWithPlayPause,
+        captureWithTimelapse,
+        captureWithImageBitmap,
+        captureWithColorCorrection
+      ];
+      
+      if (techniqueIndex >= techniques.length) {
+        console.warn(`All capture techniques failed for ${timestamp}`);
+        callback(false);
+        return;
+      }
+      
+      // Try current technique
+      techniques[techniqueIndex](timestamp, seconds, (success, frameBlob) => {
+        if (success && frameBlob) {
+          callback(true, frameBlob);
+        } else {
+          // Try next technique
+          captureWithTechniques(timestamp, seconds, techniqueIndex + 1, callback);
+        }
+      });
+    }
+    
+    // Basic capture with direct drawImage
+    function captureWithDrawImage(timestamp: string, seconds: number, callback: (success: boolean, frameBlob?: Blob) => void) {
+      if (!ctx) {
+        callback(false);
+        return;
+      }
+      
+      console.log(`Trying basic drawImage capture for ${timestamp}`);
+      
+      try {
+        // Clear the canvas
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Draw solid background to avoid transparency issues
-        ctx!.fillStyle = "white";
-        ctx!.fillRect(0, 0, canvas.width, canvas.height);
+        // Draw the video frame
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        try {
-          // Draw the current frame on the canvas
-          ctx!.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Check frame quality
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const frameQuality = analyzeFrameQuality(imageData);
+        
+        if (frameQuality.score > 0.15) { // Good quality threshold
+          canvas.toBlob((blob) => {
+            if (blob && blob.size > 1000) { // Ensure blob has reasonable size
+              callback(true, blob);
+            } else {
+              callback(false);
+            }
+          }, "image/jpeg", 0.99); // High quality JPEG
+        } else {
+          // Also try PNG for problematic frames
+          canvas.toBlob((blob) => {
+            if (blob && blob.size > 1000) { // Ensure blob has reasonable size
+              console.log(`Used PNG format for ${timestamp} with quality ${frameQuality.score.toFixed(2)}`);
+              callback(true, blob);
+            } else {
+              callback(false);
+            }
+          }, "image/png");
+        }
+      } catch (error) {
+        console.error(`Error in basic capture for ${timestamp}:`, error);
+        callback(false);
+      }
+    }
+    
+    // Capture with play-pause cycle
+    function captureWithPlayPause(timestamp: string, seconds: number, callback: (success: boolean, frameBlob?: Blob) => void) {
+      if (!ctx) {
+        callback(false);
+        return;
+      }
+      
+      console.log(`Trying play-pause technique for ${timestamp}`);
+      
+      // Play briefly before capture
+      video.play().then(() => {
+        setTimeout(() => {
+          video.pause();
           
-          // Check if canvas is actually rendering content
-          const imageData = ctx!.getImageData(0, 0, canvas.width, canvas.height);
-          const frameQuality = analyzeFrameQuality(imageData);
-          
-          console.log(`Frame quality for ${timestamp}: score=${frameQuality.score.toFixed(2)}, ` +
-                      `brightness=${frameQuality.brightness.toFixed(2)}, ` +
-                      `midPixelRatio=${frameQuality.midPixelRatio.toFixed(2)}, ` +
-                      `colorVar=${frameQuality.colorVariance.toFixed(2)}`);
-          
-          if (frameQuality.score > 0.15) {
-            // Good quality frame - convert to blob
-            canvas.toBlob((blob) => {
-              if (blob && blob.size > 1000) { // Ensure blob has reasonable size
-                callback(true, blob);
+          // Allow some time for rendering
+          setTimeout(() => {
+            try {
+              // Clear and draw
+              ctx.fillStyle = "white";
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              
+              // Check frame quality
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const frameQuality = analyzeFrameQuality(imageData);
+              
+              console.log(`Play-pause quality for ${timestamp}: ${frameQuality.score.toFixed(2)}`);
+              
+              if (frameQuality.score > 0.15) {
+                canvas.toBlob((blob) => {
+                  if (blob && blob.size > 1000) {
+                    callback(true, blob);
+                  } else {
+                    callback(false);
+                  }
+                }, "image/jpeg", 0.99);
               } else {
-                console.warn(`Generated blob for ${timestamp} is too small: ${blob?.size || 0} bytes`);
                 callback(false);
               }
-            }, "image/jpeg", 0.98); // Higher quality JPEG
-          } else {
-            // Try with a different compression method
+            } catch (error) {
+              console.error(`Error in play-pause capture for ${timestamp}:`, error);
+              callback(false);
+            }
+          }, 100);
+        }, 200);
+      }).catch(err => {
+        console.warn(`Could not play video for play-pause technique: ${err}`);
+        callback(false);
+      });
+    }
+    
+    // Capture with timelapse technique (multiple frames)
+    function captureWithTimelapse(timestamp: string, seconds: number, callback: (success: boolean, frameBlob?: Blob) => void) {
+      if (!ctx) {
+        callback(false);
+        return;
+      }
+      
+      console.log(`Trying timelapse technique for ${timestamp}`);
+      
+      // Try capturing multiple frames in sequence
+      const frames: ImageData[] = [];
+      const frameCount = 5;
+      let capturedFrames = 0;
+      
+      function captureTimelapseFrame() {
+        if (capturedFrames >= frameCount) {
+          // Process captured frames to find the best one
+          let bestFrame = null;
+          let bestScore = 0;
+          
+          for (let i = 0; i < frames.length; i++) {
+            const quality = analyzeFrameQuality(frames[i]);
+            if (quality.score > bestScore) {
+              bestScore = quality.score;
+              bestFrame = frames[i];
+            }
+          }
+          
+          if (bestFrame && bestScore > 0.15) {
+            console.log(`Found good timelapse frame with score ${bestScore.toFixed(2)}`);
+            ctx.putImageData(bestFrame, 0, 0);
             canvas.toBlob((blob) => {
               if (blob && blob.size > 1000) {
                 callback(true, blob);
               } else {
-                console.warn(`Low quality frame at ${timestamp}, score: ${frameQuality.score.toFixed(2)}`);
                 callback(false);
               }
-            }, "image/png"); // Try PNG format instead
+            }, "image/jpeg", 0.99);
+          } else {
+            callback(false);
           }
-        } catch (error) {
-          console.error(`Error drawing video to canvas at ${timestamp}:`, error);
+          return;
+        }
+        
+        // Draw current frame
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Store frame
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        frames.push(imageData);
+        capturedFrames++;
+        
+        // Small time offset for next frame
+        const offset = 0.1 * capturedFrames;
+        video.currentTime = seconds + offset;
+        
+        // Wait for seek to complete
+        const onSeeked = () => {
+          video.removeEventListener('seeked', onSeeked);
+          setTimeout(() => captureTimelapseFrame(), 100);
+        };
+        
+        video.addEventListener('seeked', onSeeked);
+      }
+      
+      // Start the timelapse capture
+      captureTimelapseFrame();
+    }
+    
+    // Capture using ImageBitmap API for potentially better rendering
+    function captureWithImageBitmap(timestamp: string, seconds: number, callback: (success: boolean, frameBlob?: Blob) => void) {
+      if (!ctx || !('createImageBitmap' in window)) {
+        callback(false);
+        return;
+      }
+      
+      console.log(`Trying ImageBitmap technique for ${timestamp}`);
+      
+      try {
+        createImageBitmap(video).then(bitmap => {
+          // Draw the bitmap to canvas
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          bitmap.close(); // Release resources
+          
+          // Check quality
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const frameQuality = analyzeFrameQuality(imageData);
+          
+          console.log(`ImageBitmap quality for ${timestamp}: ${frameQuality.score.toFixed(2)}`);
+          
+          if (frameQuality.score > 0.15) {
+            canvas.toBlob((blob) => {
+              if (blob && blob.size > 1000) {
+                callback(true, blob);
+              } else {
+                callback(false);
+              }
+            }, "image/jpeg", 0.99);
+          } else {
+            callback(false);
+          }
+        }).catch(err => {
+          console.warn(`ImageBitmap creation failed: ${err}`);
+          callback(false);
+        });
+      } catch (error) {
+        console.error(`Error in ImageBitmap capture: ${error}`);
+        callback(false);
+      }
+    }
+    
+    // Capture with color correction
+    function captureWithColorCorrection(timestamp: string, seconds: number, callback: (success: boolean, frameBlob?: Blob) => void) {
+      if (!ctx) {
+        callback(false);
+        return;
+      }
+      
+      console.log(`Trying color correction technique for ${timestamp}`);
+      
+      // Draw the video frame
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Get the image data
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      
+      // Apply contrast and brightness adjustments
+      for (let i = 0; i < data.length; i += 4) {
+        // Check if pixel is close to white
+        if (data[i] > 240 && data[i+1] > 240 && data[i+2] > 240) {
+          // Make sure it's not pure white (which might be a blank frame)
+          data[i] = 230;     // R
+          data[i+1] = 230;   // G
+          data[i+2] = 235;   // B
+        }
+        
+        // Add slight contrast
+        for (let j = 0; j < 3; j++) {
+          const factor = 1.1; // Contrast factor
+          let color = data[i+j];
+          color = Math.floor((color / 255 - 0.5) * factor * 255 + 0.5 * 255);
+          data[i+j] = Math.max(0, Math.min(255, color));
+        }
+      }
+      
+      // Put the modified image data back on the canvas
+      ctx.putImageData(imageData, 0, 0);
+      
+      // Create blob
+      canvas.toBlob((blob) => {
+        if (blob && blob.size > 1000) {
+          console.log(`Color correction technique produced a valid blob for ${timestamp}`);
+          callback(true, blob);
+        } else {
           callback(false);
         }
-      });
+      }, "image/jpeg", 0.99);
     }
     
     // Analyze frame quality and return score with metrics
@@ -454,6 +708,7 @@ export async function extractFramesFromVideoUrl(
       let brightPixels = 0;
       let colorVariance = 0;
       let hasContent = false;
+      let whiteCount = 0;
       
       for (let i = 0; i < imageData.data.length; i += 4 * step) {
         const r = imageData.data[i];
@@ -467,10 +722,15 @@ export async function extractFramesFromVideoUrl(
         else if (brightness > 215) brightPixels++;
         else midPixels++;
         
+        // Count near-white pixels (for detecting blank frames)
+        if (r > 250 && g > 250 && b > 250) {
+          whiteCount++;
+        }
+        
         // Calculate color variance
         colorVariance += Math.abs(r - g) + Math.abs(g - b) + Math.abs(r - b);
         
-        // Check for non-white, non-black content
+        // If we find significant non-white, non-black content, we're good
         if ((r < 240 || g < 240 || b < 240) && (r > 15 || g > 15 || b > 15)) {
           hasContent = true;
         }
@@ -479,9 +739,23 @@ export async function extractFramesFromVideoUrl(
       const sampledPixels = Math.ceil(pixelCount / step);
       const avgBrightness = totalBrightness / (sampledPixels * 255);
       const midPixelRatio = midPixels / sampledPixels;
-      const colorVarianceScore = colorVariance / (sampledPixels * 765);
+      const colorVarianceScore = colorVariance / (sampledPixels * 765); // 765 is max possible variance (255*3)
+      const whiteRatio = whiteCount / sampledPixels;
+      
+      // Penalize heavily if frame is almost all white
+      const whiteFramePenalty = whiteRatio > 0.95 ? 0.1 : 1.0;
+      
+      console.log(`Frame quality: brightness=${avgBrightness.toFixed(2)}, ` +
+                  `midPixels=${midPixelRatio.toFixed(2)}, ` +
+                  `colorVar=${colorVarianceScore.toFixed(2)}, ` +
+                  `whiteRatio=${whiteRatio.toFixed(2)}, ` +
+                  `hasContent=${hasContent}`);
       
       // Calculate quality score - higher is better
+      // We prefer:
+      // 1. Medium brightness (around 0.5) - distance from ideal of 0.5
+      // 2. High mid-range pixel content
+      // 3. High color variance
       const brightnessFactor = 1 - Math.abs(avgBrightness - 0.5) * 2; // 1 at perfect, 0 at extremes
       
       // Combined quality score (weighted sum)
@@ -489,18 +763,18 @@ export async function extractFramesFromVideoUrl(
         brightnessFactor * 0.4 + 
         midPixelRatio * 0.4 + 
         colorVarianceScore * 0.2
-      ) * (hasContent ? 1 : 0.2); // Heavily penalize frames with no content
+      ) * whiteFramePenalty * (hasContent ? 1 : 0.5);
       
       return {
         score: qualityScore,
         brightness: avgBrightness,
         midPixelRatio,
         colorVariance: colorVarianceScore,
+        whiteRatio,
         hasContent
       };
     }
     
-    // Function to retry extractions that failed with the first approach
     function retryFailedExtractions(failedTimestamps: string[], index: number) {
       if (index >= failedTimestamps.length) {
         console.log(`Retry complete. Total frames extracted: ${frames.length}`);
@@ -602,40 +876,30 @@ export async function extractFramesFromVideoUrl(
       resolve(result);
     }
     
-    // Start the process
-    setupVideoHandlers();
+    // Start loading the video
+    console.log(`Loading video from URL: ${videoUrl}`);
+    video.src = videoUrl;
     
-    // Start loading the video - with a more robust loading process
-    try {
-      console.log(`Loading video from URL: ${videoUrl}`);
-      video.src = videoUrl;
-      
-      // Force the video to load
-      video.load();
-      
-      // Set a timeout to detect video loading issues
-      const loadingTimeout = setTimeout(() => {
-        if (!video.videoWidth || !video.videoHeight || video.readyState < 2) {
-          console.warn("Video loading timeout - readyState:", video.readyState);
-          
-          // Try to recover by forcing load again
-          video.load();
-          
-          // Set a final timeout before giving up
-          setTimeout(() => {
-            if (video.readyState < 2) {
-              cleanupAndReject("Video loading timed out");
-            }
-          }, 10000);
-        }
-      }, 15000);
-      
-      // Clear timeout if video loads successfully
-      video.addEventListener('loadeddata', () => {
-        clearTimeout(loadingTimeout);
+    // Force the video to load
+    video.load();
+    
+    // Wait for setup to complete and then begin processing
+    setupComplete.then(() => {
+      // Initialize extraction with a brief preroll play to get the decoder warmed up
+      video.play().then(() => {
+        setTimeout(() => {
+          video.pause();
+          // Start processing timestamps
+          processTimestamps();
+        }, 1000); // 1 second preroll
+      }).catch(err => {
+        console.warn("Could not perform initial play for decoder warmup:", err);
+        // Start processing anyway
+        processTimestamps();
       });
-    } catch (e) {
-      cleanupAndReject(`Error loading video: ${e}`);
-    }
+    }).catch(err => {
+      console.error("Setup failed:", err);
+      cleanupAndReject("Failed to set up video element");
+    });
   });
 }

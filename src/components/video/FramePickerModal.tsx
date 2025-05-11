@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -339,8 +338,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         undefined,
         duration,
         {
-          captureAttempts: 4,
-          captureOffsets: [-0.1, 0, 0.1, 0.2, -0.2, 0.5, -0.5],
+          captureAttempts: 5, // More attempts
+          captureOffsets: [-0.1, 0, 0.1, 0.2, -0.2, 0.5, -0.5, 0.8, -0.8], // More offsets
           minContentThreshold: 0.03
         }
       );
@@ -572,6 +571,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               onLoadedMetadata={handleVideoLoaded}
               onError={handleVideoError}
               playsInline
+              preload="auto" // Force full preload
             >
               Your browser does not support the video tag.
             </video>
