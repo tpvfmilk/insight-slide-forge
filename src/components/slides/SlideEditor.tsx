@@ -930,9 +930,9 @@ export const SlideEditor = () => {
         </Button>
       </div>
       
-      {/* Film strip at the bottom - card-style with centered titles */}
-      <div className="h-40 border-t w-full">
-        <div className="max-w-screen-xl mx-auto px-4">
+      {/* Film strip at the bottom - card-style with centered titles - updated to take full height */}
+      <div className="h-40 border-t w-full flex-shrink-0">
+        <div className="max-w-screen-xl mx-auto px-4 h-full">
           <ScrollArea orientation="horizontal" className="h-full w-full">
             <div ref={filmstripRef} className="flex gap-2 p-2 h-full">
               {slides.map((slide, index) => (
@@ -951,9 +951,7 @@ export const SlideEditor = () => {
                         alt={`Slide ${index + 1}`}
                         className="w-full h-full object-cover"
                       />
-                    ) : (
-                      <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
-                    )}
+                    ) : null}
                   </div>
                   
                   {/* Slide title/number */}
