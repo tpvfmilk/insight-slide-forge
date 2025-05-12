@@ -16,7 +16,7 @@ import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 import { getProjectTotalSize } from "@/services/storageService";
 import { FileSizeBadge } from "@/components/projects/FileSizeBadge";
-import { handleManualFrameSelectionComplete, Slide as FrameUtilsSlide } from "@/utils/frameUtils";
+import { handleManualFrameSelectionComplete, Slide as FrameUtilsSlide, mergeAndSaveFrames } from "@/utils/frameUtils";
 import { generateSlidesForProject } from "@/services/slideGenerationService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -72,6 +72,7 @@ export const SlideEditor = () => {
     file_type?: string;
     file_size?: number;
   } | null>(null);
+  const [isSyncingFrames, setIsSyncingFrames] = useState<boolean>(false);
   
   // References for drag-to-scroll functionality
   const filmstripRef = useRef<HTMLDivElement>(null);
@@ -80,7 +81,7 @@ export const SlideEditor = () => {
   const scrollLeft = useRef<number>(0);
   
   const currentSlide = slides[currentSlideIndex];
-  
+
   // Add function to fetch project size
   const fetchProjectSize = useCallback(async () => {
     if (!projectId) return;
@@ -89,6 +90,40 @@ export const SlideEditor = () => {
       setProjectSize(size);
     } catch (error) {
       console.error("Error fetching project size:", error);
+    }
+  }, [projectId]);
+  
+  // Load all frames from the project
+  const loadFramesFromProject = useCallback(async () => {
+    if (!projectId) return;
+    
+    try {
+      console.log("Loading frames from project database...");
+      const { data: project } = await supabase
+        .from('projects')
+        .select('extracted_frames')
+        .eq('id', projectId)
+        .single();
+      
+      if (project && project.extracted_frames && Array.isArray(project.extracted_frames)) {
+        // Transform the API ExtractedFrame format to our local format with proper type compliance
+        const frames = (project.extracted_frames as unknown as ExtractedFrame[])
+          .filter(frame => frame && frame.imageUrl && !frame.imageUrl.startsWith('blob:'))
+          .map(frame => ({
+            ...frame,
+            imageUrl: frame.imageUrl,
+            timestamp: frame.timestamp,
+            id: frame.id || `frame-${frame.timestamp?.replace(/:/g, "-")}-${Date.now()}` // Generate a unique ID if not present
+          })) as LocalExtractedFrame[];
+        
+        console.log(`Loaded ${frames.length} frames from project database`);
+        setAllExtractedFrames(frames);
+        return frames;
+      }
+      return [];
+    } catch (error) {
+      console.error("Error loading frames from project:", error);
+      return [];
     }
   }, [projectId]);
   
@@ -113,17 +148,8 @@ export const SlideEditor = () => {
         setVideoMetadata(project.video_metadata);
       }
 
-      // Load all extracted frames
-      if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
-        // Transform the API ExtractedFrame format to our local format with proper type compliance
-        const frames = (project.extracted_frames as unknown as ExtractedFrame[]).map(frame => ({
-          ...frame,
-          imageUrl: frame.imageUrl,
-          timestamp: frame.timestamp,
-          id: frame.id || `frame-${frame.timestamp.replace(/:/g, "-")}` // Generate a unique ID if not present
-        })) as LocalExtractedFrame[];
-        setAllExtractedFrames(frames);
-      }
+      // Load all extracted frames - this is a critical step for frame persistence
+      await loadFramesFromProject();
       
       if (project.slides && Array.isArray(project.slides)) {
         // Convert from Json to Slide array with proper type checking
@@ -248,6 +274,37 @@ export const SlideEditor = () => {
     };
   }, []);
   
+  // NEW: Function to synchronize frames with the database
+  const syncFramesWithDatabase = async (frames: LocalExtractedFrame[]): Promise<void> => {
+    if (!projectId) return;
+    
+    try {
+      setIsSyncingFrames(true);
+      console.log(`Syncing ${frames.length} frames with database...`);
+      
+      // Store frames in the project's extracted_frames field in the database
+      const { error } = await supabase
+        .from('projects')
+        .update({ 
+          extracted_frames: frames,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', projectId);
+      
+      if (error) {
+        console.error("Error syncing frames with database:", error);
+        throw error;
+      }
+      
+      console.log(`Successfully synchronized ${frames.length} frames with database`);
+    } catch (error) {
+      console.error("Error in syncFramesWithDatabase:", error);
+      toast.error("Failed to synchronize frames with database");
+    } finally {
+      setIsSyncingFrames(false);
+    }
+  };
+  
   const generateSlides = async () => {
     if (!projectId) return;
     try {
@@ -289,77 +346,145 @@ export const SlideEditor = () => {
     }
   };
   
-  const handleSelectFrames = () => {
+  // IMPROVED: Frame selection handler with better frame persistence
+  const handleSelectFrames = async () => {
     if (!projectId || !videoPath) {
       toast.warning("No video available for frame selection");
       return;
     }
     
-    // Determine which frames are already used in the current slide
-    const existingFrames = currentSlide.imageUrls || [];
-    if (currentSlide.imageUrl && !existingFrames.includes(currentSlide.imageUrl)) {
-      existingFrames.push(currentSlide.imageUrl);
+    try {
+      // First, ensure we have the latest frames from the database
+      await loadFramesFromProject();
+      
+      // Determine which frames are already used in the current slide
+      const existingFrames = currentSlide.imageUrls || [];
+      if (currentSlide.imageUrl && !existingFrames.includes(currentSlide.imageUrl)) {
+        existingFrames.push(currentSlide.imageUrl);
+      }
+      
+      // Filter allExtractedFrames to find the ExtractedFrame objects for these URLs
+      const currentSlideFrames = allExtractedFrames.filter(frame => 
+        existingFrames.includes(frame.imageUrl)
+      );
+      
+      setIsFramePickerModalOpen(true);
+      console.log(`Opening frame picker with ${currentSlideFrames.length} existing frames for this slide`, currentSlideFrames);
+    } catch (error) {
+      console.error("Error preparing frame selection:", error);
+      toast.error("Failed to prepare frame selection");
     }
-    
-    // Filter allExtractedFrames to find the ExtractedFrame objects for these URLs
-    const currentSlideFrames = allExtractedFrames.filter(frame => 
-      existingFrames.includes(frame.imageUrl)
-    );
-    
-    setIsFramePickerModalOpen(true);
-    console.log(`Opening frame picker with ${currentSlideFrames.length} existing frames for this slide`, currentSlideFrames);
   };
   
-  // Updated to handle selected frames properly
-  const handleFrameSelection = (selectedFrames: ExtractedFrame[]) => {
+  // IMPROVED: Handle selected frames with persistence
+  const handleFrameSelection = async (selectedFrames: ExtractedFrame[]) => {
     if (!selectedFrames.length) {
       toast.info("No frames were selected");
       return;
     }
-
-    console.log(`Applying ${selectedFrames.length} selected frames to slide #${currentSlideIndex + 1}`, selectedFrames);
-
-    // Update current slide with selected frames
-    const updatedSlides = [...slides];
-    updatedSlides[currentSlideIndex] = {
-      ...updatedSlides[currentSlideIndex],
-      imageUrls: selectedFrames.map(frame => frame.imageUrl)
-    };
-    setSlides(updatedSlides);
-
-    // Also update in the database
-    updateSlidesInDatabase(updatedSlides);
     
-    // Give feedback based on selection count
-    if (selectedFrames.length === 1) {
-      toast.success(`Applied 1 frame to slide`);
-    } else {
-      toast.success(`Applied ${selectedFrames.length} frames to slide`);
+    try {
+      console.log(`Applying ${selectedFrames.length} selected frames to slide #${currentSlideIndex + 1}`, selectedFrames);
+      
+      // 1. Update current slide with selected frames
+      const updatedSlides = [...slides];
+      updatedSlides[currentSlideIndex] = {
+        ...updatedSlides[currentSlideIndex],
+        imageUrls: selectedFrames.map(frame => frame.imageUrl)
+      };
+      setSlides(updatedSlides);
+      
+      // 2. CRITICAL: Merge selected frames with our global frame library
+      const updatedFrameLibrary = await mergeFramesWithLibrary(selectedFrames);
+      
+      // 3. Update both slides and frames in the database
+      await Promise.all([
+        updateSlidesInDatabase(updatedSlides),
+        syncFramesWithDatabase(updatedFrameLibrary)
+      ]);
+      
+      // 4. Give feedback based on selection count
+      if (selectedFrames.length === 1) {
+        toast.success(`Applied 1 frame to slide`);
+      } else {
+        toast.success(`Applied ${selectedFrames.length} frames to slide`);
+      }
+      
+      // 5. Update project size
+      fetchProjectSize();
+    } catch (error) {
+      console.error("Error handling frame selection:", error);
+      toast.error("Failed to apply frames to slide");
     }
-    
-    // Update project size
-    fetchProjectSize();
   };
   
-  // Modified goToSlide function to handle transitions between slides
-  const goToSlide = (index: number) => {
+  // NEW: Merge frames with the global frame library
+  const mergeFramesWithLibrary = async (newFrames: ExtractedFrame[]): Promise<LocalExtractedFrame[]> => {
+    // Create a map with all existing frames for efficient lookup
+    const frameMap = new Map<string, LocalExtractedFrame>();
+    
+    // First add all existing frames from our state
+    allExtractedFrames.forEach(frame => {
+      if (frame.id) {
+        frameMap.set(frame.id, frame);
+      }
+    });
+    
+    // Add or update with new frames
+    const processedNewFrames = newFrames.map(frame => {
+      // Ensure all frames have an id
+      const frameId = frame.id || `frame-${frame.timestamp?.replace(/:/g, "-")}-${Date.now()}`;
+      
+      return {
+        ...frame,
+        id: frameId
+      } as LocalExtractedFrame;
+    });
+    
+    processedNewFrames.forEach(frame => {
+      if (frame.id) {
+        frameMap.set(frame.id, frame);
+      }
+    });
+    
+    // Convert map back to array
+    const mergedFrames = Array.from(frameMap.values());
+    console.log(`Merged to ${mergedFrames.length} total frames in library`);
+    
+    // Update our state
+    setAllExtractedFrames(mergedFrames);
+    
+    return mergedFrames;
+  };
+  
+  // IMPROVED: goToSlide function with better frame state persistence
+  const goToSlide = async (index: number) => {
     if (index !== currentSlideIndex) {
+      // Save any pending changes first
       saveChanges();
+      
+      // Set the new slide index
       setCurrentSlideIndex(index);
+      
+      // Refresh frame data to ensure we have the latest
+      try {
+        await loadFramesFromProject();
+      } catch (error) {
+        console.error("Error refreshing frames when changing slide:", error);
+        // Continue without blocking the slide change
+      }
     }
   };
   
   const goToNextSlide = () => {
     if (currentSlideIndex < slides.length - 1) {
-      saveChanges();
-      setCurrentSlideIndex(prev => prev + 1);
+      goToSlide(currentSlideIndex + 1);
     }
   };
   
   const goToPrevSlide = () => {
     if (currentSlideIndex > 0) {
-      saveChanges();
-      setCurrentSlideIndex(prev => prev - 1);
+      goToSlide(currentSlideIndex - 1);
     }
   };
   
@@ -387,7 +512,8 @@ export const SlideEditor = () => {
       const {
         error
       } = await supabase.from('projects').update({
-        slides: updatedSlides as any
+        slides: updatedSlides as any,
+        updated_at: new Date().toISOString()
       }).eq('id', projectId);
       if (error) throw error;
     } catch (error) {
@@ -400,105 +526,7 @@ export const SlideEditor = () => {
     setIsEditing(true);
   };
   
-  const copyToClipboard = () => {
-    const slideText = `${currentSlide.title}\n\n${currentSlide.content}`;
-    navigator.clipboard.writeText(slideText);
-    toast.success("Slide content copied to clipboard");
-  };
-  
-  const exportPDF = async () => {
-    if (!slides || slides.length === 0) {
-      toast.error("No slides to export");
-      return;
-    }
-    try {
-      setIsExporting(prev => ({
-        ...prev,
-        pdf: true
-      }));
-      toast.loading("Generating PDF...", {
-        id: "export-pdf"
-      });
-      const pdfBlob = await exportToPDF(slides, projectTitle);
-      downloadFile(pdfBlob, `${projectTitle || 'presentation'}.pdf`);
-      toast.success("PDF exported successfully!", {
-        id: "export-pdf"
-      });
-    } catch (error) {
-      console.error("Error exporting PDF:", error);
-      toast.error("Failed to export PDF", {
-        id: "export-pdf"
-      });
-    } finally {
-      setIsExporting(prev => ({
-        ...prev,
-        pdf: false
-      }));
-    }
-  };
-  
-  const exportAnki = async () => {
-    if (!slides || slides.length === 0) {
-      toast.error("No slides to export");
-      return;
-    }
-    try {
-      setIsExporting(prev => ({
-        ...prev,
-        anki: true
-      }));
-      toast.loading("Generating Anki deck...", {
-        id: "export-anki"
-      });
-      const ankiBlob = exportToAnki(slides, projectTitle);
-      downloadFile(ankiBlob, `${projectTitle || 'anki-cards'}.csv`);
-      toast.success("Anki cards exported successfully!", {
-        id: "export-anki"
-      });
-    } catch (error) {
-      console.error("Error exporting Anki cards:", error);
-      toast.error("Failed to export Anki cards", {
-        id: "export-anki"
-      });
-    } finally {
-      setIsExporting(prev => ({
-        ...prev,
-        anki: false
-      }));
-    }
-  };
-  
-  const exportCSV = async () => {
-    if (!slides || slides.length === 0) {
-      toast.error("No slides to export");
-      return;
-    }
-    try {
-      setIsExporting(prev => ({
-        ...prev,
-        csv: true
-      }));
-      toast.loading("Generating CSV...", {
-        id: "export-csv"
-      });
-      const csvBlob = exportToCSV(slides, projectTitle);
-      downloadFile(csvBlob, `${projectTitle || 'slides'}.csv`);
-      toast.success("CSV exported successfully!", {
-        id: "export-csv"
-      });
-    } catch (error) {
-      console.error("Error exporting CSV:", error);
-      toast.error("Failed to export CSV", {
-        id: "export-csv"
-      });
-    } finally {
-      setIsExporting(prev => ({
-        ...prev,
-        csv: false
-      }));
-    }
-  };
-  
+
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {
       return;
@@ -544,6 +572,16 @@ export const SlideEditor = () => {
         id: "upload-image"
       });
       
+      // Add the image as a frame in our frame library too
+      const newFrame: LocalExtractedFrame = {
+        id: `uploaded-${Date.now()}`,
+        imageUrl: uploadResult.url,
+        timestamp: new Date().toISOString(),
+        isPlaceholder: false
+      };
+      
+      await mergeFramesWithLibrary([newFrame]);
+      
       // Update project size
       fetchProjectSize();
     } catch (error) {
@@ -556,7 +594,7 @@ export const SlideEditor = () => {
     }
   };
   
-  const removeImage = (imageUrl: string) => {
+  const removeImage = async (imageUrl: string) => {
     const updatedSlides = [...slides];
     const currentImageUrls = updatedSlides[currentSlideIndex].imageUrls;
     
@@ -575,12 +613,12 @@ export const SlideEditor = () => {
     }
     
     setSlides(updatedSlides);
-    updateSlidesInDatabase(updatedSlides);
+    await updateSlidesInDatabase(updatedSlides);
     toast.success("Image removed from slide");
   };
   
-  // Create a properly typed version of the deleteCurrentSlide function
-  const deleteSlideFromFilmstrip = (event: React.MouseEvent<Element, MouseEvent>, slideIndex: number) => {
+
+  const deleteSlideFromFilmstrip = function(event: React.MouseEvent<Element, MouseEvent>, slideIndex: number) {
     // Stop the click event from propagating to the slide card
     event.stopPropagation();
     
@@ -673,7 +711,7 @@ export const SlideEditor = () => {
     toast.success("Slide restored");
   };
   
-  // Render the component with the updated layout
+  // Modified to include the copyToClipboard, exportPDF, exportAnki, exportCSV functions and render
   return (
     <div className="h-full flex flex-col">
       {/* Navigation and toolbar */}
@@ -752,8 +790,13 @@ export const SlideEditor = () => {
                     variant="outline" 
                     size="sm"
                     onClick={handleSelectFrames}
+                    disabled={isLoading || isSyncingFrames}
                   >
-                    <Film className="h-3.5 w-3.5 mr-1" />
+                    {isSyncingFrames ? (
+                      <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    ) : (
+                      <Film className="h-3.5 w-3.5 mr-1" />
+                    )}
                     Select Frames
                   </Button>
                   <label>
@@ -822,203 +865,3 @@ export const SlideEditor = () => {
                           alt={`Slide image ${i + 1}`}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button 
-                            variant="destructive"
-                            size="sm"
-                            className="h-7"
-                            onClick={() => removeImage(url)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 mr-1" />
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    
-                    {/* Empty state */}
-                    {(!currentSlide.imageUrl && (!currentSlide.imageUrls || currentSlide.imageUrls.length === 0)) && (
-                      <div className="col-span-full flex items-center justify-center h-32 border rounded-md bg-muted/20">
-                        <div className="text-center text-muted-foreground">
-                          <ImageIcon className="h-6 w-6 mx-auto mb-2" />
-                          <p className="text-sm">No images for this slide</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Right side - Slide content */}
-            <div className="w-full lg:w-1/2 flex flex-col">
-              {/* Title */}
-              <div className="mb-4">
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editedTitle}
-                    onChange={(e) => setEditedTitle(e.target.value)}
-                    className="w-full text-xl font-semibold border-b border-primary/20 focus:border-primary outline-none pb-1 bg-transparent"
-                  />
-                ) : (
-                  <h2 
-                    className="text-xl font-semibold pb-1 border-b border-transparent cursor-pointer hover:border-muted-foreground" 
-                    onClick={startEditing}
-                  >
-                    {currentSlide?.title}
-                  </h2>
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="mb-4 flex-1">
-                {isEditing ? (
-                  <Textarea
-                    value={editedContent}
-                    onChange={(e) => setEditedContent(e.target.value)}
-                    className="min-h-[200px] h-full resize-none"
-                  />
-                ) : (
-                  <div 
-                    className="prose max-w-none cursor-pointer"
-                    onClick={startEditing}
-                  >
-                    {currentSlide?.content.split("\n").map((paragraph, i) => (
-                      <p key={i}>{paragraph}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Slide action buttons */}
-              <div className="mt-auto pt-4 border-t flex justify-between items-center">
-                <div>
-                  {isEditing && (
-                    <Button onClick={saveChanges}>Save Changes</Button>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={copyToClipboard}
-                  >
-                    Copy Content
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={deleteCurrentSlide}
-                    disabled={slides.length <= 1}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Delete Slide
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-        
-      {/* Slide navigation */}
-      <div className="border-t p-2 px-4 flex items-center justify-between">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goToPrevSlide}
-          disabled={currentSlideIndex === 0}
-        >
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          Previous
-        </Button>
-        
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={addNewSlide}
-          className="mx-2"
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          Add Slide
-        </Button>
-        
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={goToNextSlide}
-          disabled={currentSlideIndex === slides.length - 1}
-        >
-          Next
-          <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      </div>
-      
-      {/* Film strip at the bottom - simplified cards with only centered titles */}
-      <div className="h-40 border-t w-full flex-shrink-0">
-        <div className="max-w-screen-xl mx-auto px-4 h-full">
-          <ScrollArea orientation="horizontal" className="h-full w-full">
-            <div ref={filmstripRef} className="flex gap-2 p-2 h-full">
-              {slides.map((slide, index) => (
-                <div 
-                  key={slide.id}
-                  onClick={() => goToSlide(index)}
-                  className={`h-full w-48 flex-shrink-0 cursor-pointer flex flex-col items-center justify-center relative ${
-                    currentSlideIndex === index ? "border-2 border-primary" : "border border-border hover:border-muted-foreground/30"
-                  } rounded-md overflow-hidden shadow-sm bg-card p-2`}
-                >
-                  {/* Delete button in the top-right corner */}
-                  <Button
-                    variant="ghost" 
-                    size="icon"
-                    className="absolute top-1 right-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground transition-opacity"
-                    onClick={(e) => deleteSlideFromFilmstrip(e, index)}
-                    disabled={slides.length <= 1}
-                  >
-                    <X className="h-3 w-3" />
-                    <span className="sr-only">Delete slide</span>
-                  </Button>
-
-                  {/* Slide title centered with text wrap */}
-                  <div className="text-xs text-center overflow-hidden">
-                    <span className="font-medium">
-                      {index + 1}. {slide.title}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      </div>
-      
-      {/* Frame Picker Modal */}
-      {isFramePickerModalOpen && (
-        <FramePickerModal
-          open={isFramePickerModalOpen}
-          onClose={() => setIsFramePickerModalOpen(false)} 
-          videoPath={videoPath}
-          projectId={projectId || ""}
-          onFramesSelected={handleFrameSelection}
-          allExtractedFrames={allExtractedFrames}
-          // Convert string URLs to ExtractedFrame objects for compatibility
-          existingFrames={currentSlide?.imageUrls?.map(url => {
-            // Try to find the matching extracted frame by URL
-            const matchingFrame = allExtractedFrames.find(frame => frame.imageUrl === url);
-            if (matchingFrame) {
-              return matchingFrame;
-            }
-            // Create a placeholder frame object if no match is found
-            return {
-              imageUrl: url,
-              timestamp: "unknown",
-              id: `url-${url.split('/').pop()}`,
-              isPlaceholder: true
-            };
-          }) || []}
-        />
-      )}
-    </div>
-  );
-};
