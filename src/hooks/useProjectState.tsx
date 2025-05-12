@@ -276,7 +276,7 @@ export const useProjectState = (projectId: string | undefined) => {
       // Get current project data with extracted frames
       const { data: projectData, error: getError } = await supabase
         .from('projects')
-        .select('extracted_frames')
+        .select('extracted_frames, slides')
         .eq('id', projectId)
         .single();
         
@@ -302,10 +302,13 @@ export const useProjectState = (projectId: string | undefined) => {
       // If a frame with the same timestamp exists, the new one replaces it
       const framesByTimestamp = new Map<string, ExtractedFrame>();
       
-      // First add all existing frames
+      // First add all existing frames - THIS PRESERVES THE LIBRARY
       existingFrames.forEach(frame => {
         if (frame.timestamp) {
           framesByTimestamp.set(frame.timestamp, frame);
+        } else if (frame.id) {
+          // Use ID as fallback if timestamp is missing
+          framesByTimestamp.set(frame.id, frame);
         }
       });
       
@@ -313,6 +316,9 @@ export const useProjectState = (projectId: string | undefined) => {
       nonBlankFrames.forEach(frame => {
         if (frame.timestamp) {
           framesByTimestamp.set(frame.timestamp, frame);
+        } else if (frame.id) {
+          // Use ID as fallback if timestamp is missing
+          framesByTimestamp.set(frame.id, frame);
         }
       });
       

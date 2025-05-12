@@ -48,6 +48,9 @@ const ProjectPage = () => {
     }
     console.log("Opening frame picker modal with", extractedFrames?.length || 0, "extracted frames");
     modals.openFramePickerModal();
+    
+    // Force reload project to ensure we have the latest frames
+    loadProject();
   };
   
   // Handler for when frames are selected in the frame picker
@@ -148,7 +151,11 @@ const ProjectPage = () => {
       {modals.isFramePickerModalOpen && project?.source_file_path && (
         <FramePickerModal
           open={modals.isFramePickerModalOpen}
-          onClose={() => modals.closeFramePickerModal()} 
+          onClose={() => {
+            modals.closeFramePickerModal();
+            // Force reload project after closing modal to ensure we have the latest frames
+            loadProject();
+          }} 
           videoPath={project.source_file_path}
           projectId={projectId || ""}
           onFramesSelected={handleFrameSelection}

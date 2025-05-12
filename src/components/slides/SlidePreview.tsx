@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -20,8 +21,16 @@ export interface Slide {
 
 type TransitionDirection = "next" | "prev" | "none";
 
-const SlideContent = ({ slide }: { slide: Slide }) => (
-  <div className="space-y-6">
+const SlideContent = ({ 
+  slide, 
+  slideNumber, 
+  totalSlides 
+}: { 
+  slide: Slide; 
+  slideNumber: number; 
+  totalSlides: number;
+}) => (
+  <div className="space-y-6 relative">
     <h2 className="text-4xl font-bold">{slide.title}</h2>
     
     {/* Display multiple images if available, otherwise fall back to single imageUrl */}
@@ -50,6 +59,11 @@ const SlideContent = ({ slide }: { slide: Slide }) => (
     
     <div className="text-xl whitespace-pre-line overflow-y-auto max-h-[60vh] px-2 md:px-0">
       {slide.content}
+    </div>
+    
+    {/* Slide number indicator at the bottom */}
+    <div className="absolute bottom-0 right-0 text-xs text-muted-foreground bg-background/50 px-2 py-1 rounded-tl-md">
+      Slide {slideNumber} of {totalSlides}
     </div>
   </div>
 );
@@ -331,7 +345,13 @@ export const SlidePreview = () => {
       <div className="flex-1 flex items-center justify-center p-8 relative" ref={slideContainerRef}>
         <div className={getSlideAnimationClasses()}>
           <div className="max-w-4xl w-full mx-auto h-full flex items-center justify-center">
-            {currentSlide && <SlideContent slide={currentSlide} />}
+            {currentSlide && (
+              <SlideContent 
+                slide={currentSlide}
+                slideNumber={currentSlideIndex + 1}
+                totalSlides={slides.length}
+              />
+            )}
           </div>
         </div>
       </div>

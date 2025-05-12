@@ -1,3 +1,4 @@
+
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -59,6 +60,63 @@ export function getFrameStatistics(
     unusedCount: unusedFrames.length,
     unusedFrames
   };
+}
+
+/**
+ * Merge frames from multiple sources, ensuring no duplicates
+ */
+export async function mergeAndSaveFrames(
+  projectId: string,
+  newFrames: ExtractedFrame[],
+  existingFrames: ExtractedFrame[] = []
+): Promise<ExtractedFrame[]> {
+  try {
+    console.log(`Merging ${newFrames.length} new frames with ${existingFrames.length} existing frames`);
+    
+    // Create a map for efficient merging
+    const frameMap = new Map<string, ExtractedFrame>();
+    
+    // First add all existing frames
+    existingFrames.forEach(frame => {
+      if (frame.id) {
+        frameMap.set(frame.id, frame);
+      } else if (frame.timestamp) {
+        frameMap.set(frame.timestamp, frame);
+      }
+    });
+    
+    // Then add/override with new frames
+    newFrames.forEach(frame => {
+      const key = frame.id || frame.timestamp;
+      if (key) {
+        frameMap.set(key, frame);
+      }
+    });
+    
+    // Convert map back to array
+    const mergedFrames = Array.from(frameMap.values());
+    console.log(`Merged to ${mergedFrames.length} total frames`);
+    
+    // Save to project if a project ID is provided
+    if (projectId) {
+      const { error } = await supabase
+        .from('projects')
+        .update({ extracted_frames: mergedFrames })
+        .eq('id', projectId);
+        
+      if (error) {
+        console.error("Error saving merged frames:", error);
+        return mergedFrames;
+      }
+      
+      console.log(`Saved ${mergedFrames.length} merged frames to project ${projectId}`);
+    }
+    
+    return mergedFrames;
+  } catch (error) {
+    console.error("Error in mergeAndSaveFrames:", error);
+    return [...existingFrames, ...newFrames];
+  }
 }
 
 /**
