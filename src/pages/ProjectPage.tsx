@@ -1,3 +1,4 @@
+
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -56,6 +57,11 @@ const ProjectPage = () => {
     
     try {
       toast.loading("Processing selected frames...", { id: toastId });
+      
+      if (selectedFrames.length === 0) {
+        toast.error("No frames were selected", { id: toastId });
+        return;
+      }
       
       // Pass the selected frames to be handled in the project state
       const success = await handleManualFrameSelectionComplete(selectedFrames);

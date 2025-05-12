@@ -67,10 +67,21 @@ export const useProjectState = (projectId: string | undefined) => {
         });
       }
       
-      // Get previously extracted frames
+      // Get previously extracted frames - ensure they're properly loaded
       if (projectData.extracted_frames && Array.isArray(projectData.extracted_frames)) {
-        setExtractedFrames(projectData.extracted_frames as ExtractedFrame[]);
-        console.log(`Loaded ${projectData.extracted_frames.length} extracted frames from project`);
+        const frames = projectData.extracted_frames as ExtractedFrame[];
+        console.log(`Loaded ${frames.length} extracted frames from project`);
+        
+        // Validate frames have proper URLs before setting state
+        const validFrames = frames.filter(frame => 
+          frame && frame.imageUrl && !frame.imageUrl.startsWith('blob:')
+        );
+        
+        if (validFrames.length !== frames.length) {
+          console.warn(`Filtered out ${frames.length - validFrames.length} frames with invalid URLs`);
+        }
+        
+        setExtractedFrames(validFrames);
       } else {
         setExtractedFrames([]);
       }

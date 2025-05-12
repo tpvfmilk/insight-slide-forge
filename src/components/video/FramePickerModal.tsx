@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -88,8 +89,17 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       if (allExtractedFrames && allExtractedFrames.length > 0) {
         console.log(`Loading ${allExtractedFrames.length} frames from project's extracted frames`);
         
+        // Filter out any frames without valid URLs
+        const validFrames = allExtractedFrames.filter(frame => 
+          frame && frame.imageUrl && !frame.imageUrl.startsWith('blob:')
+        );
+        
+        if (validFrames.length !== allExtractedFrames.length) {
+          console.warn(`Filtered out ${allExtractedFrames.length - validFrames.length} frames with invalid URLs`);
+        }
+        
         // Sort frames by timestamp
-        const sortedLibraryFrames = [...allExtractedFrames].sort((a, b) => {
+        const sortedLibraryFrames = [...validFrames].sort((a, b) => {
           return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
         });
         
@@ -354,7 +364,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         type: 'image/jpeg'
       });
       
-      // Upload to Supabase Storage
+      // Upload to Supabase Storage - ensure proper path and bucket
       const filePath = `${projectId}/${timestamp.replace(/:/g, '_')}-${Date.now()}.jpg`;
       const { data: uploadData, error: uploadError } = await supabase
         .storage
@@ -652,13 +662,34 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         }
       }
       
+      // Make sure to save frames to project before closing modal
+      try {
+        // Explicitly save all valid frames to Supabase to ensure persistence
+        const { error: updateError } = await supabase
+          .from('projects')
+          .update({ 
+            extracted_frames: validFrames 
+          })
+          .eq('id', projectId);
+          
+        if (updateError) {
+          console.error("Error saving frames to project:", updateError);
+        } else {
+          console.log(`Successfully saved ${validFrames.length} frames to project table`);
+        }
+      } catch (saveError) {
+        console.error("Error saving frames to project:", saveError);
+      }
+      
       // Call the onFramesSelected callback with the valid frames
       await onFramesSelected(validFrames);
       
-      // Processing is handled by the parent component
+      // Toast will be handled by parent component
+      toast.dismiss(toastId);
     } catch (error) {
       console.error("Error in handleApplyFrames:", error);
       toast.error("Failed to process selected frames", { id: toastId });
+    } finally {
       setIsUploadingFrames(false);
     }
   };
@@ -872,7 +903,12 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         </div>
         
         <div className="flex justify-between items-center pt-4 border-t mt-2">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={() => {
+            // Make sure to properly close and clean up
+            toast.dismiss("processing-frames");
+            toast.dismiss("capture-frame");
+            onClose();
+          }}>
             Cancel
           </Button>
           <Button 
