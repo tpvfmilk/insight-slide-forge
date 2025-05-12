@@ -526,6 +526,118 @@ export const SlideEditor = () => {
     setIsEditing(true);
   };
   
+  const copyToClipboard = () => {
+    if (!currentSlide) return;
+    
+    const slideText = `${currentSlide.title}\n\n${currentSlide.content}`;
+    navigator.clipboard.writeText(slideText);
+    toast.success("Slide content copied to clipboard");
+  };
+  
+  const exportPDF = async () => {
+    if (!slides || slides.length === 0) {
+      toast.error("No slides to export");
+      return;
+    }
+    
+    try {
+      setIsExporting((prev) => ({
+        ...prev,
+        pdf: true
+      }));
+      
+      toast.loading("Generating PDF...", {
+        id: "export-pdf"
+      });
+      
+      const pdfBlob = await exportToPDF(slides, projectTitle);
+      downloadFile(pdfBlob, `${projectTitle || 'presentation'}.pdf`);
+      
+      toast.success("PDF exported successfully!", {
+        id: "export-pdf"
+      });
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast.error("Failed to export PDF", {
+        id: "export-pdf"
+      });
+    } finally {
+      setIsExporting((prev) => ({
+        ...prev,
+        pdf: false
+      }));
+    }
+  };
+  
+  const exportAnki = async () => {
+    if (!slides || slides.length === 0) {
+      toast.error("No slides to export");
+      return;
+    }
+    
+    try {
+      setIsExporting((prev) => ({
+        ...prev,
+        anki: true
+      }));
+      
+      toast.loading("Generating Anki deck...", {
+        id: "export-anki"
+      });
+      
+      const ankiBlob = exportToAnki(slides, projectTitle);
+      downloadFile(ankiBlob, `${projectTitle || 'anki-cards'}.csv`);
+      
+      toast.success("Anki cards exported successfully!", {
+        id: "export-anki"
+      });
+    } catch (error) {
+      console.error("Error exporting Anki cards:", error);
+      toast.error("Failed to export Anki cards", {
+        id: "export-anki"
+      });
+    } finally {
+      setIsExporting((prev) => ({
+        ...prev,
+        anki: false
+      }));
+    }
+  };
+  
+  const exportCSV = async () => {
+    if (!slides || slides.length === 0) {
+      toast.error("No slides to export");
+      return;
+    }
+    
+    try {
+      setIsExporting((prev) => ({
+        ...prev,
+        csv: true
+      }));
+      
+      toast.loading("Generating CSV...", {
+        id: "export-csv"
+      });
+      
+      const csvBlob = exportToCSV(slides, projectTitle);
+      downloadFile(csvBlob, `${projectTitle || 'slides'}.csv`);
+      
+      toast.success("CSV exported successfully!", {
+        id: "export-csv"
+      });
+    } catch (error) {
+      console.error("Error exporting CSV:", error);
+      toast.error("Failed to export CSV", {
+        id: "export-csv"
+      });
+    } finally {
+      setIsExporting((prev) => ({
+        ...prev,
+        csv: false
+      }));
+    }
+  };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {
@@ -617,8 +729,7 @@ export const SlideEditor = () => {
     toast.success("Image removed from slide");
   };
   
-
-  const deleteSlideFromFilmstrip = function(event: React.MouseEvent<Element, MouseEvent>, slideIndex: number) {
+  const deleteSlideFromFilmstrip = (event: React.MouseEvent<Element, MouseEvent>, slideIndex: number) => {
     // Stop the click event from propagating to the slide card
     event.stopPropagation();
     
@@ -661,7 +772,7 @@ export const SlideEditor = () => {
     });
   };
 
-  // IMPORTANT: Define the deleteCurrentSlide function here
+  // Define the deleteCurrentSlide function here
   const deleteCurrentSlide = () => {
     // Create a synthetic event to pass to deleteSlideFromFilmstrip
     const syntheticEvent = {
@@ -865,3 +976,220 @@ export const SlideEditor = () => {
                           alt={`Slide image ${i + 1}`}
                           className="w-full h-full object-cover"
                         />
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="destructive"
+                            size="sm"
+                            className="h-7"
+                            onClick={() => removeImage(url)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Empty state */}
+                    {(!currentSlide.imageUrl && (!currentSlide.imageUrls || currentSlide.imageUrls.length === 0)) && (
+                      <div className="col-span-2 aspect-video border border-dashed rounded-md flex items-center justify-center">
+                        <div className="text-center text-muted-foreground">
+                          <ImageIcon className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                          <p>No images for this slide</p>
+                          <p className="text-xs mt-1">Click "Select Frames" or "Upload" to add images</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Right side - Content */}
+            <div className="w-full lg:w-1/2 flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Content</h3>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={copyToClipboard}
+                    className="text-xs"
+                  >
+                    Copy Text
+                  </Button>
+                  {isEditing ? (
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={saveChanges}
+                    >
+                      Save Changes
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={startEditing}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Edit content form */}
+              <div className="flex-1 overflow-y-auto">
+                {isEditing ? (
+                  <div className="space-y-3">
+                    <div>
+                      <input 
+                        type="text"
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        className="w-full p-2 text-lg font-medium border rounded"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <Textarea 
+                        value={editedContent}
+                        onChange={(e) => setEditedContent(e.target.value)}
+                        className="w-full h-[300px] p-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                ) : currentSlide ? (
+                  <div className="space-y-3">
+                    <h2 className="text-lg font-medium">{currentSlide.title}</h2>
+                    <div className="whitespace-pre-wrap text-sm">{currentSlide.content}</div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Bottom filmstrip */}
+      <div className="border-t p-4">
+        <div className="relative">
+          <ScrollArea className="w-full pb-2" orientation="horizontal">
+            <div className="flex gap-2 cursor-grab" ref={filmstripRef}>
+              {slides.map((slide, i) => (
+                <div 
+                  key={slide.id} 
+                  className={`group relative flex-shrink-0 w-40 aspect-video rounded-md overflow-hidden border-2 ${
+                    i === currentSlideIndex ? 'border-primary' : 'border-border'
+                  } hover:border-muted-foreground transition-colors`}
+                  onClick={() => goToSlide(i)}
+                >
+                  {/* Slide thumbnail */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-background">
+                    {slide.imageUrl || (slide.imageUrls && slide.imageUrls.length > 0) ? (
+                      <img 
+                        src={slide.imageUrl || slide.imageUrls![0]} 
+                        alt={`Thumbnail for slide ${i + 1}`} 
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-xs text-center p-2 overflow-hidden">
+                        <div className="line-clamp-3 text-muted-foreground">{slide.content}</div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Slide number */}
+                  <div className="absolute top-1 left-1 text-xs bg-background/80 text-foreground rounded px-1">
+                    {i + 1}
+                  </div>
+                  
+                  {/* Delete button */}
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => deleteSlideFromFilmstrip(e, i)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              
+              {/* Add new slide button */}
+              <Button
+                variant="outline"
+                className="flex-shrink-0 w-40 aspect-video rounded-md border border-dashed"
+                onClick={addNewSlide}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Add Slide
+              </Button>
+            </div>
+          </ScrollArea>
+          
+          {/* Slide navigation buttons */}
+          <div className="absolute top-1/2 left-0 transform -translate-y-1/2 flex w-full justify-between pointer-events-none">
+            <Button
+              variant="outline"
+              size="icon"
+              className={`h-8 w-8 rounded-full bg-background/80 shadow pointer-events-auto ${
+                currentSlideIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              onClick={goToPrevSlide}
+              disabled={currentSlideIndex === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className={`h-8 w-8 rounded-full bg-background/80 shadow pointer-events-auto ${
+                currentSlideIndex === slides.length - 1 ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              onClick={goToNextSlide}
+              disabled={currentSlideIndex === slides.length - 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          {/* Undo delete button */}
+          {showUndoButton && (
+            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="shadow-lg animate-fade-in"
+                onClick={undoDeleteSlide}
+              >
+                <Undo className="h-3.5 w-3.5 mr-1" />
+                Undo Delete
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Frame Picker Modal with Library */}
+      {isFramePickerModalOpen && videoPath && (
+        <FramePickerModal
+          open={isFramePickerModalOpen}
+          onClose={() => {
+            setIsFramePickerModalOpen(false);
+            // Force reload frames after closing modal to ensure we have the latest frames
+            loadFramesFromProject();
+          }} 
+          videoPath={videoPath}
+          projectId={projectId || ""}
+          onFramesSelected={handleFrameSelection}
+          allExtractedFrames={allExtractedFrames}
+          existingFrames={currentSlide.imageUrls?.map(url => ({
+            id: url,
+            imageUrl: url,
+            timestamp: ""
+          }) as ExtractedFrame) || []}
+        />
+      )}
+    </div>
+  );
+};
