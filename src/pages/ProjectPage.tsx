@@ -66,9 +66,7 @@ const ProjectPage = () => {
         toast.success(`Successfully processed ${selectedFrames.length} frames`, { id: toastId });
         
         // After frames are processed, reload the project to reflect changes
-        setTimeout(() => {
-          loadProject();
-        }, 500);
+        await loadProject();
       } else {
         toast.error("Failed to process frames", { id: toastId });
       }

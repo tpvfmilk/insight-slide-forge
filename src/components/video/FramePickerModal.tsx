@@ -64,6 +64,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       // Initialize with existing frames selected
       const initialSelectedState: {[key: string]: boolean} = {};
       
+      // Select all existing frames by default
       if (existingFrames && existingFrames.length > 0) {
         existingFrames.forEach(frame => {
           if (frame.id) {
@@ -348,15 +349,17 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       }
       
       // Create a File from the Blob
-      const file = new File([frame], `frame-${timestamp.replace(/:/g, "-")}.jpg`, {
+      const fileName = `frame-${timestamp.replace(/:/g, "-")}-${Date.now()}.jpg`;
+      const file = new File([frame], fileName, {
         type: 'image/jpeg'
       });
       
       // Upload to Supabase Storage
+      const filePath = `${projectId}/${timestamp.replace(/:/g, '_')}-${Date.now()}.jpg`;
       const { data: uploadData, error: uploadError } = await supabase
         .storage
         .from('slide_stills')
-        .upload(`${projectId}/${timestamp.replace(/:/g, '_')}.jpg`, file, {
+        .upload(filePath, file, {
           cacheControl: '3600',
           upsert: true
         });
@@ -366,12 +369,13 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         return null;
       }
       
-      // Get public URL
+      // Get public URL - CRUCIAL for persistence
       const { data: urlData } = supabase
         .storage
         .from('slide_stills')
         .getPublicUrl(uploadData.path);
         
+      console.log(`Frame uploaded successfully, got permanent URL: ${urlData.publicUrl}`);
       return urlData.publicUrl;
     } catch (error) {
       console.error("Error in uploadFrameToStorage:", error);
@@ -395,9 +399,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       const currentTimePosition = video.currentTime;
       const timestamp = formatTime(currentTimePosition);
       
-      toast.loading(`Capturing frame at ${timestamp}...`, {
-        id: 'capture-frame'
-      });
+      const toastId = "capture-frame";
+      toast.loading(`Capturing frame at ${timestamp}...`, { id: toastId });
       
       // Use our advanced frame extraction to get a good quality frame
       const extractedFrames = await extractFramesFromVideoUrl(
@@ -408,7 +411,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         {
           captureAttempts: 5, // More attempts
           captureOffsets: [-0.1, 0, 0.1, 0.2, -0.2, 0.5, -0.5, 0.8, -0.8], // More offsets
-          minContentThreshold: 0.03
+          minContentThreshold: 0.02 // Slightly lower threshold
         }
       );
       
@@ -419,9 +422,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         const permanentUrl = await uploadFrameToStorage(frame, extractedTimestamp);
         
         if (!permanentUrl) {
-          toast.error(`Failed to upload frame at ${timestamp}`, {
-            id: 'capture-frame'
-          });
+          toast.error(`Failed to upload frame at ${timestamp}`, { id: toastId });
           createPlaceholderFrame(currentTimePosition);
           return;
         }
@@ -461,16 +462,14 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         // Add timemark to the seek bar
         setCapturedTimemarks(prev => [...prev, currentTimePosition]);
         
-        toast.success(`Frame captured at ${timestamp}`, {
-          id: 'capture-frame'
-        });
+        toast.success(`Frame captured at ${timestamp}`, { id: toastId });
+        
+        console.log(`Frame captured and stored with permanent URL: ${permanentUrl}`);
       } else {
         // Create placeholder if extraction failed
         createPlaceholderFrame(currentTimePosition);
         
-        toast.error(`Could not capture frame at ${timestamp}`, {
-          id: 'capture-frame'
-        });
+        toast.error(`Could not capture frame at ${timestamp}`, { id: toastId });
       }
     } catch (error) {
       console.error("Error capturing frame:", error);
@@ -635,31 +634,31 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     toast.loading("Processing selected frames...", { id: toastId });
     
     try {
-      // Ensure all frames have valid permanent URLs (not blob URLs)
+      // Double check: ensure all frames have valid permanent URLs (not blob URLs)
+      // This is critical for persistence
       const validFrames = sortedFrames.filter(frame => 
         frame.imageUrl && !frame.imageUrl.startsWith('blob:')
       );
       
       if (validFrames.length < sortedFrames.length) {
-        console.warn(`${sortedFrames.length - validFrames.length} frames have temporary URLs and will be skipped`);
-      }
-      
-      if (validFrames.length === 0) {
-        toast.error("No valid frames available to apply", { id: toastId });
-        setIsUploadingFrames(false);
-        return;
+        const invalidFrames = sortedFrames.length - validFrames.length;
+        console.warn(`${invalidFrames} frames have temporary URLs and will be skipped`);
+        if (validFrames.length === 0) {
+          toast.error("No valid frames available. All frames must have permanent URLs.", { id: toastId });
+          setIsUploadingFrames(false);
+          return;
+        } else {
+          toast.warning(`${invalidFrames} frames will be skipped due to invalid URLs`, { id: toastId });
+        }
       }
       
       // Call the onFramesSelected callback with the valid frames
       await onFramesSelected(validFrames);
       
-      // Successfully processed
-      toast.success(`Applied ${validFrames.length} frames`, { id: toastId });
-      onClose();
+      // Processing is handled by the parent component
     } catch (error) {
       console.error("Error in handleApplyFrames:", error);
       toast.error("Failed to process selected frames", { id: toastId });
-    } finally {
       setIsUploadingFrames(false);
     }
   };

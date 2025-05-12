@@ -237,7 +237,7 @@ export const clientExtractFramesFromVideo = async (
   }
 };
 
-// Helper function to upload extracted frames - ensure it properly handles URLs
+// Helper function to upload extracted frames - improved for persistence
 async function uploadExtractedFrames(
   projectId: string, 
   extractedFrames: Array<{ timestamp: string; frame: Blob }>
@@ -246,16 +246,23 @@ async function uploadExtractedFrames(
   
   for (const { frame, timestamp } of extractedFrames) {
     try {
+      // Create a unique filename with timestamp
+      const uniqueId = Date.now().toString();
+      const filename = `frame-${timestamp.replace(/:/g, "-")}-${uniqueId}.jpg`;
+      
       // Create a File from the Blob
-      const file = new File([frame], `frame-${timestamp.replace(/:/g, "-")}.jpg`, {
+      const file = new File([frame], filename, {
         type: 'image/jpeg'
       });
+      
+      // Create a unique path for the file
+      const filePath = `${projectId}/${timestamp.replace(/:/g, '_')}-${uniqueId}.jpg`;
       
       // Upload the file
       const { data: uploadData, error: uploadError } = await supabase
         .storage
         .from('slide_stills')
-        .upload(`${projectId}/${timestamp.replace(/:/g, '_')}.jpg`, file, {
+        .upload(filePath, file, {
           cacheControl: '3600',
           upsert: true
         });
@@ -271,12 +278,16 @@ async function uploadExtractedFrames(
         .from('slide_stills')
         .getPublicUrl(uploadData.path);
         
+      const frameId = `frame-${timestamp.replace(/:/g, "-")}-${uniqueId}`;
+      
       uploadedFrames.push({
         timestamp,
         imageUrl: urlData.publicUrl,
-        id: `frame-${timestamp.replace(/:/g, "-")}`,
+        id: frameId,
         isPlaceholder: false
       });
+      
+      console.log(`Successfully uploaded frame at ${timestamp} with permanent URL: ${urlData.publicUrl}`);
       
     } catch (uploadError) {
       console.error(`Error uploading frame at ${timestamp}:`, uploadError);
@@ -286,45 +297,78 @@ async function uploadExtractedFrames(
   return uploadedFrames;
 }
 
-// Helper function to save extracted frames to the project
+// Improved helper function to save extracted frames to the project
 async function saveExtractedFramesToProject(projectId: string, frames: ExtractedFrame[]): Promise<void> {
-  // Verify all frames have valid (not blob:// URLs) before saving
-  const invalidFrames = frames.filter(frame => frame.imageUrl.startsWith('blob:'));
-  if (invalidFrames.length > 0) {
-    console.error("Cannot save frames with blob URLs to project:", invalidFrames);
-    throw new Error("Cannot save frames with temporary URLs to project");
-  }
-  
-  // Get existing frames
-  const { data: project } = await supabase
-    .from('projects')
-    .select('extracted_frames')
-    .eq('id', projectId)
-    .single();
+  try {
+    // Verify all frames have valid (not blob:// URLs) before saving
+    const invalidFrames = frames.filter(frame => 
+      !frame.imageUrl || frame.imageUrl.startsWith('blob:')
+    );
     
-  const existingFrames: ExtractedFrame[] = project?.extracted_frames as unknown as ExtractedFrame[] || [];
-  
-  // Merge existing and new frames, avoiding duplicates
-  const updatedFrames = [
-    ...frames,
-    ...existingFrames.filter(existing => 
-      !frames.some(frame => frame.timestamp === existing.timestamp)
-    )
-  ];
-  
-  // Update project
-  await updateProject(projectId, {
-    extracted_frames: updatedFrames
-  });
+    if (invalidFrames.length > 0) {
+      console.error("Cannot save frames with blob URLs to project:", invalidFrames);
+      throw new Error("Cannot save frames with temporary URLs to project");
+    }
+    
+    // Get existing frames
+    const { data: project, error } = await supabase
+      .from('projects')
+      .select('extracted_frames')
+      .eq('id', projectId)
+      .single();
+      
+    if (error) {
+      console.error("Error fetching project for frame saving:", error);
+      throw new Error("Could not access project data");
+    }
+    
+    const existingFrames: ExtractedFrame[] = project?.extracted_frames as unknown as ExtractedFrame[] || [];
+    
+    // Create a map by timestamp for efficient deduplication
+    const framesMap = new Map<string, ExtractedFrame>();
+    
+    // Add existing frames first
+    existingFrames.forEach(frame => {
+      if (frame.timestamp) {
+        framesMap.set(frame.timestamp, frame);
+      }
+    });
+    
+    // Then add new frames, which will override existing ones with the same timestamp
+    frames.forEach(frame => {
+      if (frame.timestamp) {
+        framesMap.set(frame.timestamp, frame);
+      }
+    });
+    
+    // Convert map back to array
+    const updatedFrames = Array.from(framesMap.values());
+    
+    console.log(`Saving ${frames.length} new frames, total frames: ${updatedFrames.length}`);
+    
+    // Update project
+    const { error: updateError } = await supabase
+      .from('projects')
+      .update({ extracted_frames: updatedFrames })
+      .eq('id', projectId);
+      
+    if (updateError) {
+      console.error("Error updating project with frames:", updateError);
+      throw new Error("Failed to save frames to project");
+    }
+  } catch (error) {
+    console.error("Error in saveExtractedFramesToProject:", error);
+    throw error;
+  }
 }
 
-// Function to update slides with extracted frames
+// Improved function to update slides with extracted frames
 export const updateSlidesWithExtractedFrames = async (
   projectId: string,
   extractedFrames: ExtractedFrame[]
 ): Promise<boolean> => {
   try {
-    console.log('Updating slides with extracted frames:', extractedFrames);
+    console.log('Updating slides with extracted frames:', extractedFrames.length);
     
     if (!extractedFrames || extractedFrames.length === 0) {
       console.error('No extracted frames provided');
@@ -359,29 +403,41 @@ export const updateSlidesWithExtractedFrames = async (
       return false;
     }
 
-    // Combine existing extracted frames with new ones
-    let allExtractedFrames = [...extractedFrames];
+    // First update the extracted_frames in the project to ensure persistence
+    // This ensures we store all frames at the project level
+    const allExtractedFrames = [...extractedFrames];
     
     if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
       // Get existing frames from project
       const existingFrames = project.extracted_frames as ExtractedFrame[];
       
-      // Merge existing frames with new ones, avoiding duplicates
-      existingFrames.forEach(existingFrame => {
-        const isDuplicate = allExtractedFrames.some(
-          newFrame => newFrame.timestamp === existingFrame.timestamp
-        );
-        
-        if (!isDuplicate) {
-          allExtractedFrames.push(existingFrame);
+      // Create a map by timestamp
+      const framesMap = new Map<string, ExtractedFrame>();
+      
+      // Add extracted frames first (newer ones)
+      extractedFrames.forEach(frame => {
+        if (frame.timestamp) {
+          framesMap.set(frame.timestamp, frame);
         }
       });
+      
+      // Then add existing frames (older ones) if they don't exist
+      existingFrames.forEach(frame => {
+        if (frame.timestamp && !framesMap.has(frame.timestamp)) {
+          framesMap.set(frame.timestamp, frame);
+        }
+      });
+      
+      // Convert map back to array
+      allExtractedFrames = Array.from(framesMap.values());
     }
 
     // Save all extracted frames to the project
     await updateProject(projectId, {
       extracted_frames: allExtractedFrames
     });
+    
+    console.log(`Saved ${allExtractedFrames.length} total frames to project`);
 
     // Now update the slides with frame images where needed
     const updatedSlides = project.slides.map((slide: any) => {
@@ -426,10 +482,19 @@ export const updateSlidesWithExtractedFrames = async (
     });
 
     // Update the project with the modified slides
-    await updateProject(projectId, {
-      slides: updatedSlides
-    });
+    const { error: updateError } = await supabase
+      .from('projects')
+      .update({
+        slides: updatedSlides
+      })
+      .eq('id', projectId);
+      
+    if (updateError) {
+      console.error("Error updating slides with frames:", updateError);
+      return false;
+    }
 
+    console.log(`Successfully updated slides with frames`);
     return true;
   } catch (error) {
     console.error('Error updating slides with extracted frames:', error);

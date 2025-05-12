@@ -54,7 +54,6 @@ export const useProjectState = (projectId: string | undefined) => {
       
       setProject(projectData);
       setContextPrompt(projectData.context_prompt || "");
-      // Make sure the transcript state is properly set from the project data
       setTranscript(projectData.transcript || "");
       setTitle(projectData.title || "Untitled Project");
       
@@ -72,6 +71,8 @@ export const useProjectState = (projectId: string | undefined) => {
       if (projectData.extracted_frames && Array.isArray(projectData.extracted_frames)) {
         setExtractedFrames(projectData.extracted_frames as ExtractedFrame[]);
         console.log(`Loaded ${projectData.extracted_frames.length} extracted frames from project`);
+      } else {
+        setExtractedFrames([]);
       }
       
       // Load all project videos
@@ -89,8 +90,7 @@ export const useProjectState = (projectId: string | undefined) => {
         console.log(`Total duration of all videos: ${totalDuration}s`);
       }
       
-      // We will still check if frames are needed, but we won't automatically extract them
-      // This is just for UI indication purposes
+      // Check if frames are needed for UI indication
       const slidesArray = Array.isArray(projectData.slides) ? projectData.slides : [];
       setNeedsFrameExtraction(
         projectData.source_type === 'video' && 
@@ -130,17 +130,6 @@ export const useProjectState = (projectId: string | undefined) => {
         } catch (error) {
           console.error("Error parsing video filename:", error);
         }
-      }
-      
-      // For new projects, check if we need to transcribe
-      const isNewlyCreated = Date.now() - new Date(projectData.created_at).getTime() < 60000; // Within a minute
-      
-      if (isNewlyCreated) {
-        // If video upload with no transcript, try to transcribe
-        if (projectData.source_type === 'video' && !projectData.transcript) {
-          handleTranscribeVideo();
-        }
-        // NO LONGER automatically generate slides or extract frames
       }
     } catch (error) {
       console.error("Error loading project:", error);
@@ -248,11 +237,11 @@ export const useProjectState = (projectId: string | undefined) => {
     }
   };
   
-  // Update to ensure frames are properly saved to project-level storage
+  // Updated to ensure frames are properly saved and processed
   const handleManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]): Promise<boolean> => {
     if (!projectId) return false;
     
-    if (selectedFrames.length === 0) {
+    if (!selectedFrames || selectedFrames.length === 0) {
       toast.info("No frames were selected");
       return false;
     }
@@ -262,16 +251,18 @@ export const useProjectState = (projectId: string | undefined) => {
       
       // First, verify all frames have valid permanent URLs (not blob:// URLs)
       const invalidFrames = selectedFrames.filter(frame => 
-        !frame.imageUrl || frame.imageUrl.startsWith('blob:')
+        !frame.imageUrl || 
+        frame.imageUrl.startsWith('blob:') || 
+        !frame.timestamp
       );
       
       if (invalidFrames.length > 0) {
-        console.error("Cannot update slides with blob URLs:", invalidFrames);
+        console.error("Cannot update slides with invalid URLs:", invalidFrames);
         toast.error("Cannot save frames with temporary URLs. Please try capturing frames again.");
         return false;
       }
       
-      // Get current extracted frames
+      // Get current project data with extracted frames
       const { data: projectData, error: getError } = await supabase
         .from('projects')
         .select('extracted_frames')
@@ -284,8 +275,8 @@ export const useProjectState = (projectId: string | undefined) => {
         return false;
       }
       
-      // Get existing frames
-      const existingFrames: ExtractedFrame[] = projectData?.extracted_frames as unknown as ExtractedFrame[] || [];
+      // Get existing frames or initialize empty array
+      const existingFrames: ExtractedFrame[] = (projectData?.extracted_frames as unknown as ExtractedFrame[]) || [];
       console.log(`Found ${existingFrames.length} existing frames in project`);
       
       // Filter out frames that are white/blank
@@ -296,13 +287,26 @@ export const useProjectState = (projectId: string | undefined) => {
         return false;
       }
       
-      // Merge with new frames, avoiding duplicates by timestamp
-      const combinedFrames = [
-        ...nonBlankFrames,
-        ...existingFrames.filter(existing => 
-          !nonBlankFrames.some(selected => selected.timestamp === existing.timestamp)
-        )
-      ];
+      // Merge with new frames, removing duplicates by timestamp
+      // If a frame with the same timestamp exists, the new one replaces it
+      const framesByTimestamp = new Map<string, ExtractedFrame>();
+      
+      // First add all existing frames
+      existingFrames.forEach(frame => {
+        if (frame.timestamp) {
+          framesByTimestamp.set(frame.timestamp, frame);
+        }
+      });
+      
+      // Then add/override with new frames
+      nonBlankFrames.forEach(frame => {
+        if (frame.timestamp) {
+          framesByTimestamp.set(frame.timestamp, frame);
+        }
+      });
+      
+      // Convert map back to array
+      const combinedFrames = Array.from(framesByTimestamp.values());
       
       console.log(`Updating project with ${nonBlankFrames.length} new frames, total will be ${combinedFrames.length} frames`);
       
@@ -319,21 +323,19 @@ export const useProjectState = (projectId: string | undefined) => {
       }
       
       // Now update the slides to show the selected frames
-      const success = await updateSlidesWithExtractedFrames(projectId, nonBlankFrames);
+      const success = await updateSlidesWithExtractedFrames(projectId, combinedFrames);
       
-      if (success) {
-        // Update local state with the new frames
-        setExtractedFrames(combinedFrames);
-        
-        // Reload the project to get the updated slides with images
-        await loadProject();
-        setNeedsFrameExtraction(false);
-        toast.success(`${nonBlankFrames.length} frames have been saved and are now available to all slides`);
-        return true;
-      } else {
+      if (!success) {
+        console.error("Failed to update slides with frames");
         toast.error("Failed to update slides with selected frames");
         return false;
       }
+      
+      // Update local state with the new frames
+      setExtractedFrames(combinedFrames);
+      
+      console.log(`Successfully saved ${nonBlankFrames.length} frames to project`);
+      return true;
     } catch (error) {
       console.error("Error in handleManualFrameSelectionComplete:", error);
       toast.error("An error occurred while processing the selected frames");
