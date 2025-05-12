@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Slider } from "@/components/ui/slider";
 import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 import { Separator } from "@/components/ui/separator";
+import { mergeAndSaveFrames } from "@/utils/frameUtils";
 
 // Create a separate interface for frames with blobs that extends ExtractedFrame
 interface CapturedFrameWithBlob {
@@ -471,6 +472,13 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         // Add timemark to the seek bar
         setCapturedTimemarks(prev => [...prev, currentTimePosition]);
         
+        // Most importantly: Save the new frame to the project's frame library immediately
+        // This ensures it persists even if the user doesn't apply it to a slide
+        const updatedFrames = await mergeAndSaveFrames(projectId, [newFrame], libraryFrames);
+        if (updatedFrames) {
+          console.log(`Frame captured and saved to project library`);
+        }
+        
         toast.success(`Frame captured at ${timestamp}`, { id: toastId });
         
         console.log(`Frame captured and stored with permanent URL: ${permanentUrl}`);
@@ -644,7 +652,6 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     
     try {
       // Double check: ensure all frames have valid permanent URLs (not blob URLs)
-      // This is critical for persistence
       const validFrames = sortedFrames.filter(frame => 
         frame.imageUrl && !frame.imageUrl.startsWith('blob:')
       );
@@ -661,71 +668,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         }
       }
       
-      // IMPORTANT CHANGE: Get the current extracted frames from the project first
-      const { data: projectData, error: fetchError } = await supabase
-        .from('projects')
-        .select('extracted_frames')
-        .eq('id', projectId)
-        .single();
-      
-      if (fetchError) {
-        console.error("Error fetching project frames:", fetchError);
-        toast.error("Failed to retrieve project frames", { id: toastId });
-        setIsUploadingFrames(false);
-        return;
-      }
-      
-      // Extract current frames from project data
-      const currentFrames = (projectData?.extracted_frames || []) as ExtractedFrame[];
-      console.log(`Retrieved ${currentFrames.length} existing frames from project`);
-      
-      // Create a map of existing frames by id for efficient merging
-      const frameMap = new Map<string, ExtractedFrame>();
-      
-      // Add all current frames to the map first
-      currentFrames.forEach(frame => {
-        if (frame.id) {
-          frameMap.set(frame.id, frame);
-        }
-      });
-      
-      // Add or update with the selected frames
-      validFrames.forEach(frame => {
-        if (frame.id) {
-          frameMap.set(frame.id, frame);
-        }
-      });
-      
-      // Convert map back to array - this preserves all frames
-      const mergedFrames = Array.from(frameMap.values());
-      console.log(`Merged frames: ${mergedFrames.length} total frames will be saved to project`);
-      
-      // Save the merged frames to the project
-      try {
-        const { error: updateError } = await supabase
-          .from('projects')
-          .update({ 
-            extracted_frames: mergedFrames 
-          })
-          .eq('id', projectId);
-          
-        if (updateError) {
-          console.error("Error saving frames to project:", updateError);
-          toast.error("Failed to save frame library", { id: toastId });
-          setIsUploadingFrames(false);
-          return;
-        } else {
-          console.log(`Successfully saved ${mergedFrames.length} frames to project table`);
-        }
-      } catch (saveError) {
-        console.error("Error saving frames to project:", saveError);
-        toast.error("Failed to save frame library", { id: toastId });
-        setIsUploadingFrames(false);
-        return;
-      }
-      
-      // Call the onFramesSelected callback with only the selected frames
-      // This way we apply only selected frames to the slide but keep all frames in the library
+      // Call the onFramesSelected callback with the selected frames
+      // This will apply the selected frames to the current slide
       await onFramesSelected(validFrames);
       
       // Toast will be handled by parent component

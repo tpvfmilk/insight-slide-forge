@@ -64,6 +64,7 @@ export function getFrameStatistics(
 
 /**
  * Merge frames from multiple sources, ensuring no duplicates
+ * Returns the merged frames array
  */
 export async function mergeAndSaveFrames(
   projectId: string,
@@ -73,10 +74,34 @@ export async function mergeAndSaveFrames(
   try {
     console.log(`Merging ${newFrames.length} new frames with ${existingFrames.length} existing frames`);
     
+    // First, get the latest frames from the project to ensure we're working with current data
+    const { data: projectData, error: fetchError } = await supabase
+      .from('projects')
+      .select('extracted_frames')
+      .eq('id', projectId)
+      .single();
+    
+    if (fetchError) {
+      console.error("Error fetching project frames:", fetchError);
+      return existingFrames;
+    }
+    
+    // Get current frames from project data (this ensures we have the most up-to-date frames)
+    const currentProjectFrames = (projectData?.extracted_frames || []) as ExtractedFrame[];
+    
     // Create a map for efficient merging
     const frameMap = new Map<string, ExtractedFrame>();
     
-    // First add all existing frames
+    // First add all project frames
+    currentProjectFrames.forEach(frame => {
+      if (frame.id) {
+        frameMap.set(frame.id, frame);
+      } else if (frame.timestamp) {
+        frameMap.set(frame.timestamp, frame);
+      }
+    });
+    
+    // Then add all existing frames from state (might have newer updates)
     existingFrames.forEach(frame => {
       if (frame.id) {
         frameMap.set(frame.id, frame);
@@ -85,7 +110,7 @@ export async function mergeAndSaveFrames(
       }
     });
     
-    // Then add/override with new frames
+    // Finally, add/override with new frames
     newFrames.forEach(frame => {
       const key = frame.id || frame.timestamp;
       if (key) {
@@ -97,21 +122,18 @@ export async function mergeAndSaveFrames(
     const mergedFrames = Array.from(frameMap.values());
     console.log(`Merged to ${mergedFrames.length} total frames`);
     
-    // Save to project if a project ID is provided
-    if (projectId) {
-      const { error } = await supabase
-        .from('projects')
-        .update({ extracted_frames: mergedFrames })
-        .eq('id', projectId);
-        
-      if (error) {
-        console.error("Error saving merged frames:", error);
-        return mergedFrames;
-      }
+    // Save to project
+    const { error } = await supabase
+      .from('projects')
+      .update({ extracted_frames: mergedFrames })
+      .eq('id', projectId);
       
-      console.log(`Saved ${mergedFrames.length} merged frames to project ${projectId}`);
+    if (error) {
+      console.error("Error saving merged frames:", error);
+      return mergedFrames;
     }
     
+    console.log(`Saved ${mergedFrames.length} merged frames to project ${projectId}`);
     return mergedFrames;
   } catch (error) {
     console.error("Error in mergeAndSaveFrames:", error);
@@ -140,7 +162,6 @@ export async function purgeUnusedFrames(
     
     unusedFrames.forEach(frame => {
       // Extract the path from the URL
-      // URL format is typically like: https://[bucket-url]/storage/v1/object/public/[bucket]/path/to/file
       try {
         const url = new URL(frame.imageUrl);
         const pathParts = url.pathname.split('/');
@@ -161,7 +182,7 @@ export async function purgeUnusedFrames(
     // Remove files from storage
     if (filesToDelete.length > 0) {
       const { error } = await supabase.storage
-        .from('project_' + projectId)
+        .from('slide_stills')
         .remove(filesToDelete);
       
       if (error) {

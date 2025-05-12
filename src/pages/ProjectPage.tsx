@@ -1,4 +1,3 @@
-
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -67,17 +66,20 @@ const ProjectPage = () => {
       }
       
       // Pass the selected frames to be handled in the project state
+      // Note: we're now only applying these frames to the current slide,
+      // not removing them from the global library
       const success = await handleManualFrameSelectionComplete(selectedFrames);
       
       if (success) {
         // Close the modal
         modals.closeFramePickerModal();
-        toast.success(`Successfully processed ${selectedFrames.length} frames`, { id: toastId });
+        toast.success(`Successfully applied ${selectedFrames.length} frames to slide`, { id: toastId });
         
         // After frames are processed, reload the project to reflect changes
+        // This is crucial for keeping the frame library in sync
         await loadProject();
       } else {
-        toast.error("Failed to process frames", { id: toastId });
+        toast.error("Failed to apply frames to slide", { id: toastId });
       }
     } catch (error) {
       console.error("Error processing frames:", error);
