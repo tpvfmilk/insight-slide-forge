@@ -1,10 +1,9 @@
-
 import { useState, useEffect } from "react";
 import { X, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 
 export interface SlideData {
@@ -36,7 +35,8 @@ export function SlidePreview({
   isEditable = true,
   className = "",
 }: SlidePreviewProps) {
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
+  
   const [activeIndex, setActiveIndex] = useState(currentSlide);
   
   // Update active state when currentSlide changes in parent

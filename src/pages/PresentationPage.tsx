@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import SlidePreview from "@/components/slides/SlidePreview";
+import { SlidePreview } from "@/components/slides/SlidePreview";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
