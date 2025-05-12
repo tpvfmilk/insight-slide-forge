@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { updateProject } from './projectService';
@@ -405,7 +406,8 @@ export const updateSlidesWithExtractedFrames = async (
 
     // First update the extracted_frames in the project to ensure persistence
     // This ensures we store all frames at the project level
-    const allExtractedFrames = [...extractedFrames];
+    // Create a working array that we'll modify
+    let combinedExtractedFrames = [...extractedFrames];
     
     if (project.extracted_frames && Array.isArray(project.extracted_frames)) {
       // Get existing frames from project
@@ -429,21 +431,21 @@ export const updateSlidesWithExtractedFrames = async (
       });
       
       // Convert map back to array
-      allExtractedFrames = Array.from(framesMap.values());
+      combinedExtractedFrames = Array.from(framesMap.values());
     }
 
     // Save all extracted frames to the project
     await updateProject(projectId, {
-      extracted_frames: allExtractedFrames
+      extracted_frames: combinedExtractedFrames
     });
     
-    console.log(`Saved ${allExtractedFrames.length} total frames to project`);
+    console.log(`Saved ${combinedExtractedFrames.length} total frames to project`);
 
     // Now update the slides with frame images where needed
     const updatedSlides = project.slides.map((slide: any) => {
       if (slide.timestamp) {
         // Find a matching frame
-        const matchingFrame = allExtractedFrames.find(
+        const matchingFrame = combinedExtractedFrames.find(
           frame => frame.timestamp === slide.timestamp
         );
         
@@ -462,7 +464,7 @@ export const updateSlidesWithExtractedFrames = async (
       if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps) && slide.transcriptTimestamps.length > 0) {
         // Find all matching frames for this slide's timestamps
         const matchingFrames = slide.transcriptTimestamps
-          .map(timestamp => allExtractedFrames.find(frame => frame.timestamp === timestamp))
+          .map(timestamp => combinedExtractedFrames.find(frame => frame.timestamp === timestamp))
           .filter(Boolean); // Remove undefined entries
         
         if (matchingFrames.length > 0) {
