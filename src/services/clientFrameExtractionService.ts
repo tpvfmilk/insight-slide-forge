@@ -266,7 +266,7 @@ async function uploadExtractedFrames(
         continue;
       }
       
-      // Get public URL
+      // Get public URL - this ensures we have a permanent URL
       const { data: urlData } = supabase
         .storage
         .from('slide_stills')
@@ -289,6 +289,13 @@ async function uploadExtractedFrames(
 
 // Helper function to save extracted frames to the project
 async function saveExtractedFramesToProject(projectId: string, frames: ExtractedFrame[]): Promise<void> {
+  // Verify all frames have valid (not blob:// URLs) before saving
+  const invalidFrames = frames.filter(frame => frame.imageUrl.startsWith('blob:'));
+  if (invalidFrames.length > 0) {
+    console.error("Cannot save frames with blob URLs to project:", invalidFrames);
+    throw new Error("Cannot save frames with temporary URLs to project");
+  }
+  
   // Get existing frames
   const { data: project } = await supabase
     .from('projects')
@@ -323,6 +330,16 @@ export const updateSlidesWithExtractedFrames = async (
     if (!extractedFrames || extractedFrames.length === 0) {
       console.error('No extracted frames provided');
       return false;
+    }
+    
+    // Verify all frames have valid URLs (not blob:// URLs) before updating slides
+    const invalidFrames = extractedFrames.filter(frame => 
+      !frame.imageUrl || frame.imageUrl.startsWith('blob:')
+    );
+    
+    if (invalidFrames.length > 0) {
+      console.error("Cannot update slides with blob URLs:", invalidFrames);
+      throw new Error("Cannot update slides with temporary URLs");
     }
 
     // First, fetch the current project

@@ -56,6 +56,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
   const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   const [libraryFrames, setLibraryFrames] = useState<ExtractedFrame[]>([]);
+  const [isUploadingFrames, setIsUploadingFrames] = useState(false);
   
   // Reset state when opening modal
   useEffect(() => {
@@ -339,6 +340,45 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     loadVideo();
   };
   
+  // Helper function to upload a captured frame to Supabase storage
+  const uploadFrameToStorage = async (frame: Blob, timestamp: string): Promise<string | null> => {
+    try {
+      if (!projectId) {
+        throw new Error("Project ID is required to upload frames");
+      }
+      
+      // Create a File from the Blob
+      const file = new File([frame], `frame-${timestamp.replace(/:/g, "-")}.jpg`, {
+        type: 'image/jpeg'
+      });
+      
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase
+        .storage
+        .from('slide_stills')
+        .upload(`${projectId}/${timestamp.replace(/:/g, '_')}.jpg`, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+        
+      if (uploadError || !uploadData?.path) {
+        console.error("Error uploading frame:", uploadError);
+        return null;
+      }
+      
+      // Get public URL
+      const { data: urlData } = supabase
+        .storage
+        .from('slide_stills')
+        .getPublicUrl(uploadData.path);
+        
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error("Error in uploadFrameToStorage:", error);
+      return null;
+    }
+  };
+  
   // Capture current frame using the improved extraction service
   const captureFrame = async () => {
     const video = videoRef.current;
@@ -375,20 +415,28 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       if (extractedFrames && extractedFrames.length > 0) {
         const { frame, timestamp: extractedTimestamp } = extractedFrames[0];
         
-        // Create a URL for the blob
-        const imageUrl = URL.createObjectURL(frame);
+        // Upload the frame to storage to get a permanent URL
+        const permanentUrl = await uploadFrameToStorage(frame, extractedTimestamp);
         
-        // Create a new extracted frame
+        if (!permanentUrl) {
+          toast.error(`Failed to upload frame at ${timestamp}`, {
+            id: 'capture-frame'
+          });
+          createPlaceholderFrame(currentTimePosition);
+          return;
+        }
+        
+        // Create a new extracted frame with permanent URL
         const frameId = `frame-${Date.now()}-${extractedTimestamp}`;
         
         const newFrame: ExtractedFrame = {
           id: frameId,
-          imageUrl,
+          imageUrl: permanentUrl, // Use permanent URL from storage
           timestamp: extractedTimestamp,
           isPlaceholder: false
         };
         
-        // Create a captured frame with blob
+        // Create a captured frame with blob (for local use only)
         const capturedFrame: CapturedFrameWithBlob = {
           ...newFrame,
           blob: frame
@@ -435,7 +483,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   };
   
   // Create a placeholder frame when capture fails
-  const createPlaceholderFrame = (timeInSeconds: number) => {
+  const createPlaceholderFrame = async (timeInSeconds: number) => {
     const canvas = canvasRef.current;
     if (!canvas) {
       toast.error("Failed to create placeholder frame");
@@ -468,23 +516,28 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     ctx.fillText("Could not extract frame from video", canvas.width / 2, canvas.height / 2 + 20);
     
     // Convert to blob
-    canvas.toBlob((blob) => {
+    canvas.toBlob(async (blob) => {
       if (blob) {
+        // Upload placeholder to storage
+        const permanentUrl = await uploadFrameToStorage(blob, timestamp);
+        
+        if (!permanentUrl) {
+          toast.error("Failed to upload placeholder frame");
+          return;
+        }
+        
         // Generate unique ID for the frame
-        const frameId = `frame-${Date.now()}`;
+        const frameId = `frame-${Date.now()}-placeholder`;
         
-        // Create a URL for the blob
-        const imageUrl = URL.createObjectURL(blob);
-        
-        // Create a new extracted frame
+        // Create a new extracted frame with permanent URL
         const newFrame: ExtractedFrame = {
           id: frameId,
-          imageUrl,
+          imageUrl: permanentUrl, // Use permanent URL from storage
           timestamp,
           isPlaceholder: true
         };
         
-        // Create a captured frame with blob
+        // Create a captured frame with blob for local use
         const capturedFrame: CapturedFrameWithBlob = {
           ...newFrame,
           blob
@@ -561,7 +614,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   };
   
   // Apply selected frames to slide
-  const handleApplyFrames = () => {
+  const handleApplyFrames = async () => {
     // Get selected frames from library
     const selectedFramesList = libraryFrames.filter(frame => 
       frame.id && selectedFrames[frame.id]
@@ -577,10 +630,20 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       return;
     }
     
-    // Call the onFramesSelected callback with the selected frames
-    // This will update the frames in the project
-    onFramesSelected(sortedFrames);
-    onClose();
+    setIsUploadingFrames(true);
+    toast.loading("Processing selected frames...");
+    
+    try {
+      // Call the onFramesSelected callback with the selected frames
+      // This will update the frames in the project
+      onFramesSelected(sortedFrames);
+      onClose();
+    } catch (error) {
+      console.error("Error in handleApplyFrames:", error);
+      toast.error("Failed to process selected frames");
+    } finally {
+      setIsUploadingFrames(false);
+    }
   };
   
   // Custom render for slider with captured frame markers
@@ -798,10 +861,19 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           <Button 
             onClick={handleApplyFrames} 
             className="gap-1"
-            disabled={selectedFramesCount === 0}
+            disabled={selectedFramesCount === 0 || isUploadingFrames}
           >
-            <Plus className="h-4 w-4 mr-1" />
-            Insert {selectedFramesCount > 0 ? `${selectedFramesCount} Frame${selectedFramesCount !== 1 ? 's' : ''}` : 'to Slide'}
+            {isUploadingFrames ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4 mr-1" />
+                Insert {selectedFramesCount > 0 ? `${selectedFramesCount} Frame${selectedFramesCount !== 1 ? 's' : ''}` : 'to Slide'}
+              </>
+            )}
           </Button>
         </div>
       </DialogContent>

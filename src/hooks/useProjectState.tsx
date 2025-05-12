@@ -288,6 +288,19 @@ export const useProjectState = (projectId: string | undefined) => {
         return false;
       }
       
+      // Verify all frames have valid permanent URLs (not blob:// URLs)
+      const allFramesHaveValidUrls = nonBlankFrames.every(
+        frame => frame.imageUrl && !frame.imageUrl.startsWith('blob:')
+      );
+      
+      if (!allFramesHaveValidUrls) {
+        console.error("Some frames have invalid URLs:", nonBlankFrames.filter(
+          frame => !frame.imageUrl || frame.imageUrl.startsWith('blob:')
+        ));
+        toast.error("Some frames have temporary URLs. Please try capturing frames again.");
+        return false;
+      }
+      
       // Merge with new frames, avoiding duplicates by timestamp
       const combinedFrames = [
         ...nonBlankFrames,
