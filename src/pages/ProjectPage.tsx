@@ -52,15 +52,16 @@ const ProjectPage = () => {
   // Handler for when frames are selected in the frame picker
   const handleFrameSelection = (selectedFrames) => {
     // Pass the selected frames to be handled in the project state
-    handleManualFrameSelectionComplete(selectedFrames);
-    
-    // Close the modal
-    modals.closeFramePickerModal();
-    
-    // After frames are processed, reload the project to reflect changes
-    setTimeout(() => {
-      loadProject();
-    }, 500);
+    handleManualFrameSelectionComplete(selectedFrames)
+      .then(() => {
+        // Close the modal
+        modals.closeFramePickerModal();
+        
+        // After frames are processed, reload the project to reflect changes
+        setTimeout(() => {
+          loadProject();
+        }, 500);
+      });
   };
   
   return (
@@ -125,7 +126,7 @@ const ProjectPage = () => {
         </div>
       </div>
 
-      {/* Frame Picker Modal */}
+      {/* Frame Picker Modal with Library */}
       {modals.isFramePickerModalOpen && project?.source_file_path && (
         <FramePickerModal
           open={modals.isFramePickerModalOpen}

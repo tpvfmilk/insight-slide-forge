@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -311,6 +310,9 @@ export const useProjectState = (projectId: string | undefined) => {
       const success = await updateSlidesWithExtractedFrames(projectId, nonBlankFrames);
       
       if (success) {
+        // Update local state with the new frames
+        setExtractedFrames(combinedFrames);
+        
         // Reload the project to get the updated slides with images
         await loadProject();
         setNeedsFrameExtraction(false);
