@@ -1,16 +1,14 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Play, Pause, Camera, Trash2, Plus, RefreshCw, AlertCircle, Rewind, FastForward, Check, CheckCheck } from "lucide-react";
+import { Play, Pause, Camera, Trash2, Plus, RefreshCw, AlertCircle, Rewind, FastForward, Check } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { Slider } from "@/components/ui/slider";
 import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 
 // Create a separate interface for frames with blobs that extends ExtractedFrame
@@ -41,7 +39,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   allExtractedFrames = [],
   existingFrames = []
 }) => {
-  const [selectedFrames, setSelectedFrames] = useState<ExtractedFrame[]>(existingFrames || []);
+  const [selectedFrames, setSelectedFrames] = useState<{[key: string]: boolean}>({});
   const [capturedFrames, setCapturedFrames] = useState<CapturedFrameWithBlob[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -57,19 +55,23 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [loadAttempts, setLoadAttempts] = useState(0);
   const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
   const [isCapturingFrame, setIsCapturingFrame] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("capture");
   const [libraryFrames, setLibraryFrames] = useState<ExtractedFrame[]>([]);
-  const [selectedLibraryFrames, setSelectedLibraryFrames] = useState<{[key: string]: boolean}>({});
   
   // Reset state when opening modal
   useEffect(() => {
     if (open) {
-      // Sort existing frames by timestamp if they exist
-      const sortedFrames = [...(existingFrames || [])].sort((a, b) => {
-        return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
-      });
+      // Initialize with existing frames selected
+      const initialSelectedState: {[key: string]: boolean} = {};
       
-      setSelectedFrames(sortedFrames);
+      if (existingFrames && existingFrames.length > 0) {
+        existingFrames.forEach(frame => {
+          if (frame.id) {
+            initialSelectedState[frame.id] = true;
+          }
+        });
+      }
+      
+      setSelectedFrames(initialSelectedState);
       setVideoError(null);
       setIsVideoLoaded(false);
       setIsLoadingVideo(true);
@@ -87,15 +89,6 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         });
         
         setLibraryFrames(sortedLibraryFrames);
-        
-        // Initialize selected state for library frames
-        const initialSelectedState: {[key: string]: boolean} = {};
-        existingFrames.forEach(frame => {
-          if (frame.id) {
-            initialSelectedState[frame.id] = true;
-          }
-        });
-        setSelectedLibraryFrames(initialSelectedState);
       }
       
       // Try to load the video
@@ -394,13 +387,6 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         // Add to captured frames
         setCapturedFrames(prev => [...prev, capturedFrame]);
         
-        // Add to selected frames
-        setSelectedFrames(prev => {
-          const newFrames = [...prev, newFrame];
-          // Sort frames by timestamp
-          return newFrames.sort((a, b) => timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp));
-        });
-        
         // Add to library frames
         setLibraryFrames(prev => {
           const newFrames = [...prev, newFrame];
@@ -408,8 +394,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           return newFrames.sort((a, b) => timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp));
         });
         
-        // Mark as selected in library
-        setSelectedLibraryFrames(prev => ({
+        // Automatically select the newly captured frame
+        setSelectedFrames(prev => ({
           ...prev,
           [frameId]: true
         }));
@@ -497,12 +483,18 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         // Add to captured frames
         setCapturedFrames(prev => [...prev, capturedFrame]);
         
-        // Add to selected frames
-        setSelectedFrames(prev => {
+        // Add to library frames
+        setLibraryFrames(prev => {
           const newFrames = [...prev, newFrame];
           // Sort frames by timestamp
           return newFrames.sort((a, b) => timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp));
         });
+        
+        // Automatically select the newly captured frame
+        setSelectedFrames(prev => ({
+          ...prev,
+          [frameId]: true
+        }));
         
         // Add timemark to the seek bar
         setCapturedTimemarks(prev => [...prev, timeInSeconds]);
@@ -514,10 +506,28 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     }, "image/jpeg", 0.95);
   };
   
-  // Remove a frame from selection
+  // Toggle selection of a frame in library
+  const toggleFrameSelection = (frame: ExtractedFrame) => {
+    if (!frame.id) return;
+    
+    setSelectedFrames(prev => {
+      const updated = {...prev};
+      
+      // Toggle selection
+      if (updated[frame.id!]) {
+        delete updated[frame.id!];
+      } else {
+        updated[frame.id!] = true;
+      }
+      
+      return updated;
+    });
+  };
+  
+  // Remove a frame from the library
   const removeFrame = (frameId: string) => {
     // Find the frame to remove
-    const frameToRemove = selectedFrames.find(frame => frame.id === frameId);
+    const frameToRemove = libraryFrames.find(frame => frame.id === frameId);
     if (frameToRemove) {
       // Remove from captured timemarks if it exists there
       if (frameToRemove.timestamp) {
@@ -526,50 +536,33 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       }
     }
     
-    // Remove from selected frames
-    setSelectedFrames(prev => prev.filter(frame => frame.id !== frameId));
+    // Remove from library frames
+    setLibraryFrames(prev => prev.filter(frame => frame.id !== frameId));
     
-    // Remove from selected library frames
-    setSelectedLibraryFrames(prev => {
+    // Remove from selected frames
+    setSelectedFrames(prev => {
       const updated = {...prev};
       delete updated[frameId];
       return updated;
     });
   };
   
-  // Toggle selection of a frame in library
-  const toggleLibraryFrameSelection = (frame: ExtractedFrame) => {
-    if (!frame.id) return;
-    
-    setSelectedLibraryFrames(prev => {
-      const updated = {...prev};
-      
-      // Toggle selection
-      if (updated[frame.id!]) {
-        delete updated[frame.id!];
-        // Also remove from selected frames
-        setSelectedFrames(prevFrames => prevFrames.filter(f => f.id !== frame.id));
-      } else {
-        updated[frame.id!] = true;
-        // Add to selected frames if not already there
-        setSelectedFrames(prevFrames => {
-          if (!prevFrames.some(f => f.id === frame.id)) {
-            return [...prevFrames, frame];
-          }
-          return prevFrames;
-        });
-      }
-      
-      return updated;
-    });
-  };
-  
   // Apply selected frames to slide
   const handleApplyFrames = () => {
+    // Get selected frames from library
+    const selectedFramesList = libraryFrames.filter(frame => 
+      frame.id && selectedFrames[frame.id]
+    );
+    
     // Sort frames by timestamp before applying
-    const sortedFrames = [...selectedFrames].sort((a, b) => {
+    const sortedFrames = [...selectedFramesList].sort((a, b) => {
       return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
     });
+    
+    if (sortedFrames.length === 0) {
+      toast.info("No frames selected");
+      return;
+    }
     
     onFramesSelected(sortedFrames);
     onClose();
@@ -606,6 +599,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     );
   };
   
+  // Get count of selected frames
+  const selectedFramesCount = Object.keys(selectedFrames).length;
+  
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -613,195 +609,151 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         
         {/* Main content area */}
         <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
-          <Tabs 
-            defaultValue="capture" 
-            className="w-full"
-            onValueChange={setActiveTab}
-            value={activeTab}
-          >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="capture">Capture Frames</TabsTrigger>
-              <TabsTrigger value="library">Frame Library ({libraryFrames.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="capture" className="flex-1">
-              {/* Video player */}
-              <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
-                {isLoadingVideo ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
-                    <RefreshCw className="h-8 w-8 animate-spin mr-2" />
-                    <span>Loading video...</span>
-                  </div>
-                ) : videoError ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
-                    <div>
-                      <AlertCircle className="h-10 w-10 mb-2 mx-auto text-destructive" />
-                      <p className="mb-4">{videoError}</p>
-                      <Button 
-                        variant="secondary" 
-                        onClick={retryLoadVideo}
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Retry Loading Video
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-                
-                <video
-                  ref={videoRef}
-                  src={videoUrl || undefined}
-                  className="w-full h-full"
-                  crossOrigin="anonymous"
-                  onLoadedData={handleVideoLoaded}
-                  onLoadedMetadata={handleVideoLoaded}
-                  onError={handleVideoError}
-                  playsInline
-                  preload="auto" // Force full preload
-                >
-                  Your browser does not support the video tag.
-                </video>
-                
-                {/* Video controls overlay */}
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
-                  <div className="flex items-center space-x-4 w-full">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={seekBack}
-                      className="text-white hover:bg-white/20"
-                      disabled={!isVideoLoaded}
-                    >
-                      <Rewind className="h-5 w-5" />
-                    </Button>
-
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={togglePlayPause}
-                      className="text-white hover:bg-white/20"
-                      disabled={!isVideoLoaded}
-                    >
-                      {isPlaying ? (
-                        <Pause className="h-5 w-5" />
-                      ) : (
-                        <Play className="h-5 w-5" />
-                      )}
-                    </Button>
-                    
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      onClick={seekForward}
-                      className="text-white hover:bg-white/20"
-                      disabled={!isVideoLoaded}
-                    >
-                      <FastForward className="h-5 w-5" />
-                    </Button>
-                    
-                    <div className="text-white text-sm">
-                      {formatTime(currentTime)} / {formatTime(duration)}
-                    </div>
-                    
-                    <div className="flex-1"></div>
-                    
-                    <Button 
-                      variant="secondary" 
-                      size="sm"
-                      onClick={captureFrame}
-                      className="flex items-center space-x-1"
-                      disabled={!isVideoLoaded || isCapturingFrame}
-                    >
-                      {isCapturingFrame ? (
-                        <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                      ) : (
-                        <Camera className="h-4 w-4 mr-1" />
-                      )}
-                      {isCapturingFrame ? 'Capturing...' : 'Capture Frame'}
-                    </Button>
-                  </div>
-                  
-                  {/* Video seek slider with markers */}
-                  <div className="px-1">
-                    {renderSliderWithMarkers()}
-                  </div>
+          {/* Video player section */}
+          <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
+            {isLoadingVideo ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
+                <RefreshCw className="h-8 w-8 animate-spin mr-2" />
+                <span>Loading video...</span>
+              </div>
+            ) : videoError ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
+                <div>
+                  <AlertCircle className="h-10 w-10 mb-2 mx-auto text-destructive" />
+                  <p className="mb-4">{videoError}</p>
+                  <Button 
+                    variant="secondary" 
+                    onClick={retryLoadVideo}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry Loading Video
+                  </Button>
                 </div>
+              </div>
+            ) : null}
+            
+            <video
+              ref={videoRef}
+              src={videoUrl || undefined}
+              className="w-full h-full"
+              crossOrigin="anonymous"
+              onLoadedData={handleVideoLoaded}
+              onLoadedMetadata={handleVideoLoaded}
+              onError={handleVideoError}
+              playsInline
+              preload="auto" // Force full preload
+            >
+              Your browser does not support the video tag.
+            </video>
+            
+            {/* Video controls overlay */}
+            <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
+              <div className="flex items-center space-x-4 w-full">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={seekBack}
+                  className="text-white hover:bg-white/20"
+                  disabled={!isVideoLoaded}
+                >
+                  <Rewind className="h-5 w-5" />
+                </Button>
+
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={togglePlayPause}
+                  className="text-white hover:bg-white/20"
+                  disabled={!isVideoLoaded}
+                >
+                  {isPlaying ? (
+                    <Pause className="h-5 w-5" />
+                  ) : (
+                    <Play className="h-5 w-5" />
+                  )}
+                </Button>
+                
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={seekForward}
+                  className="text-white hover:bg-white/20"
+                  disabled={!isVideoLoaded}
+                >
+                  <FastForward className="h-5 w-5" />
+                </Button>
+                
+                <div className="text-white text-sm">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </div>
+                
+                <div className="flex-1"></div>
+                
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={captureFrame}
+                  className="flex items-center space-x-1"
+                  disabled={!isVideoLoaded || isCapturingFrame}
+                >
+                  {isCapturingFrame ? (
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <Camera className="h-4 w-4 mr-1" />
+                  )}
+                  {isCapturingFrame ? 'Capturing...' : 'Capture Frame'}
+                </Button>
               </div>
               
-              {/* Hidden canvas for frame capture */}
-              <canvas ref={canvasRef} className="hidden"></canvas>
-            </TabsContent>
-            <TabsContent value="library" className="mt-0">
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">
-                  Select frames from the library to add to the current slide.
-                </div>
-                
-                <div className="h-[300px] bg-muted/30 rounded-md overflow-hidden">
-                  <ScrollArea className="h-full">
-                    {libraryFrames.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2">
-                        {libraryFrames.map((frame) => (
-                          <div 
-                            key={frame.id} 
-                            className={`relative aspect-video cursor-pointer rounded-md overflow-hidden border-2 ${
-                              selectedLibraryFrames[frame.id!] ? 'border-primary' : 'border-transparent'
-                            }`}
-                            onClick={() => toggleLibraryFrameSelection(frame)}
-                          >
-                            <img
-                              src={frame.imageUrl}
-                              alt={`Frame at ${frame.timestamp}`}
-                              className="h-full w-full object-cover"
-                            />
-                            <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
-                            {selectedLibraryFrames[frame.id!] && (
-                              <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
-                                <Check className="h-3 w-3 text-primary-foreground" />
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="h-full flex items-center justify-center">
-                        <div className="text-center text-muted-foreground">
-                          <p>No frames in library</p>
-                          <p className="text-sm mt-2">Capture frames from the video to add them to the library</p>
-                        </div>
-                      </div>
-                    )}
-                  </ScrollArea>
-                </div>
+              {/* Video seek slider with markers */}
+              <div className="px-1">
+                {renderSliderWithMarkers()}
               </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
           
           <Separator />
           
-          {/* Selected frames section */}
-          <div className="flex flex-col space-y-2">
-            <h3 className="text-sm font-medium">Selected Frames</h3>
+          {/* Combined Library & Selected Frames Section */}
+          <div className="space-y-2 flex-1 overflow-hidden">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium">Frame Library</h3>
+              <div className="text-sm text-muted-foreground">
+                {selectedFramesCount} frame{selectedFramesCount !== 1 ? 's' : ''} selected
+              </div>
+            </div>
             
-            <div className="flex-1 min-h-[100px] bg-muted/30 rounded-md overflow-hidden">
-              <ScrollArea className="h-[140px]">
-                {selectedFrames.length > 0 ? (
-                  <div className="flex gap-2 p-2">
-                    {selectedFrames.map((frame) => (
+            <div className="h-[300px] bg-muted/30 rounded-md overflow-hidden">
+              <ScrollArea className="h-full">
+                {libraryFrames.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2">
+                    {libraryFrames.map((frame) => (
                       <div 
                         key={frame.id} 
-                        className="relative h-24 aspect-video flex-shrink-0"
+                        className={`relative aspect-video cursor-pointer rounded-md overflow-hidden border-2 ${
+                          selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
+                        }`}
+                        onClick={() => toggleFrameSelection(frame)}
                       >
                         <img
                           src={frame.imageUrl}
                           alt={`Frame at ${frame.timestamp}`}
-                          className="h-full w-full object-cover rounded-md"
+                          className="h-full w-full object-cover"
                         />
                         <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
+                        {selectedFrames[frame.id!] && (
+                          <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
+                            <Check className="h-3 w-3 text-primary-foreground" />
+                          </div>
+                        )}
                         <Button
                           variant="destructive"
                           size="icon"
-                          className="h-6 w-6 absolute top-1 right-1"
-                          onClick={() => removeFrame(frame.id as string)}
+                          className="h-6 w-6 absolute bottom-1 right-1 opacity-0 hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFrame(frame.id as string);
+                          }}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -810,21 +762,31 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                   </div>
                 ) : (
                   <div className="h-full flex items-center justify-center">
-                    <p className="text-muted-foreground text-sm">No frames selected</p>
+                    <div className="text-center text-muted-foreground">
+                      <p>No frames in library</p>
+                      <p className="text-sm mt-2">Capture frames from the video to add them to the library</p>
+                    </div>
                   </div>
                 )}
               </ScrollArea>
             </div>
           </div>
+          
+          {/* Hidden canvas for frame capture */}
+          <canvas ref={canvasRef} className="hidden"></canvas>
         </div>
         
         <div className="flex justify-between items-center pt-4 border-t mt-2">
-          <div className="text-sm text-muted-foreground">
-            {selectedFrames.length} frame(s) selected
-          </div>
-          <Button onClick={handleApplyFrames} className="gap-1">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleApplyFrames} 
+            className="gap-1"
+            disabled={selectedFramesCount === 0}
+          >
             <Plus className="h-4 w-4 mr-1" />
-            Insert to Slide
+            Insert {selectedFramesCount > 0 ? `${selectedFramesCount} Frame${selectedFramesCount !== 1 ? 's' : ''}` : 'to Slide'}
           </Button>
         </div>
       </DialogContent>
