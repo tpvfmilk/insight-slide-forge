@@ -46,11 +46,14 @@ const ProjectPage = () => {
       toast.error("No video available");
       return;
     }
+    console.log("Opening frame picker modal with", extractedFrames?.length || 0, "extracted frames");
     modals.openFramePickerModal();
   };
   
   // Handler for when frames are selected in the frame picker
   const handleFrameSelection = (selectedFrames) => {
+    console.log(`Frame selection complete with ${selectedFrames.length} frames`);
+    
     // Pass the selected frames to be handled in the project state
     handleManualFrameSelectionComplete(selectedFrames)
       .then(() => {

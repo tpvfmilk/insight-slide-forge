@@ -71,6 +71,7 @@ export const useProjectState = (projectId: string | undefined) => {
       // Get previously extracted frames
       if (projectData.extracted_frames && Array.isArray(projectData.extracted_frames)) {
         setExtractedFrames(projectData.extracted_frames as ExtractedFrame[]);
+        console.log(`Loaded ${projectData.extracted_frames.length} extracted frames from project`);
       }
       
       // Load all project videos
@@ -257,6 +258,8 @@ export const useProjectState = (projectId: string | undefined) => {
     }
     
     try {
+      console.log(`Processing ${selectedFrames.length} selected frames for project ${projectId}`);
+      
       // First, add selected frames to the project's extracted_frames collection
       // This ensures they're persistent and available for any slide
       
@@ -275,6 +278,7 @@ export const useProjectState = (projectId: string | undefined) => {
       
       // Get existing frames
       const existingFrames: ExtractedFrame[] = projectData?.extracted_frames as unknown as ExtractedFrame[] || [];
+      console.log(`Found ${existingFrames.length} existing frames in project`);
       
       // Filter out frames that are white/blank
       const nonBlankFrames = selectedFrames.filter(frame => !frame.isPlaceholder);

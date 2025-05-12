@@ -78,17 +78,27 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       setLoadAttempts(0);
       setCurrentTime(0);
       setSeekingValue(0);
+      setCapturedFrames([]);
       setCapturedTimemarks([]);
       setIsCapturingFrame(false);
       
-      // Set library frames from allExtractedFrames
+      // Load all project frames from allExtractedFrames
       if (allExtractedFrames && allExtractedFrames.length > 0) {
+        console.log(`Loading ${allExtractedFrames.length} frames from project's extracted frames`);
+        
         // Sort frames by timestamp
         const sortedLibraryFrames = [...allExtractedFrames].sort((a, b) => {
           return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
         });
         
+        // Add existing timemarks to seek bar
+        const timemarks = sortedLibraryFrames.map(frame => timeToSeconds(frame.timestamp));
+        setCapturedTimemarks(timemarks);
+        
         setLibraryFrames(sortedLibraryFrames);
+      } else {
+        console.log('No existing frames found in project');
+        setLibraryFrames([]);
       }
       
       // Try to load the video
@@ -545,6 +555,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       delete updated[frameId];
       return updated;
     });
+    
+    // Also remove from captured frames if it exists there
+    setCapturedFrames(prev => prev.filter(frame => frame.id !== frameId));
   };
   
   // Apply selected frames to slide
@@ -564,6 +577,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       return;
     }
     
+    // Call the onFramesSelected callback with the selected frames
+    // This will update the frames in the project
     onFramesSelected(sortedFrames);
     onClose();
   };
