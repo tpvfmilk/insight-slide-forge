@@ -248,7 +248,7 @@ export const useProjectState = (projectId: string | undefined) => {
     }
   };
   
-  // Update to store frames in project-level state and make them available to all slides
+  // Update to ensure frames are properly saved to project-level storage
   const handleManualFrameSelectionComplete = async (selectedFrames: ExtractedFrame[]): Promise<boolean> => {
     if (!projectId) return false;
     
@@ -260,8 +260,16 @@ export const useProjectState = (projectId: string | undefined) => {
     try {
       console.log(`Processing ${selectedFrames.length} selected frames for project ${projectId}`);
       
-      // First, add selected frames to the project's extracted_frames collection
-      // This ensures they're persistent and available for any slide
+      // First, verify all frames have valid permanent URLs (not blob:// URLs)
+      const invalidFrames = selectedFrames.filter(frame => 
+        !frame.imageUrl || frame.imageUrl.startsWith('blob:')
+      );
+      
+      if (invalidFrames.length > 0) {
+        console.error("Cannot update slides with blob URLs:", invalidFrames);
+        toast.error("Cannot save frames with temporary URLs. Please try capturing frames again.");
+        return false;
+      }
       
       // Get current extracted frames
       const { data: projectData, error: getError } = await supabase
@@ -285,19 +293,6 @@ export const useProjectState = (projectId: string | undefined) => {
       
       if (nonBlankFrames.length === 0) {
         toast.error("All selected frames appear to be blank. Please try capturing frames at different timestamps.");
-        return false;
-      }
-      
-      // Verify all frames have valid permanent URLs (not blob:// URLs)
-      const allFramesHaveValidUrls = nonBlankFrames.every(
-        frame => frame.imageUrl && !frame.imageUrl.startsWith('blob:')
-      );
-      
-      if (!allFramesHaveValidUrls) {
-        console.error("Some frames have invalid URLs:", nonBlankFrames.filter(
-          frame => !frame.imageUrl || frame.imageUrl.startsWith('blob:')
-        ));
-        toast.error("Some frames have temporary URLs. Please try capturing frames again.");
         return false;
       }
       

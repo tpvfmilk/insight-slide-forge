@@ -613,7 +613,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     setCapturedFrames(prev => prev.filter(frame => frame.id !== frameId));
   };
   
-  // Apply selected frames to slide
+  // Apply selected frames to slide with proper upload handling
   const handleApplyFrames = async () => {
     // Get selected frames from library
     const selectedFramesList = libraryFrames.filter(frame => 
@@ -631,16 +631,34 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     }
     
     setIsUploadingFrames(true);
-    toast.loading("Processing selected frames...");
+    const toastId = "processing-frames";
+    toast.loading("Processing selected frames...", { id: toastId });
     
     try {
-      // Call the onFramesSelected callback with the selected frames
-      // This will update the frames in the project
-      onFramesSelected(sortedFrames);
+      // Ensure all frames have valid permanent URLs (not blob URLs)
+      const validFrames = sortedFrames.filter(frame => 
+        frame.imageUrl && !frame.imageUrl.startsWith('blob:')
+      );
+      
+      if (validFrames.length < sortedFrames.length) {
+        console.warn(`${sortedFrames.length - validFrames.length} frames have temporary URLs and will be skipped`);
+      }
+      
+      if (validFrames.length === 0) {
+        toast.error("No valid frames available to apply", { id: toastId });
+        setIsUploadingFrames(false);
+        return;
+      }
+      
+      // Call the onFramesSelected callback with the valid frames
+      await onFramesSelected(validFrames);
+      
+      // Successfully processed
+      toast.success(`Applied ${validFrames.length} frames`, { id: toastId });
       onClose();
     } catch (error) {
       console.error("Error in handleApplyFrames:", error);
-      toast.error("Failed to process selected frames");
+      toast.error("Failed to process selected frames", { id: toastId });
     } finally {
       setIsUploadingFrames(false);
     }

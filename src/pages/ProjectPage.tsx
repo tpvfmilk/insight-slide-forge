@@ -1,4 +1,3 @@
-
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -51,20 +50,32 @@ const ProjectPage = () => {
   };
   
   // Handler for when frames are selected in the frame picker
-  const handleFrameSelection = (selectedFrames) => {
+  const handleFrameSelection = async (selectedFrames) => {
     console.log(`Frame selection complete with ${selectedFrames.length} frames`);
+    const toastId = "frame-processing";
     
-    // Pass the selected frames to be handled in the project state
-    handleManualFrameSelectionComplete(selectedFrames)
-      .then(() => {
+    try {
+      toast.loading("Processing selected frames...", { id: toastId });
+      
+      // Pass the selected frames to be handled in the project state
+      const success = await handleManualFrameSelectionComplete(selectedFrames);
+      
+      if (success) {
         // Close the modal
         modals.closeFramePickerModal();
+        toast.success(`Successfully processed ${selectedFrames.length} frames`, { id: toastId });
         
         // After frames are processed, reload the project to reflect changes
         setTimeout(() => {
           loadProject();
         }, 500);
-      });
+      } else {
+        toast.error("Failed to process frames", { id: toastId });
+      }
+    } catch (error) {
+      console.error("Error processing frames:", error);
+      toast.error("An error occurred while processing frames", { id: toastId });
+    }
   };
   
   return (

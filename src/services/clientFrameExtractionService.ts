@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { updateProject } from './projectService';
@@ -238,7 +237,7 @@ export const clientExtractFramesFromVideo = async (
   }
 };
 
-// Helper function to upload extracted frames
+// Helper function to upload extracted frames - ensure it properly handles URLs
 async function uploadExtractedFrames(
   projectId: string, 
   extractedFrames: Array<{ timestamp: string; frame: Blob }>
