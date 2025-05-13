@@ -16,7 +16,7 @@ export const SlideHeader = ({
   projectId
 }: SlideHeaderProps) => {
   return (
-    <div className="flex justify-between items-center p-4 border-b">
+    <div className="flex justify-between items-center h-14 p-4 border-b">
       <div className="text-sm text-muted-foreground flex items-center">
         <Clock className="h-4 w-4 mr-1" />
         <span>Slide {currentSlideIndex + 1} of {slidesLength}</span>

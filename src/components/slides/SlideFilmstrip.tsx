@@ -92,8 +92,8 @@ export const SlideFilmstrip = ({
   
   return (
     <div className="border-t w-full overflow-hidden">
-      {/* Reduced height of this navigation bar */}
-      <div className="border-b py-1.5 px-4 flex justify-between items-center">
+      {/* Reduced height navigation bar */}
+      <div className="border-b h-12 px-4 flex justify-between items-center">
         <div className="flex-1">
           {/* Empty space to balance the layout */}
         </div>
@@ -143,19 +143,19 @@ export const SlideFilmstrip = ({
         </div>
       </div>
       
-      {/* Filmstrip with constrained width and proper horizontal scrolling */}
-      <div className="px-4 py-2 overflow-hidden w-full">
+      {/* Filmstrip with proper width constraints and horizontal scrolling */}
+      <div className="w-full overflow-hidden px-4 py-2">
         <ScrollArea 
-          className="h-16 border rounded-md" 
+          className="h-16 border rounded-md w-full" 
           orientation="horizontal" 
           ref={scrollContainerRef}
         >
-          <div className="flex gap-2 p-2 w-max">
+          <div className="flex gap-2 p-2 w-full">
             {slides.map((slide, index) => (
               <div 
                 key={slide.id || index}
                 className={cn(
-                  "group relative min-w-[140px] w-[140px] h-12 p-1 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center flex-shrink-0",
+                  "group relative min-w-[160px] w-[160px] h-12 p-1 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center flex-shrink-0",
                   index === currentSlideIndex 
                     ? "border-primary bg-primary/5" 
                     : "border-border hover:border-muted-foreground"
@@ -172,7 +172,7 @@ export const SlideFilmstrip = ({
                 
                 {/* Only show the slide title */}
                 <p className={cn(
-                  "text-xs truncate text-center max-w-[110px] px-1",
+                  "text-xs truncate text-center max-w-[130px] px-1",
                   index === currentSlideIndex ? "text-primary font-medium" : "text-foreground"
                 )}>
                   {slide.title || "Untitled Slide"}
