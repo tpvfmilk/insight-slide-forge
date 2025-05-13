@@ -92,7 +92,7 @@ export const SlideFilmstrip = ({
   
   return (
     <div className="border-t w-full overflow-hidden">
-      {/* Reduced height navigation bar */}
+      {/* Navigation bar */}
       <div className="border-b h-12 px-4 flex justify-between items-center">
         <div className="flex-1">
           {/* Empty space to balance the layout */}
@@ -143,10 +143,10 @@ export const SlideFilmstrip = ({
         </div>
       </div>
       
-      {/* Filmstrip with proper width constraints and horizontal scrolling */}
+      {/* Filmstrip with increased height for taller cards */}
       <div className="w-full overflow-hidden px-4 py-2">
         <ScrollArea 
-          className="h-16 border rounded-md w-full" 
+          className="h-[118px] border rounded-md w-full" 
           orientation="horizontal" 
           ref={scrollContainerRef}
         >
@@ -155,7 +155,7 @@ export const SlideFilmstrip = ({
               <div 
                 key={slide.id || index}
                 className={cn(
-                  "group relative min-w-[160px] w-[160px] h-12 p-1 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center flex-shrink-0",
+                  "group relative min-w-[160px] w-[160px] h-[100px] p-1 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center flex-shrink-0",
                   index === currentSlideIndex 
                     ? "border-primary bg-primary/5" 
                     : "border-border hover:border-muted-foreground"
@@ -172,7 +172,7 @@ export const SlideFilmstrip = ({
                 
                 {/* Only show the slide title */}
                 <p className={cn(
-                  "text-xs truncate text-center max-w-[130px] px-1",
+                  "text-xs truncate text-center max-w-[140px] px-1",
                   index === currentSlideIndex ? "text-primary font-medium" : "text-foreground"
                 )}>
                   {slide.title || "Untitled Slide"}

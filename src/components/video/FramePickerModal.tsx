@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -259,6 +258,11 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     }
   };
   
+  // Handle video URL update from VideoPlayer
+  const handleVideoUrlUpdate = (url: string) => {
+    setVideoUrl(url);
+  };
+  
   // Get count of selected frames
   const selectedFramesCount = Object.keys(selectedFrames).length;
   
@@ -269,16 +273,21 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         
         {/* Main content area */}
         <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
-          {/* Video player component */}
-          <VideoPlayer
-            videoPath={videoPath}
-            projectId={projectId}
-            onTimeUpdate={handleTimeUpdate}
-            onVideoLoaded={handleVideoLoaded}
-            capturedTimemarks={capturedTimemarks}
-          >
-            {/* Capture frame button is rendered inside VideoPlayer */}
-            <div className="absolute bottom-16 right-4">
+          {/* Video player component with updated z-index handling */}
+          <div className="relative">
+            <VideoPlayer
+              videoPath={videoPath}
+              projectId={projectId}
+              onTimeUpdate={handleTimeUpdate}
+              onVideoLoaded={handleVideoLoaded}
+              onVideoUrlUpdate={handleVideoUrlUpdate}
+              capturedTimemarks={capturedTimemarks}
+            >
+              {/* Empty children to avoid conflicts */}
+            </VideoPlayer>
+            
+            {/* Capture frame button positioned absolutely with proper z-index */}
+            <div className="absolute bottom-16 right-4 z-10">
               <FrameCapture
                 videoUrl={videoUrl}
                 currentTime={currentTime}
@@ -287,7 +296,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                 onFrameCaptured={handleFrameCaptured}
               />
             </div>
-          </VideoPlayer>
+          </div>
           
           <Separator />
           

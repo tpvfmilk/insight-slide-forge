@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -11,6 +10,7 @@ interface VideoPlayerProps {
   projectId: string;
   onTimeUpdate?: (currentTime: number) => void;
   onVideoLoaded?: (duration: number) => void;
+  onVideoUrlUpdate?: (url: string) => void;  // Add new prop for URL updates
   capturedTimemarks?: number[];
   isCapturingFrame?: boolean;
   children?: ReactNode; // Add support for children prop
@@ -21,6 +21,7 @@ export const VideoPlayer = ({
   projectId,
   onTimeUpdate,
   onVideoLoaded,
+  onVideoUrlUpdate, // New prop for URL updates
   capturedTimemarks = [],
   isCapturingFrame = false,
   children // Add children to props
@@ -119,6 +120,11 @@ export const VideoPlayer = ({
       
       console.log("Got signed URL for video");
       setVideoUrl(data.signedUrl);
+      
+      // Notify parent of URL update
+      if (onVideoUrlUpdate) {
+        onVideoUrlUpdate(data.signedUrl);
+      }
     } catch (error) {
       console.error("Error getting fresh video URL:", error);
       setVideoError("Failed to access video. The video might be unavailable or the format is not supported.");
@@ -394,4 +400,3 @@ export const VideoPlayer = ({
     </div>
   );
 };
-

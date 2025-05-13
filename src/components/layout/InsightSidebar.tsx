@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Droplet, Home, UsersRound, FilePlus, Folder as FolderIcon, ChevronRight } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
@@ -69,7 +70,7 @@ export function InsightSidebar({
         <Separator className="my-4" />
       </div>
 
-      <div className="my-0 py-0">
+      <div className="p-0 border-t">
         <StorageUsageBar />
       </div>
 
