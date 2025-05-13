@@ -204,6 +204,7 @@ export const VideoPlayer = ({
           }
           
           // Initialize metadata as an empty object if it doesn't exist
+          // Fix: Ensure currentMetadata is an object by using a default empty object
           const currentMetadata = projectData?.video_metadata || {};
           
           // Update the duration in the metadata
@@ -247,7 +248,12 @@ export const VideoPlayer = ({
     } else {
       video.play().catch(error => {
         console.error("Error playing video:", error);
-        toast.error("Failed to play video");
+        // Fix: Use the correct toast method for error
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to play video"
+        });
       });
     }
     
