@@ -36,7 +36,7 @@ export const SlideFilmstrip = ({
   const startX = useRef<number>(0);
   const scrollLeft = useRef<number>(0);
   
-  // Set up drag-to-scroll functionality for the filmstrip - fixed to work with ScrollArea
+  // Set up drag-to-scroll functionality for the filmstrip
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current?.querySelector('[data-radix-scroll-area-viewport]');
     if (!scrollContainer) return;
@@ -93,67 +93,69 @@ export const SlideFilmstrip = ({
   return (
     <div className="border-t w-full overflow-hidden">
       {/* Reduced height of this navigation bar */}
-      <div className="border-b px-6 py-2 flex justify-between items-center">
+      <div className="border-b py-1.5 px-4 flex justify-between items-center">
         <div className="flex-1">
           {/* Empty space to balance the layout */}
         </div>
         
-        <div className="flex items-center gap-3 flex-1 justify-center">
+        <div className="flex items-center gap-2 flex-1 justify-center">
           <Button
             variant="outline"
-            size="icon"
+            size="sm"
+            className="h-8 w-8 p-0"
             onClick={onPrevSlide}
             disabled={currentSlideIndex <= 0}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           
-          <span className="text-sm px-2">
-            Slide {currentSlideIndex + 1} of {slides.length}
+          <span className="text-sm px-1">
+            {currentSlideIndex + 1} / {slides.length}
           </span>
           
           <Button
             variant="outline"
-            size="icon"
+            size="sm"
+            className="h-8 w-8 p-0"
             onClick={onNextSlide}
             disabled={currentSlideIndex >= slides.length - 1}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
           
-          <Button size="sm" variant="outline" onClick={onAddSlide}>
+          <Button size="sm" variant="outline" className="h-8" onClick={onAddSlide}>
             <Plus className="h-4 w-4 mr-1" />
-            Add Slide
+            Add
           </Button>
         </div>
         
         {/* Right-aligned export and delete buttons */}
-        <div className="flex items-center gap-3 flex-1 justify-end">
-          <Button size="sm" variant="outline" onClick={onExportOptions}>
+        <div className="flex items-center gap-2 flex-1 justify-end">
+          <Button size="sm" variant="outline" className="h-8" onClick={onExportOptions}>
             <Download className="h-4 w-4 mr-1" />
             Export
           </Button>
           
-          <Button size="sm" variant="destructive" onClick={onDeleteCurrentSlide} disabled={slides.length <= 1}>
+          <Button size="sm" variant="destructive" className="h-8" onClick={onDeleteCurrentSlide} disabled={slides.length <= 1}>
             <Trash2 className="h-4 w-4 mr-1" />
-            Delete Slide
+            Delete
           </Button>
         </div>
       </div>
       
       {/* Filmstrip with constrained width and proper horizontal scrolling */}
-      <div className="mx-6 my-3 overflow-hidden">
+      <div className="px-4 py-2 overflow-hidden w-full">
         <ScrollArea 
-          className="h-20 border rounded-md" 
+          className="h-16 border rounded-md" 
           orientation="horizontal" 
           ref={scrollContainerRef}
         >
-          <div className="flex gap-2 p-2">
+          <div className="flex gap-2 p-2 w-max">
             {slides.map((slide, index) => (
               <div 
                 key={slide.id || index}
                 className={cn(
-                  "group relative min-w-[160px] w-[160px] h-14 p-2 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center flex-shrink-0",
+                  "group relative min-w-[140px] w-[140px] h-12 p-1 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center flex-shrink-0",
                   index === currentSlideIndex 
                     ? "border-primary bg-primary/5" 
                     : "border-border hover:border-muted-foreground"
@@ -170,7 +172,7 @@ export const SlideFilmstrip = ({
                 
                 {/* Only show the slide title */}
                 <p className={cn(
-                  "text-sm truncate text-center",
+                  "text-xs truncate text-center max-w-[110px] px-1",
                   index === currentSlideIndex ? "text-primary font-medium" : "text-foreground"
                 )}>
                   {slide.title || "Untitled Slide"}
@@ -181,7 +183,7 @@ export const SlideFilmstrip = ({
                   variant="ghost"
                   size="icon"
                   className={cn(
-                    "absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity",
+                    "absolute top-0.5 right-0.5 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity p-0",
                     index === currentSlideIndex && "text-primary"
                   )}
                   onClick={(e) => {
@@ -189,7 +191,7 @@ export const SlideFilmstrip = ({
                     onDeleteSlide(index);
                   }}
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-2.5 w-2.5" />
                 </Button>
               </div>
             ))}
