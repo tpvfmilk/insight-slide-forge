@@ -121,13 +121,10 @@ export const YoutubeUpload = () => {
       </div>
 
       <div className="space-y-4 mt-4">
-        <div>
-          <Label className="mb-2 block">Add series or content context (optional)</Label>
-          <ContextPromptInput 
-            value={contextPrompt}
-            onChange={setContextPrompt}
-          />
-        </div>
+        <ContextPromptInput 
+          value={contextPrompt}
+          onChange={setContextPrompt}
+        />
       </div>
       
       {isUploading && (

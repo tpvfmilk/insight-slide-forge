@@ -1,5 +1,6 @@
+
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, Plus, X, Undo, Film } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, RefreshCw, Presentation, Trash2, Plus, X, Undo } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { useParams } from "react-router-dom";
@@ -174,8 +175,8 @@ export const SlideEditor = () => {
   }, [deleteSlideFromFilmstrip]);
   
   return (
-    <div className="h-full flex flex-col">
-      {/* Navigation and toolbar */}
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Navigation and toolbar - Removed redundant "Select Frames" button */}
       <SlideHeader 
         currentSlideIndex={currentSlideIndex}
         slidesLength={slides.length}

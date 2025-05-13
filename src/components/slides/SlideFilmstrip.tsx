@@ -31,64 +31,64 @@ export const SlideFilmstrip = ({
   onDeleteCurrentSlide
 }: SlideFilmstripProps) => {
   // References for drag-to-scroll functionality
-  const filmstripRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isMouseDown = useRef<boolean>(false);
   const startX = useRef<number>(0);
   const scrollLeft = useRef<number>(0);
   
-  // Set up drag-to-scroll functionality for the filmstrip
+  // Set up drag-to-scroll functionality for the filmstrip - fixed to work with ScrollArea
   useEffect(() => {
-    const filmstrip = filmstripRef.current;
-    if (!filmstrip) return;
+    const scrollContainer = scrollContainerRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+    if (!scrollContainer) return;
     
     const handleMouseDown = (e: MouseEvent) => {
       isMouseDown.current = true;
-      startX.current = e.pageX - filmstrip.offsetLeft;
-      scrollLeft.current = filmstrip.scrollLeft;
-      filmstrip.style.cursor = 'grabbing';
-      filmstrip.style.userSelect = 'none';
+      startX.current = e.pageX - scrollContainer.getBoundingClientRect().left;
+      scrollLeft.current = scrollContainer.scrollLeft;
+      scrollContainer.style.cursor = 'grabbing';
+      scrollContainer.style.userSelect = 'none';
     };
     
     const handleMouseUp = () => {
       isMouseDown.current = false;
-      filmstrip.style.cursor = 'grab';
-      filmstrip.style.userSelect = '';
+      scrollContainer.style.cursor = 'grab';
+      scrollContainer.style.userSelect = '';
     };
     
     const handleMouseLeave = () => {
       isMouseDown.current = false;
-      filmstrip.style.cursor = 'grab';
-      filmstrip.style.userSelect = '';
+      scrollContainer.style.cursor = 'grab';
+      scrollContainer.style.userSelect = '';
     };
     
     const handleMouseMove = (e: MouseEvent) => {
       if (!isMouseDown.current) return;
       e.preventDefault();
-      const x = e.pageX - filmstrip.offsetLeft;
+      const x = e.pageX - scrollContainer.getBoundingClientRect().left;
       const walk = (x - startX.current) * 2; // Scroll speed multiplier
-      filmstrip.scrollLeft = scrollLeft.current - walk;
+      scrollContainer.scrollLeft = scrollLeft.current - walk;
     };
     
     // Add event listeners
-    filmstrip.addEventListener('mousedown', handleMouseDown);
-    filmstrip.addEventListener('mouseleave', handleMouseLeave);
+    scrollContainer.addEventListener('mousedown', handleMouseDown);
+    scrollContainer.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousemove', handleMouseMove);
     
     // Initialize cursor style
-    filmstrip.style.cursor = 'grab';
+    scrollContainer.style.cursor = 'grab';
     
     return () => {
       // Clean up event listeners
-      filmstrip.removeEventListener('mousedown', handleMouseDown);
-      filmstrip.removeEventListener('mouseleave', handleMouseLeave);
+      scrollContainer.removeEventListener('mousedown', handleMouseDown);
+      scrollContainer.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousemove', handleMouseMove);
     };
   }, []);
   
   return (
-    <div className="border-t w-full">
+    <div className="border-t w-full overflow-hidden">
       {/* Reduced height of this navigation bar */}
       <div className="border-b px-6 py-2 flex justify-between items-center">
         <div className="flex-1">
@@ -138,15 +138,19 @@ export const SlideFilmstrip = ({
         </div>
       </div>
       
-      {/* Filmstrip with fixed width and horizontal scrolling */}
-      <div className="mx-6 my-3 max-w-full">
-        <ScrollArea className="h-20 border rounded-md" orientation="horizontal" ref={filmstripRef}>
-          <div className="flex gap-2 p-2 w-max">
+      {/* Filmstrip with constrained width and proper horizontal scrolling */}
+      <div className="mx-6 my-3 overflow-hidden">
+        <ScrollArea 
+          className="h-20 border rounded-md" 
+          orientation="horizontal" 
+          ref={scrollContainerRef}
+        >
+          <div className="flex gap-2 p-2">
             {slides.map((slide, index) => (
               <div 
                 key={slide.id || index}
                 className={cn(
-                  "group relative min-w-[160px] w-[160px] h-14 p-2 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center",
+                  "group relative min-w-[160px] w-[160px] h-14 p-2 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center flex-shrink-0",
                   index === currentSlideIndex 
                     ? "border-primary bg-primary/5" 
                     : "border-border hover:border-muted-foreground"
