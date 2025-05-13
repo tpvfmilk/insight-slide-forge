@@ -1,10 +1,8 @@
 
-import { useState, useEffect, useRef, ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Play, Pause, Rewind, FastForward, RefreshCw, AlertCircle } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { ReactNode } from "react";
+import { useVideoPlayer } from "@/hooks/useVideoPlayer";
+import { VideoControls } from "@/components/video/VideoControls";
+import { VideoOverlay } from "@/components/video/VideoOverlay";
 
 interface VideoPlayerProps {
   videoPath: string;
@@ -27,384 +25,43 @@ export const VideoPlayer = ({
   isCapturingFrame = false,
   children
 }: VideoPlayerProps) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [seekingValue, setSeekingValue] = useState(0);
-  const [isSeeking, setIsSeeking] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
-  const [isLoadingVideo, setIsLoadingVideo] = useState(true);
-  const [loadAttempts, setLoadAttempts] = useState(0);
-  const [durationUpdatedInDB, setDurationUpdatedInDB] = useState(false);
+  const {
+    videoRef,
+    isPlaying,
+    currentTime,
+    duration,
+    seekingValue,
+    videoUrl,
+    videoError,
+    isVideoLoaded,
+    isLoadingVideo,
+    togglePlayPause,
+    seekBack,
+    seekForward,
+    handleSeekStart,
+    handleSeekChange,
+    handleSeekEnd,
+    handleVideoLoaded,
+    handleVideoError,
+    retryLoadVideo
+  } = useVideoPlayer({
+    videoPath,
+    projectId,
+    onTimeUpdate,
+    onVideoLoaded,
+    onVideoUrlUpdate
+  });
   
-  const videoRef = useRef<HTMLVideoElement>(null);
-  
-  // Format time display (seconds to MM:SS)
-  const formatTime = (timeInSeconds: number): string => {
-    const minutes = Math.floor(timeInSeconds / 60);
-    const seconds = Math.floor(timeInSeconds % 60);
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-  
-  // Function to load the video
-  const loadVideo = async () => {
-    if (!videoPath) {
-      setVideoError("No video path provided");
-      setIsLoadingVideo(false);
-      return;
-    }
-    
-    setIsLoadingVideo(true);
-    setVideoError(null);
-    console.log("Starting video loading process for path:", videoPath);
-    
-    try {
-      console.log(`Attempting to load video from path: ${videoPath}`);
-      
-      // Extract bucket and file path
-      let bucket = 'video_uploads';
-      let filePath = videoPath;
-      
-      // If path includes '/', extract the actual file path without bucket name
-      if (videoPath.includes('/')) {
-        const pathParts = videoPath.split('/');
-        if (pathParts.length > 1) {
-          filePath = pathParts.pop() || '';
-          bucket = pathParts.join('/');
-        }
-      }
-      
-      console.log(`Getting signed URL for ${bucket}/${filePath}`);
-      
-      // Get a fresh signed URL with longer expiry
-      const { data, error } = await supabase
-        .storage
-        .from(bucket)
-        .createSignedUrl(filePath, 7200); // 2 hour expiry
-        
-      if (error || !data?.signedUrl) {
-        console.error("Error getting signed URL:", error);
-        
-        // Try alternate methods to get video URL
-        if (projectId) {
-          // If we have project ID, try to get source URL from project
-          const { data: projectData } = await supabase
-            .from('projects')
-            .select('source_url, source_file_path')
-            .eq('id', projectId)
-            .single();
-            
-          if (projectData?.source_url) {
-            console.log("Using project source URL as fallback");
-            setVideoUrl(projectData.source_url);
-            
-            // Important: Notify parent of URL update
-            if (onVideoUrlUpdate) {
-              onVideoUrlUpdate(projectData.source_url);
-            }
-            return;
-          } else if (projectData?.source_file_path) {
-            // Try with the source file path from project
-            const altPath = projectData.source_file_path;
-            const altBucket = 'video_uploads';
-            
-            const { data: altData, error: altError } = await supabase
-              .storage
-              .from(altBucket)
-              .createSignedUrl(altPath, 7200);
-              
-            if (!altError && altData?.signedUrl) {
-              console.log("Using alternate file path from project");
-              setVideoUrl(altData.signedUrl);
-              
-              // Important: Notify parent of URL update
-              if (onVideoUrlUpdate) {
-                onVideoUrlUpdate(altData.signedUrl);
-              }
-              return;
-            }
-          }
-        }
-        
-        throw new Error("Couldn't create access link for video");
-      }
-      
-      console.log("Got signed URL for video");
-      setVideoUrl(data.signedUrl);
-      
-      // Critical: Notify parent immediately of URL update with a small delay to ensure it's processed
-      if (onVideoUrlUpdate) {
-        console.log("Notifying parent of video URL update");
-        setTimeout(() => {
-          onVideoUrlUpdate(data.signedUrl);
-        }, 100);
-      }
-    } catch (error) {
-      console.error("Error getting fresh video URL:", error);
-      setVideoError("Failed to access video. The video might be unavailable or the format is not supported.");
-    } finally {
-      setIsLoadingVideo(false);
-    }
-  };
-  
-  // Load video on mount
-  useEffect(() => {
-    loadVideo();
-  }, [videoPath, loadAttempts]);
-
-  // Update time display when video is playing
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    const updateTime = () => {
-      if (!isSeeking) {
-        setCurrentTime(video.currentTime);
-        setSeekingValue(video.currentTime);
-        onTimeUpdate?.(video.currentTime);
-      }
-    };
-    
-    video.addEventListener('timeupdate', updateTime);
-    
-    return () => {
-      video.removeEventListener('timeupdate', updateTime);
-    };
-  }, [isSeeking, onTimeUpdate]);
-
-  // Handle video duration and update project metadata in database
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const handleLoadedMetadata = async () => {
-      const videoDuration = video.duration;
-      setDuration(videoDuration);
-      
-      if (onVideoLoaded) {
-        onVideoLoaded(videoDuration);
-      }
-      
-      // Update the project's video_metadata with the accurate duration
-      // Only do this once per video load to avoid unnecessary DB operations
-      if (projectId && videoDuration && !durationUpdatedInDB) {
-        try {
-          // First get the current metadata
-          const { data: projectData, error: fetchError } = await supabase
-            .from('projects')
-            .select('video_metadata')
-            .eq('id', projectId)
-            .single();
-            
-          if (fetchError) {
-            console.error("Error fetching project metadata:", fetchError);
-            return;
-          }
-          
-          // Initialize metadata as an empty object if it doesn't exist
-          // Fix: Ensure currentMetadata is an object by using a default empty object
-          const currentMetadata = projectData?.video_metadata || {};
-          
-          // Update the duration in the metadata
-          // Fix: Ensure we're spreading an object by providing a default empty object
-          const updatedMetadata = {
-            ...(currentMetadata || {}),
-            duration: videoDuration
-          };
-          
-          // Save the updated metadata back to the database
-          const { error: updateError } = await supabase
-            .from('projects')
-            .update({ video_metadata: updatedMetadata })
-            .eq('id', projectId);
-              
-          if (updateError) {
-            console.error("Error updating project metadata:", updateError);
-          } else {
-            console.log("Updated project with accurate video duration:", videoDuration);
-            setDurationUpdatedInDB(true);
-          }
-        } catch (error) {
-          console.error("Error updating video duration in project:", error);
-        }
-      }
-    };
-
-    video.addEventListener('loadedmetadata', handleLoadedMetadata);
-    
-    return () => {
-      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
-    };
-  }, [projectId, onVideoLoaded, durationUpdatedInDB]);
-  
-  // Handle video playback control
-  const togglePlayPause = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    if (isPlaying) {
-      video.pause();
-    } else {
-      video.play().catch(error => {
-        console.error("Error playing video:", error);
-        // Fix: Use the correct toast method for error
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to play video"
-        });
-      });
-    }
-    
-    setIsPlaying(!isPlaying);
-  };
-
-  // Update isPlaying state based on video events
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-    const handleEnded = () => setIsPlaying(false);
-    
-    video.addEventListener('play', handlePlay);
-    video.addEventListener('pause', handlePause);
-    video.addEventListener('ended', handleEnded);
-    
-    return () => {
-      video.removeEventListener('play', handlePlay);
-      video.removeEventListener('pause', handlePause);
-      video.removeEventListener('ended', handleEnded);
-    };
-  }, []);
-
-  // Seek back 5 seconds
-  const seekBack = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    video.currentTime = Math.max(0, video.currentTime - 5);
-    setCurrentTime(video.currentTime);
-    setSeekingValue(video.currentTime);
-    onTimeUpdate?.(video.currentTime);
-  };
-
-  // Seek forward 5 seconds
-  const seekForward = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    video.currentTime = Math.min(video.duration, video.currentTime + 5);
-    setCurrentTime(video.currentTime);
-    setSeekingValue(video.currentTime);
-    onTimeUpdate?.(video.currentTime);
-  };
-
-  // Handle seeking via slider
-  const handleSeekStart = () => {
-    setIsSeeking(true);
-  };
-
-  const handleSeekChange = (value: number[]) => {
-    setSeekingValue(value[0]);
-  };
-
-  const handleSeekEnd = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    video.currentTime = seekingValue;
-    setCurrentTime(seekingValue);
-    setIsSeeking(false);
-    onTimeUpdate?.(seekingValue);
-  };
-  
-  // Handle video load events
-  const handleVideoLoaded = () => {
-    setIsVideoLoaded(true);
-    setVideoError(null);
-    setIsLoadingVideo(false);
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
-      onVideoLoaded?.(videoRef.current.duration);
-      
-      // Additional notification of URL when video is fully loaded
-      if (videoUrl && onVideoUrlUpdate) {
-        onVideoUrlUpdate(videoUrl);
-      }
-    }
-  };
-  
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    console.error("Video error:", e);
-    setVideoError("Failed to load video. Please check the video file format and try again.");
-    setIsVideoLoaded(false);
-    setIsLoadingVideo(false);
-  };
-  
-  // Retry loading video
-  const retryLoadVideo = () => {
-    setLoadAttempts(prev => prev + 1);
-    loadVideo();
-  };
-  
-  // Custom render for slider with captured frame markers
-  const renderSliderWithMarkers = () => {
-    return (
-      <div className="relative w-full">
-        <Slider 
-          value={[seekingValue]} 
-          min={0} 
-          max={duration || 100}
-          step={0.01}
-          onValueChange={handleSeekChange}
-          onValueCommit={handleSeekEnd}
-          onPointerDown={handleSeekStart}
-          className="z-10"
-        />
-        
-        {/* Timemark indicators */}
-        {capturedTimemarks.map((time, index) => (
-          <div 
-            key={index}
-            className="absolute top-1/2 w-1 h-4 bg-green-500 rounded-full transform -translate-y-1/2 z-0"
-            style={{ 
-              left: `${(time / (duration || 100)) * 100}%`,
-              marginLeft: -2 // Center the marker
-            }}
-            title={`Captured frame at ${formatTime(time)}`}
-          />
-        ))}
-      </div>
-    );
-  };
-
   return (
     <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
-      {isLoadingVideo ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
-          <RefreshCw className="h-8 w-8 animate-spin mr-2" />
-          <span>Loading video...</span>
-        </div>
-      ) : videoError ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
-          <div>
-            <AlertCircle className="h-10 w-10 mb-2 mx-auto text-destructive" />
-            <p className="mb-4">{videoError}</p>
-            <Button 
-              variant="secondary" 
-              onClick={retryLoadVideo}
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Retry Loading Video
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      {/* Error and loading overlays */}
+      <VideoOverlay 
+        isLoading={isLoadingVideo}
+        error={videoError}
+        onRetry={retryLoadVideo}
+      />
       
+      {/* Video element */}
       <video
         ref={videoRef}
         src={videoUrl || undefined}
@@ -414,62 +71,28 @@ export const VideoPlayer = ({
         onLoadedMetadata={handleVideoLoaded}
         onError={handleVideoError}
         playsInline
-        preload="auto" // Force full preload
+        preload="auto"
       >
         Your browser does not support the video tag.
       </video>
       
-      {/* Video controls overlay */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
-        <div className="flex items-center space-x-4 w-full">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={seekBack}
-            className="text-white hover:bg-white/20"
-            disabled={!isVideoLoaded}
-          >
-            <Rewind className="h-5 w-5" />
-          </Button>
-
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={togglePlayPause}
-            className="text-white hover:bg-white/20"
-            disabled={!isVideoLoaded}
-          >
-            {isPlaying ? (
-              <Pause className="h-5 w-5" />
-            ) : (
-              <Play className="h-5 w-5" />
-            )}
-          </Button>
-          
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={seekForward}
-            className="text-white hover:bg-white/20"
-            disabled={!isVideoLoaded}
-          >
-            <FastForward className="h-5 w-5" />
-          </Button>
-          
-          <div className="text-white text-sm">
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </div>
-          
-          <div className="flex-1"></div>
-        </div>
-        
-        {/* Video seek slider with markers */}
-        <div className="px-1">
-          {renderSliderWithMarkers()}
-        </div>
-      </div>
+      {/* Video controls */}
+      <VideoControls
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        duration={duration}
+        seekingValue={seekingValue}
+        isVideoLoaded={isVideoLoaded}
+        onPlay={togglePlayPause}
+        onSeekStart={handleSeekStart}
+        onSeekChange={handleSeekChange}
+        onSeekEnd={handleSeekEnd}
+        onSeekBack={seekBack}
+        onSeekForward={seekForward}
+        capturedTimemarks={capturedTimemarks}
+      />
       
-      {/* Render children (if provided) */}
+      {/* Additional content (e.g., for frame capture UI) */}
       {children}
     </div>
   );
