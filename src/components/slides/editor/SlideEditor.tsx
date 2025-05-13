@@ -1,8 +1,7 @@
 
 import React from "react";
-import { useParams } from "react-router-dom";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
-import { SlideEditorProvider, useSlideEditor } from "./SlideEditorContext";
+import { useSlideEditor } from "./SlideEditorContext";
 import { SlideEditorHeader } from "./SlideEditorHeader";
 import { SlidePanels } from "./SlidePanels";
 import { SlideControls } from "./SlideControls";
@@ -10,20 +9,8 @@ import { SlideFilmstrip } from "./SlideFilmstrip";
 import { SlideEditorStyles } from "../SlideEditorStyles";
 import { SlideEditorProps } from "./SlideEditorTypes";
 
-// Main component wrapper with provider
-export const SlideEditor: React.FC<SlideEditorProps> = ({ projectId: propProjectId }) => {
-  const { id: routeProjectId } = useParams<{ id: string }>();
-  const projectId = propProjectId || routeProjectId;
-
-  return (
-    <SlideEditorProvider>
-      <SlideEditorContent projectId={projectId} />
-    </SlideEditorProvider>
-  );
-};
-
-// Inner component that uses the context
-const SlideEditorContent: React.FC<SlideEditorProps> = ({ projectId }) => {
+// Export the inner content component that uses the context
+export const SlideEditorContent: React.FC<SlideEditorProps> = ({ projectId }) => {
   const {
     isLoading,
     currentSlide,
