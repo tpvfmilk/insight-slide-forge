@@ -11,6 +11,8 @@ const PresentationPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [projectTitle, setProjectTitle] = useState<string>("");
+  const [slides, setSlides] = useState<any[]>([]);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   
   useEffect(() => {
     const loadProjectInfo = async () => {
@@ -30,6 +32,8 @@ const PresentationPage = () => {
         // Check if slides exist
         if (!project.slides || !Array.isArray(project.slides) || project.slides.length === 0) {
           toast.error("No slides available for this project");
+        } else {
+          setSlides(project.slides);
         }
       } catch (error) {
         console.error("Error loading project data:", error);
@@ -66,7 +70,10 @@ const PresentationPage = () => {
       </div>
       
       <div className="flex-1">
-        <SlidePreview />
+        <SlidePreview 
+          slides={slides} 
+          currentSlide={slides[currentSlideIndex]} 
+        />
       </div>
     </div>
   );
