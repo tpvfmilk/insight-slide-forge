@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,26 +8,30 @@ import { toast } from "sonner";
 interface FramePickerModalProps {
   open: boolean;
   onClose: () => void;
-  allFrames: LocalExtractedFrame[];
-  initialSelectedFrames?: LocalExtractedFrame[];
-  onApplyFrames: (frames: LocalExtractedFrame[]) => void;
+  videoPath: string;
+  projectId: string;
+  onFramesSelected: (frames: LocalExtractedFrame[]) => void;
+  allExtractedFrames: LocalExtractedFrame[];
+  existingFrames?: LocalExtractedFrame[];
 }
 
 export function FramePickerModal({
   open,
   onClose,
-  allFrames,
-  initialSelectedFrames = [],
-  onApplyFrames
+  videoPath,
+  projectId,
+  allExtractedFrames,
+  existingFrames = [],
+  onFramesSelected
 }: FramePickerModalProps) {
-  const [selectedFrames, setSelectedFrames] = useState<LocalExtractedFrame[]>(initialSelectedFrames);
+  const [selectedFrames, setSelectedFrames] = useState<LocalExtractedFrame[]>(existingFrames);
   
   // Reset selected frames when modal opens
   useEffect(() => {
     if (open) {
-      setSelectedFrames(initialSelectedFrames);
+      setSelectedFrames(existingFrames);
     }
-  }, [open, initialSelectedFrames]);
+  }, [open, existingFrames]);
   
   const toggleFrameSelection = (frame: LocalExtractedFrame) => {
     setSelectedFrames(prevSelected => {
@@ -45,7 +50,7 @@ export function FramePickerModal({
       return;
     }
     
-    onApplyFrames(selectedFrames);
+    onFramesSelected(selectedFrames);
     onClose();
   };
   
@@ -61,7 +66,7 @@ export function FramePickerModal({
         </div>
         
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto max-h-[60vh]">
-          {allFrames.map(frame => (
+          {allExtractedFrames.map(frame => (
             <div 
               key={frame.id}
               className={`relative aspect-video rounded-md overflow-hidden cursor-pointer border-2 ${

@@ -1,4 +1,3 @@
-
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -146,7 +145,7 @@ const ProjectPage = () => {
               openTranscriptDialog={() => modals.openTranscriptDialog()}
             />
           ) : (
-            <SlideEditor />
+            <SlideEditor projectId={projectId} />
           )}
         </div>
       </div>
@@ -164,7 +163,6 @@ const ProjectPage = () => {
           projectId={projectId || ""}
           onFramesSelected={handleFrameSelection}
           allExtractedFrames={extractedFrames || []}
-          existingFrames={[]} // This will be populated by the SlideEditor when needed
         />
       )}
     </InsightLayout>

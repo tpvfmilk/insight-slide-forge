@@ -15,15 +15,25 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({ projectId: propProject
   const { id: routeProjectId } = useParams<{ id: string }>();
   const projectId = propProjectId || routeProjectId;
 
+  if (!projectId) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">No project ID specified</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <SlideEditorProvider>
-      <SlideEditorContent projectId={projectId} />
+    <SlideEditorProvider projectId={projectId}>
+      <SlideEditorContent />
     </SlideEditorProvider>
   );
 };
 
 // Inner component that uses the context
-const SlideEditorContent: React.FC<SlideEditorProps> = ({ projectId }) => {
+const SlideEditorContent: React.FC = () => {
   const {
     isLoading,
     currentSlide,
@@ -31,7 +41,8 @@ const SlideEditorContent: React.FC<SlideEditorProps> = ({ projectId }) => {
     setIsFramePickerModalOpen,
     handleFrameSelection,
     allExtractedFrames,
-    videoPath
+    videoPath,
+    projectId
   } = useSlideEditor();
 
   if (isLoading) {
@@ -65,12 +76,12 @@ const SlideEditorContent: React.FC<SlideEditorProps> = ({ projectId }) => {
       <SlideFilmstrip />
       
       {/* Frame Picker Modal */}
-      {isFramePickerModalOpen && videoPath && (
+      {isFramePickerModalOpen && videoPath && projectId && (
         <FramePickerModal
           open={isFramePickerModalOpen}
           onClose={() => setIsFramePickerModalOpen(false)} 
           videoPath={videoPath}
-          projectId={projectId || ""}
+          projectId={projectId}
           onFramesSelected={handleFrameSelection}
           allExtractedFrames={allExtractedFrames}
           existingFrames={currentSlide?.imageUrls?.map(url => {

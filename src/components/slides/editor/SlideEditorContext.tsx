@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useParams } from "react-router-dom";
@@ -16,13 +17,13 @@ import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
 interface SlideEditorContextProps {
   children: React.ReactNode;
+  projectId: string;
 }
 
 export const SlideEditorContext = createContext<SlideEditorContextValue | undefined>(undefined);
 
-export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ children }) => {
-  const { id: routeProjectId } = useParams<{ id: string }>();
-  const projectId = routeProjectId || "";
+export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ children, projectId }) => {
+  // No need to get projectId from params as it's now passed as a prop
   
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
