@@ -1,6 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Copy } from "lucide-react";
 
 interface SlideContentProps {
   currentSlide: {
@@ -15,6 +16,7 @@ interface SlideContentProps {
   saveChanges: () => void;
   setEditedTitle: (title: string) => void;
   setEditedContent: (content: string) => void;
+  onCopyContent?: () => void;
 }
 
 export const SlideContent = ({
@@ -25,12 +27,13 @@ export const SlideContent = ({
   startEditing,
   saveChanges,
   setEditedTitle,
-  setEditedContent
+  setEditedContent,
+  onCopyContent
 }: SlideContentProps) => {
   if (!currentSlide) return null;
   
   return (
-    <div className="w-full lg:w-1/2 flex flex-col">
+    <div className="w-full flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold">Content</h3>
         <div className="flex items-center gap-2">
@@ -53,7 +56,7 @@ export const SlideContent = ({
         </div>
       </div>
       
-      <div className="flex-1 flex flex-col gap-4">
+      <div className="flex-1 flex flex-col gap-4 relative">
         <div className="space-y-2">
           <label htmlFor="title" className="text-sm font-medium">Title</label>
           {isEditing ? (
@@ -93,6 +96,14 @@ export const SlideContent = ({
               {currentSlide.content || "No content"}
             </div>
           )}
+        </div>
+        
+        {/* Copy Content button positioned at the bottom right */}
+        <div className="absolute bottom-0 right-0 pb-2">
+          <Button variant="outline" size="sm" onClick={onCopyContent} disabled={!currentSlide}>
+            <Copy className="h-4 w-4 mr-1" />
+            Copy Content
+          </Button>
         </div>
       </div>
     </div>

@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+// Import the resizable components
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+
 // Import the components we've refactored the SlideEditor into
 import { SlideHeader } from "@/components/slides/SlideHeader";
 import { SlideContent } from "@/components/slides/SlideContent";
@@ -64,6 +67,7 @@ export const SlideEditor = () => {
     csv: false
   });
   const [isFramePickerModalOpen, setIsFramePickerModalOpen] = useState<boolean>(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState<boolean>(false);
   
   // Frame selection handlers
   const handleSelectFrames = async () => {
@@ -138,17 +142,25 @@ export const SlideEditor = () => {
     toast.success("Image uploaded successfully!");
   };
   
+  // Handle export dialog
+  const handleExportDialog = () => {
+    setIsExportDialogOpen(true);
+  };
+  
   // Export functions - implementation omitted for brevity
   const exportPDF = async () => {
     toast.success("PDF exported successfully!");
+    setIsExportDialogOpen(false);
   };
   
   const exportAnki = async () => {
     toast.success("Anki cards exported successfully!");
+    setIsExportDialogOpen(false);
   };
   
   const exportCSV = async () => {
     toast.success("CSV exported successfully!");
+    setIsExportDialogOpen(false);
   };
   
   return (
@@ -161,33 +173,44 @@ export const SlideEditor = () => {
         projectId={projectId}
       />
       
-      {/* Main slide editing area */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      {/* Main slide editing area - now with resizable panels */}
+      <ResizablePanelGroup 
+        direction="horizontal" 
+        className="flex-1 overflow-hidden"
+      >
         {/* Left panel - slide content */}
-        <SlideContent
-          currentSlide={currentSlide}
-          editedTitle={editedTitle}
-          editedContent={editedContent}
-          isEditing={isEditing}
-          startEditing={startEditing}
-          saveChanges={saveChanges}
-          setEditedTitle={setEditedTitle}
-          setEditedContent={setEditedContent}
-        />
+        <ResizablePanel defaultSize={50}>
+          <SlideContent
+            currentSlide={currentSlide}
+            editedTitle={editedTitle}
+            editedContent={editedContent}
+            isEditing={isEditing}
+            startEditing={startEditing}
+            saveChanges={saveChanges}
+            setEditedTitle={setEditedTitle}
+            setEditedContent={setEditedContent}
+            onCopyContent={copyToClipboard}
+          />
+        </ResizablePanel>
+        
+        {/* Resizable handle between panels */}
+        <ResizableHandle withHandle />
         
         {/* Right panel - slide images */}
-        <SlideImages
-          currentSlide={currentSlide}
-          slides={slides}
-          currentSlideIndex={currentSlideIndex}
-          updateSlidesInDatabase={updateSlidesInDatabase}
-          handleSelectFrames={handleSelectFrames}
-          mergeFramesWithLibrary={mergeFramesWithLibrary}
-          removeImage={removeImage}
-          isSyncingFrames={isSyncingFrames}
-          fetchProjectSize={fetchProjectSize}
-        />
-      </div>
+        <ResizablePanel defaultSize={50}>
+          <SlideImages
+            currentSlide={currentSlide}
+            slides={slides}
+            currentSlideIndex={currentSlideIndex}
+            updateSlidesInDatabase={updateSlidesInDatabase}
+            handleSelectFrames={handleSelectFrames}
+            mergeFramesWithLibrary={mergeFramesWithLibrary}
+            removeImage={removeImage}
+            isSyncingFrames={isSyncingFrames}
+            fetchProjectSize={fetchProjectSize}
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
       
       {/* Frame selector dialog if we're working with video frames */}
       <SlideFrameSelector
@@ -204,7 +227,7 @@ export const SlideEditor = () => {
         loadFramesFromProject={loadFramesFromProject}
       />
       
-      {/* Filmstrip */}
+      {/* Filmstrip with updated actions */}
       <SlideFilmstrip
         slides={slides}
         currentSlideIndex={currentSlideIndex}
@@ -213,54 +236,36 @@ export const SlideEditor = () => {
         onDeleteSlide={deleteSlideFromFilmstrip}
         onNextSlide={goToNextSlide}
         onPrevSlide={goToPrevSlide}
+        onExportOptions={handleExportDialog}
+        onDeleteCurrentSlide={deleteCurrentSlide}
       />
       
-      {/* Footer actions */}
-      <div className="border-t p-4 flex justify-between">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={copyToClipboard} disabled={!currentSlide}>
-            Copy Content
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
-                <Download className="h-4 w-4 mr-1" />
-                Export
+      {/* Export dialog */}
+      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+        <DialogContent>
+          <div className="space-y-4 p-4">
+            <h3 className="text-lg font-semibold">Export Options</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Button onClick={generateSlides} variant="outline" className="justify-start" disabled={isGenerating}>
+                {isGenerating ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                {slides.length <= 1 ? "Generate Slides" : "Regenerate Slides"}
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <div className="space-y-4 p-4">
-                <h3 className="text-lg font-semibold">Export Options</h3>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Button onClick={generateSlides} variant="outline" className="justify-start" disabled={isGenerating}>
-                    {isGenerating ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                    {slides.length <= 1 ? "Generate Slides" : "Regenerate Slides"}
-                  </Button>
-                  
-                  <Button onClick={exportPDF} variant="outline" className="justify-start" disabled={isExporting.pdf}>
-                    Export to PDF
-                  </Button>
-                  
-                  <Button onClick={exportAnki} variant="outline" className="justify-start" disabled={isExporting.anki}>
-                    Export to Anki
-                  </Button>
-                  
-                  <Button onClick={exportCSV} variant="outline" className="justify-start" disabled={isExporting.csv}>
-                    Export to CSV
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-          
-          <Button size="sm" variant="destructive" onClick={deleteCurrentSlide} disabled={slides.length <= 1}>
-            <Trash2 className="h-4 w-4 mr-1" />
-            Delete Slide
-          </Button>
-        </div>
-      </div>
+              
+              <Button onClick={exportPDF} variant="outline" className="justify-start" disabled={isExporting.pdf}>
+                Export to PDF
+              </Button>
+              
+              <Button onClick={exportAnki} variant="outline" className="justify-start" disabled={isExporting.anki}>
+                Export to Anki
+              </Button>
+              
+              <Button onClick={exportCSV} variant="outline" className="justify-start" disabled={isExporting.csv}>
+                Export to CSV
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

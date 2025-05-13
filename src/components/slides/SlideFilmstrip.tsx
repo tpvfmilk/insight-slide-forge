@@ -1,6 +1,5 @@
-
 import { useRef, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, X, Download, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -8,13 +7,15 @@ import { cn } from "@/lib/utils";
 import { Slide } from "@/hooks/useSlides";
 
 interface SlideFilmstripProps {
-  slides: Slide[];
+  slides: any[];
   currentSlideIndex: number;
   onSlideSelect: (index: number) => void;
   onAddSlide: () => void;
-  onDeleteSlide: (event: React.MouseEvent<Element, MouseEvent>, slideIndex: number) => void;
+  onDeleteSlide: (index: number) => void;
   onNextSlide: () => void;
   onPrevSlide: () => void;
+  onExportOptions: () => void;
+  onDeleteCurrentSlide: () => void;
 }
 
 export const SlideFilmstrip = ({
@@ -25,6 +26,8 @@ export const SlideFilmstrip = ({
   onDeleteSlide,
   onNextSlide,
   onPrevSlide,
+  onExportOptions,
+  onDeleteCurrentSlide
 }: SlideFilmstripProps) => {
   // References for drag-to-scroll functionality
   const filmstripRef = useRef<HTMLDivElement>(null);
@@ -84,36 +87,49 @@ export const SlideFilmstrip = ({
   }, []);
   
   return (
-    <div className="border-t pt-4">
-      {/* Navigation controls above filmstrip */}
-      <div className="flex items-center justify-center mb-2 gap-2">
-        <Button 
-          variant="ghost" 
-          size="icon"
-          onClick={onPrevSlide}
-          disabled={currentSlideIndex === 0}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
+    <div className="border-t">
+      <div className="border-b px-4 py-2 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onPrevSlide}
+            disabled={currentSlideIndex <= 0}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          <span className="text-sm">
+            Slide {currentSlideIndex + 1} of {slides.length}
+          </span>
+          
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onNextSlide}
+            disabled={currentSlideIndex >= slides.length - 1}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          
+          <Button size="sm" variant="outline" onClick={onAddSlide}>
+            <Plus className="h-4 w-4 mr-1" />
+            Add Slide
+          </Button>
+        </div>
         
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onAddSlide}
-          className="px-2"
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          Add Slide
-        </Button>
-        
-        <Button 
-          variant="ghost" 
-          size="icon"
-          onClick={onNextSlide}
-          disabled={currentSlideIndex >= slides.length - 1}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        {/* New section for export and delete buttons */}
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={onExportOptions}>
+            <Download className="h-4 w-4 mr-1" />
+            Export
+          </Button>
+          
+          <Button size="sm" variant="destructive" onClick={onDeleteCurrentSlide} disabled={slides.length <= 1}>
+            <Trash2 className="h-4 w-4 mr-1" />
+            Delete Slide
+          </Button>
+        </div>
       </div>
       
       {/* Filmstrip */}
