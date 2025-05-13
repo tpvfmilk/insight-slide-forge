@@ -198,47 +198,92 @@ export const SlideEditor = () => {
     }
   }, [showUndoButton]);
   
-  // Set up drag-to-scroll functionality for the filmstrip
+  // Set up enhanced drag-to-scroll functionality for the filmstrip
   useEffect(() => {
     const filmstrip = filmstripRef.current;
     if (!filmstrip) return;
     
-    const handleMouseDown = (e: MouseEvent) => {
-      isMouseDown.current = true;
-      startX.current = e.pageX - filmstrip.offsetLeft;
-      scrollLeft.current = filmstrip.scrollLeft;
-      filmstrip.style.cursor = 'grabbing';
-      filmstrip.style.userSelect = 'none';
+    let isDown = false;
+    let startX;
+    let scrollLeft;
+    
+    // Helper function to apply cursor styling
+    const setCursorGrabbing = (grabbing = true) => {
+      filmstrip.style.cursor = grabbing ? 'grabbing' : 'grab';
+      filmstrip.style.userSelect = grabbing ? 'none' : '';
+    };
+    
+    // Mouse event handlers
+    const handleMouseDown = (e) => {
+      isDown = true;
+      filmstrip.classList.add('active-drag');
+      startX = e.pageX - filmstrip.offsetLeft;
+      scrollLeft = filmstrip.scrollLeft;
+      setCursorGrabbing(true);
     };
     
     const handleMouseUp = () => {
-      isMouseDown.current = false;
-      filmstrip.style.cursor = 'grab';
-      filmstrip.style.userSelect = '';
+      isDown = false;
+      filmstrip.classList.remove('active-drag');
+      setCursorGrabbing(false);
     };
     
     const handleMouseLeave = () => {
-      isMouseDown.current = false;
-      filmstrip.style.cursor = 'grab';
-      filmstrip.style.userSelect = '';
+      isDown = false;
+      filmstrip.classList.remove('active-drag');
+      setCursorGrabbing(false);
     };
     
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isMouseDown.current) return;
+    const handleMouseMove = (e) => {
+      if (!isDown) return;
       e.preventDefault();
       const x = e.pageX - filmstrip.offsetLeft;
-      const walk = (x - startX.current) * 2; // Scroll speed multiplier
-      filmstrip.scrollLeft = scrollLeft.current - walk;
+      const walk = (x - startX) * 1.5; // Adjusted scroll speed
+      
+      // Use requestAnimationFrame for smoother scrolling
+      requestAnimationFrame(() => {
+        filmstrip.scrollLeft = scrollLeft - walk;
+      });
     };
     
-    // Add event listeners
+    // Touch event handlers for mobile devices
+    const handleTouchStart = (e) => {
+      isDown = true;
+      filmstrip.classList.add('active-drag');
+      startX = e.touches[0].pageX - filmstrip.offsetLeft;
+      scrollLeft = filmstrip.scrollLeft;
+    };
+    
+    const handleTouchEnd = () => {
+      isDown = false;
+      filmstrip.classList.remove('active-drag');
+    };
+    
+    const handleTouchMove = (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.touches[0].pageX - filmstrip.offsetLeft;
+      const walk = (x - startX) * 1.5; // Adjusted scroll speed
+      
+      // Use requestAnimationFrame for smoother scrolling
+      requestAnimationFrame(() => {
+        filmstrip.scrollLeft = scrollLeft - walk;
+      });
+    };
+    
+    // Add event listeners with passive option for better performance
     filmstrip.addEventListener('mousedown', handleMouseDown);
-    filmstrip.addEventListener('mouseleave', handleMouseLeave);
-    document.addEventListener('mouseup', handleMouseUp);
+    filmstrip.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+    document.addEventListener('mouseup', handleMouseUp, { passive: true });
     document.addEventListener('mousemove', handleMouseMove);
     
+    // Add touch event listeners for mobile
+    filmstrip.addEventListener('touchstart', handleTouchStart, { passive: true });
+    filmstrip.addEventListener('touchend', handleTouchEnd, { passive: true });
+    filmstrip.addEventListener('touchmove', handleTouchMove, { passive: false });
+    
     // Initialize cursor style
-    filmstrip.style.cursor = 'grab';
+    setCursorGrabbing(false);
     
     return () => {
       // Clean up event listeners
@@ -246,6 +291,11 @@ export const SlideEditor = () => {
       filmstrip.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousemove', handleMouseMove);
+      
+      // Clean up touch event listeners
+      filmstrip.removeEventListener('touchstart', handleTouchStart);
+      filmstrip.removeEventListener('touchend', handleTouchEnd);
+      filmstrip.removeEventListener('touchmove', handleTouchMove);
     };
   }, []);
   
@@ -628,7 +678,7 @@ export const SlideEditor = () => {
   const deleteCurrentSlide = () => {
     // Create a synthetic event to pass to deleteSlideFromFilmstrip
     const syntheticEvent = {
-      stopPropagation: () => {}
+      stopPropagation: () {}
     } as React.MouseEvent<Element, MouseEvent>;
     
     deleteSlideFromFilmstrip(syntheticEvent, currentSlideIndex);
@@ -745,7 +795,7 @@ export const SlideEditor = () => {
           <ResizablePanelGroup direction="horizontal" className="h-full">
             {/* Left side - Images */}
             <ResizablePanel defaultSize={50} minSize={30}>
-              <div className="w-full h-full flex flex-col overflow-hidden">
+              <div className="h-full flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-hidden flex flex-col p-6">
                   {/* Images header */}
                   <div className="flex items-center justify-between mb-5">
@@ -860,7 +910,7 @@ export const SlideEditor = () => {
             
             {/* Right side - Slide content */}
             <ResizablePanel defaultSize={50} minSize={30}>
-              <div className="w-full h-full flex flex-col overflow-hidden">
+              <div className="h-full flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-hidden flex flex-col p-6">
                   {/* Title */}
                   <div className="mb-5">
@@ -901,14 +951,14 @@ export const SlideEditor = () => {
                     )}
                   </div>
 
-                  {/* Slide action buttons - now at the bottom of the content area */}
+                  {/* Slide action buttons - now with the Copy Content button positioned at bottom-right */}
                   <div className="mt-auto pt-4 border-t flex justify-between items-center">
                     <div>
                       {isEditing && (
                         <Button onClick={saveChanges}>Save Changes</Button>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-end">
                       <Button
                         variant="outline"
                         size="sm"
@@ -976,11 +1026,15 @@ export const SlideEditor = () => {
         </div>
       </div>
       
-      {/* Film strip at the bottom - simplified cards with only centered titles */}
-      <div className="h-40 border-t w-full flex-shrink-0">
+      {/* Film strip at the bottom - with enhanced drag-to-scroll capability */}
+      <div className="h-40 border-t w-full flex-shrink-0 overflow-hidden">
         <div className="max-w-screen-xl mx-auto px-4 h-full">
           <ScrollArea orientation="horizontal" className="h-full w-full">
-            <div ref={filmstripRef} className="flex gap-3 p-3 h-full">
+            <div 
+              ref={filmstripRef} 
+              className="flex gap-3 p-3 h-full cursor-grab"
+              style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
+            >
               {slides.map((slide, index) => (
                 <div 
                   key={slide.id}
@@ -1013,6 +1067,14 @@ export const SlideEditor = () => {
           </ScrollArea>
         </div>
       </div>
+      
+      {/* Add custom CSS for drag interaction */}
+      <style jsx>{`
+        .active-drag {
+          cursor: grabbing !important;
+          user-select: none;
+        }
+      `}</style>
       
       {/* Frame Picker Modal */}
       {isFramePickerModalOpen && (
