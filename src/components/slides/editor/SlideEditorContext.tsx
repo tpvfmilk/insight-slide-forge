@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useParams } from "react-router-dom";
@@ -17,13 +16,13 @@ import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
 interface SlideEditorContextProps {
   children: React.ReactNode;
-  projectId: string;
 }
 
 export const SlideEditorContext = createContext<SlideEditorContextValue | undefined>(undefined);
 
-export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ children, projectId }) => {
-  // No need to get projectId from params as it's now passed as a prop
+export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ children }) => {
+  const { id: routeProjectId } = useParams<{ id: string }>();
+  const projectId = routeProjectId || "";
   
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
@@ -248,7 +247,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
 
     console.log(`Applying ${selectedFrames.length} selected frames to slide #${currentSlideIndex + 1}`, selectedFrames);
 
-    // Update current slide with selected frames - COPY frames, don't remove from library
+    // Update current slide with selected frames
     const updatedSlides = [...slides];
     updatedSlides[currentSlideIndex] = {
       ...updatedSlides[currentSlideIndex],
@@ -259,11 +258,11 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
     
-    // Give feedback based on selection count with clarified messaging
+    // Give feedback based on selection count
     if (selectedFrames.length === 1) {
-      toast.success(`Applied 1 frame to slide (frame remains in library)`);
+      toast.success(`Applied 1 frame to slide`);
     } else {
-      toast.success(`Applied ${selectedFrames.length} frames to slide (frames remain in library)`);
+      toast.success(`Applied ${selectedFrames.length} frames to slide`);
     }
     
     // Update project size

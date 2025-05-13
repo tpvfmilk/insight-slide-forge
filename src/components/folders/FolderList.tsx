@@ -40,29 +40,9 @@ export function FolderList({
     try {
       // Get user ID to create a user-specific storage key
       const session = supabase.auth.getSession();
-      const userSession = supabase.auth.getSession();
+      const userSpecificKey = `${EXPANDED_FOLDERS_KEY}`;
       
-      // Asynchronously check for user info and update storage key later
-      userSession.then(({ data }) => {
-        if (data.session?.user?.id) {
-          const userId = data.session.user.id;
-          const userSpecificKey = `${EXPANDED_FOLDERS_KEY}_${userId}`;
-          
-          // Load from user-specific key
-          const savedExpandedFolders = localStorage.getItem(userSpecificKey);
-          if (savedExpandedFolders) {
-            const parsed = JSON.parse(savedExpandedFolders);
-            // Always include "unassigned" in the parsed result
-            const newState = Array.isArray(parsed) ? 
-              parsed.includes("unassigned") ? parsed : [...parsed, "unassigned"] : 
-              ["unassigned"];
-            setExpandedFolders(newState);
-          }
-        }
-      });
-      
-      // Default state until we can load the user-specific one
-      const savedExpandedFolders = localStorage.getItem(EXPANDED_FOLDERS_KEY);
+      const savedExpandedFolders = localStorage.getItem(userSpecificKey);
       if (savedExpandedFolders) {
         const parsed = JSON.parse(savedExpandedFolders);
         // Always include "unassigned" in the parsed result
@@ -77,31 +57,15 @@ export function FolderList({
     }
   });
 
-  // Get user ID for storage
-  const [userId, setUserId] = useState<string | null>(null);
-  
-  // Get user ID on component mount
-  useEffect(() => {
-    const getUserId = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user?.id) {
-        setUserId(data.session.user.id);
-      }
-    };
-    
-    getUserId();
-  }, []);
-
   // Save expanded folders state to localStorage whenever it changes
   useEffect(() => {
     try {
-      // Use user-specific key if available
-      const storageKey = userId ? `${EXPANDED_FOLDERS_KEY}_${userId}` : EXPANDED_FOLDERS_KEY;
-      localStorage.setItem(storageKey, JSON.stringify(expandedFolders));
+      const userSpecificKey = `${EXPANDED_FOLDERS_KEY}`;
+      localStorage.setItem(userSpecificKey, JSON.stringify(expandedFolders));
     } catch (error) {
       console.error("Error saving folder state to localStorage:", error);
     }
-  }, [expandedFolders, userId]);
+  }, [expandedFolders]);
 
   // Ensure "unassigned" is always in the expanded folders list
   useEffect(() => {

@@ -61,7 +61,7 @@ export interface SlideEditorContextValue {
     file_type?: string;
     file_size?: number;
   } | null;
-  projectId: string;
+  projectId?: string;
   
   // Methods
   setSlides: React.Dispatch<React.SetStateAction<Slide[]>>;
