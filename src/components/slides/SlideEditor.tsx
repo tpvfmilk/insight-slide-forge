@@ -76,7 +76,7 @@ export const SlideEditor = () => {
   
   // References for drag-to-scroll functionality
   const filmstripRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef<boolean>(false);
+  const isMouseDown = useRef<boolean>(false);
   const startX = useRef<number>(0);
   const scrollLeft = useRef<number>(0);
   
@@ -203,111 +203,98 @@ export const SlideEditor = () => {
     const filmstrip = filmstripRef.current;
     if (!filmstrip) return;
     
-    // Helper function to update visual indication during drag
-    const updateDragVisuals = (dragging: boolean) => {
-      if (dragging) {
-        filmstrip.style.cursor = 'grabbing';
-        filmstrip.classList.add('dragging');
-      } else {
-        filmstrip.style.cursor = 'grab';
-        filmstrip.classList.remove('dragging');
-      }
+    let isDown = false;
+    let startX;
+    let scrollLeft;
+    
+    // Helper function to apply cursor styling
+    const setCursorGrabbing = (grabbing = true) => {
+      filmstrip.style.cursor = grabbing ? 'grabbing' : 'grab';
+      filmstrip.style.userSelect = grabbing ? 'none' : '';
     };
     
     // Mouse event handlers
-    const handleMouseDown = (e: MouseEvent) => {
-      isDragging.current = true;
-      startX.current = e.pageX - filmstrip.offsetLeft;
-      scrollLeft.current = filmstrip.scrollLeft;
-      updateDragVisuals(true);
-      
-      // Prevent text selection during drag
-      e.preventDefault();
+    const handleMouseDown = (e) => {
+      isDown = true;
+      filmstrip.classList.add('active-drag');
+      startX = e.pageX - filmstrip.offsetLeft;
+      scrollLeft = filmstrip.scrollLeft;
+      setCursorGrabbing(true);
     };
     
     const handleMouseUp = () => {
-      if (isDragging.current) {
-        isDragging.current = false;
-        updateDragVisuals(false);
-      }
+      isDown = false;
+      filmstrip.classList.remove('active-drag');
+      setCursorGrabbing(false);
     };
     
     const handleMouseLeave = () => {
-      if (isDragging.current) {
-        isDragging.current = false;
-        updateDragVisuals(false);
-      }
+      isDown = false;
+      filmstrip.classList.remove('active-drag');
+      setCursorGrabbing(false);
     };
     
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
-      
-      // Calculate how far the mouse has moved
-      const x = e.pageX - filmstrip.offsetLeft;
-      const walk = (x - startX.current) * 1.5; // Speed multiplier
-      
-      // Apply the scroll directly without animation for better response
-      filmstrip.scrollLeft = scrollLeft.current - walk;
-      
-      // Prevent default browser behavior to avoid text selection and unwanted scrolls
+    const handleMouseMove = (e) => {
+      if (!isDown) return;
       e.preventDefault();
+      const x = e.pageX - filmstrip.offsetLeft;
+      const walk = (x - startX) * 1.5; // Adjusted scroll speed
+      
+      // Use requestAnimationFrame for smoother scrolling
+      requestAnimationFrame(() => {
+        filmstrip.scrollLeft = scrollLeft - walk;
+      });
     };
     
-    // Touch event handlers
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) {
-        isDragging.current = true;
-        startX.current = e.touches[0].pageX - filmstrip.offsetLeft;
-        scrollLeft.current = filmstrip.scrollLeft;
-        updateDragVisuals(true);
-      }
+    // Touch event handlers for mobile devices
+    const handleTouchStart = (e) => {
+      isDown = true;
+      filmstrip.classList.add('active-drag');
+      startX = e.touches[0].pageX - filmstrip.offsetLeft;
+      scrollLeft = filmstrip.scrollLeft;
     };
     
     const handleTouchEnd = () => {
-      if (isDragging.current) {
-        isDragging.current = false;
-        updateDragVisuals(false);
-      }
+      isDown = false;
+      filmstrip.classList.remove('active-drag');
     };
     
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isDragging.current) return;
-      
+    const handleTouchMove = (e) => {
+      if (!isDown) return;
+      e.preventDefault();
       const x = e.touches[0].pageX - filmstrip.offsetLeft;
-      const walk = (x - startX.current) * 1.5;
+      const walk = (x - startX) * 1.5; // Adjusted scroll speed
       
-      filmstrip.scrollLeft = scrollLeft.current - walk;
-      
-      // Only prevent default if we're actively dragging to allow normal touch scrolling otherwise
-      if (Math.abs(walk) > 10) { // Small threshold to detect intentional dragging
-        e.preventDefault();
-      }
+      // Use requestAnimationFrame for smoother scrolling
+      requestAnimationFrame(() => {
+        filmstrip.scrollLeft = scrollLeft - walk;
+      });
     };
     
-    // Add event listeners
+    // Add event listeners with passive option for better performance
     filmstrip.addEventListener('mousedown', handleMouseDown);
-    filmstrip.addEventListener('mouseleave', handleMouseLeave);
-    document.addEventListener('mouseup', handleMouseUp);
+    filmstrip.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+    document.addEventListener('mouseup', handleMouseUp, { passive: true });
     document.addEventListener('mousemove', handleMouseMove);
     
-    filmstrip.addEventListener('touchstart', handleTouchStart);
-    filmstrip.addEventListener('touchend', handleTouchEnd);
-    filmstrip.addEventListener('touchcancel', handleTouchEnd);
+    // Add touch event listeners for mobile
+    filmstrip.addEventListener('touchstart', handleTouchStart, { passive: true });
+    filmstrip.addEventListener('touchend', handleTouchEnd, { passive: true });
     filmstrip.addEventListener('touchmove', handleTouchMove, { passive: false });
     
-    // Apply initial grab cursor
-    filmstrip.style.cursor = 'grab';
+    // Initialize cursor style
+    setCursorGrabbing(false);
     
-    // Clean up event listeners
     return () => {
+      // Clean up event listeners
       filmstrip.removeEventListener('mousedown', handleMouseDown);
       filmstrip.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousemove', handleMouseMove);
       
+      // Clean up touch event listeners
       filmstrip.removeEventListener('touchstart', handleTouchStart);
       filmstrip.removeEventListener('touchend', handleTouchEnd);
-      filmstrip.removeEventListener('touchcancel', handleTouchEnd);
       filmstrip.removeEventListener('touchmove', handleTouchMove);
     };
   }, []);
@@ -1038,26 +1025,12 @@ export const SlideEditor = () => {
       
       {/* Film strip at the bottom - with enhanced drag-to-scroll capability */}
       <div className="h-40 border-t w-full flex-shrink-0 overflow-hidden">
-        <div className="w-full mx-auto px-4 h-full">
-          <div className="relative h-full w-full overflow-hidden">
-            {/* Visual indicator for scrollability */}
-            <div className="absolute top-1/2 -translate-y-1/2 left-2 z-10 bg-primary/20 backdrop-blur-sm p-1 rounded-full flex items-center justify-center shadow-sm">
-              <div className="text-xs font-medium px-2 select-none">
-                Drag to scroll
-              </div>
-            </div>
-            
-            {/* Film strip container - now using a regular div instead of ScrollArea */}
+        <div className="max-w-screen-xl mx-auto px-4 h-full">
+          <ScrollArea orientation="horizontal" className="h-full w-full">
             <div 
               ref={filmstripRef} 
-              className="flex gap-3 p-3 h-full overflow-x-auto hide-scrollbar"
-              style={{ 
-                scrollbarWidth: 'none', 
-                msOverflowStyle: 'none',
-                cursor: 'grab',
-                touchAction: 'pan-x',
-                userSelect: 'none'
-              }}
+              className="flex gap-3 p-3 h-full cursor-grab"
+              style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
             >
               {slides.map((slide, index) => (
                 <div 
@@ -1088,17 +1061,17 @@ export const SlideEditor = () => {
                 </div>
               ))}
             </div>
-          </div>
+          </ScrollArea>
         </div>
       </div>
       
-      {/* Custom styles for drag behavior */}
-      <style>
-        {`
-          .dragging { cursor: grabbing !important; }
-          .hide-scrollbar::-webkit-scrollbar { display: none; }
-        `}
-      </style>
+      {/* Add custom CSS for drag interaction */}
+      <style jsx>{`
+        .active-drag {
+          cursor: grabbing !important;
+          user-select: none;
+        }
+      `}</style>
       
       {/* Frame Picker Modal */}
       {isFramePickerModalOpen && (
