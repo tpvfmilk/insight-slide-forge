@@ -113,6 +113,6 @@ export const ContextDialog = ({
     );
   }
 
-  // For tabbed mode
+  // For tabbed mode - just return content without Dialog wrapper
   return <TabContent />;
 };

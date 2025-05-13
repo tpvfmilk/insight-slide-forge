@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogPortal } from "@/components/ui/dialog";
 
 interface TranscriptDialogProps {
   project: Project | null;
@@ -260,6 +261,6 @@ export const TranscriptDialog = ({
     );
   }
 
-  // For tabbed mode
+  // For tabbed mode - just return content without Dialog wrapper since it's already in a Dialog
   return <TabContent />;
 };

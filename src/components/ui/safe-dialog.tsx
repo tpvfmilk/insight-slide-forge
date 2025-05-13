@@ -1,7 +1,7 @@
 
 import React, { useId, useEffect } from 'react';
 import { useUIReset } from '@/context/UIResetContext';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogPortal } from '@/components/ui/dialog';
 
 // Define DialogProps interface since it's not exported from dialog.tsx
 interface DialogProps extends React.ComponentPropsWithoutRef<typeof Dialog> {
@@ -49,6 +49,10 @@ export const SafeDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogContent>,
   React.ComponentPropsWithoutRef<typeof DialogContent>
 >(({ children, ...props }, ref) => {
-  return <DialogContent ref={ref} {...props}>{children}</DialogContent>;
+  return (
+    <DialogPortal>
+      <DialogContent ref={ref} {...props}>{children}</DialogContent>
+    </DialogPortal>
+  );
 });
 SafeDialogContent.displayName = 'SafeDialogContent';
