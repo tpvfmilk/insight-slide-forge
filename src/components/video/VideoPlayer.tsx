@@ -208,8 +208,9 @@ export const VideoPlayer = ({
           const currentMetadata = projectData?.video_metadata || {};
           
           // Update the duration in the metadata
+          // Fix: Ensure we're spreading an object by providing a default empty object
           const updatedMetadata = {
-            ...currentMetadata,
+            ...(currentMetadata || {}),
             duration: videoDuration
           };
           
