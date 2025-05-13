@@ -1,5 +1,6 @@
 
-// Re-export from the proper location
-import { useToast, toast } from "@/components/ui/use-toast";
+// This file re-exports the toast functionality from the UI components
+import { useToast as useToastOriginal, toast as toastOriginal } from "@/components/ui/use-toast";
 
-export { useToast, toast };
+export const useToast = useToastOriginal;
+export const toast = toastOriginal;
