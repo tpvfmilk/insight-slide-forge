@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useParams } from "react-router-dom";
@@ -7,70 +6,23 @@ import { fetchProjectById } from "@/services/projectService";
 import { uploadSlideImage } from "@/services/imageService";
 import { generateSlidesForProject } from "@/services/slideGenerationService";
 import { getProjectTotalSize } from "@/services/storageService";
-import { Slide, LocalExtractedFrame, ExportState } from "./SlideEditorTypes";
+import { 
+  Slide, 
+  LocalExtractedFrame, 
+  SlideEditorContextValue,
+  ExportState
+} from "./SlideEditorTypes";
+import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
 interface SlideEditorContextProps {
   children: React.ReactNode;
 }
 
-interface SlideEditorContextValue {
-  // State
-  slides: Slide[];
-  currentSlideIndex: number;
-  currentSlide: Slide | null;
-  editedTitle: string;
-  editedContent: string;
-  isEditing: boolean;
-  isLoading: boolean;
-  isGenerating: boolean;
-  projectTitle: string;
-  isUploadingImage: boolean;
-  isExporting: ExportState;
-  isFrameSelectorOpen: boolean;
-  allExtractedFrames: LocalExtractedFrame[];
-  videoPath: string;
-  timestamps: string[];
-  lastDeletedSlide: Slide | null;
-  showUndoButton: boolean;
-  projectSize: number;
-  isFramePickerModalOpen: boolean;
-  videoMetadata: {
-    duration?: number;
-    original_file_name?: string;
-    file_type?: string;
-    file_size?: number;
-  } | null;
-  
-  // Methods
-  setSlides: React.Dispatch<React.SetStateAction<Slide[]>>;
-  setCurrentSlideIndex: React.Dispatch<React.SetStateAction<number>>;
-  setEditedTitle: React.Dispatch<React.SetStateAction<string>>;
-  setEditedContent: React.Dispatch<React.SetStateAction<string>>;
-  setIsEditing: React.Dispatch<React.SetStateAction<boolean>>;
-  setIsFramePickerModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  goToSlide: (index: number) => void;
-  goToNextSlide: () => void;
-  goToPrevSlide: () => void;
-  saveChanges: () => void;
-  startEditing: () => void;
-  copyToClipboard: () => void;
-  generateSlides: () => Promise<void>;
-  handleSelectFrames: () => void;
-  handleFrameSelection: (selectedFrames: LocalExtractedFrame[]) => void;
-  handleImageUpload: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
-  removeImage: (imageUrl: string) => void;
-  deleteSlideFromFilmstrip: (event: React.MouseEvent<Element, MouseEvent>, slideIndex: number) => void;
-  deleteCurrentSlide: () => void;
-  addNewSlide: () => void;
-  undoDeleteSlide: () => void;
-  updateSlidesInDatabase: (updatedSlides: Slide[]) => Promise<void>;
-  fetchProjectSize: () => Promise<void>;
-}
-
 export const SlideEditorContext = createContext<SlideEditorContextValue | undefined>(undefined);
 
 export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ children }) => {
-  const { id: projectId } = useParams<{ id: string }>();
+  const { id: routeProjectId } = useParams<{ id: string }>();
+  const projectId = routeProjectId || "";
   
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
@@ -81,7 +33,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [projectTitle, setProjectTitle] = useState<string>("");
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
-  const [isExporting, setIsExporting] = useState<Record<string, boolean>>({
+  const [isExporting, setIsExporting] = useState<ExportState>({
     pdf: false,
     anki: false,
     csv: false
@@ -101,7 +53,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     file_size?: number;
   } | null>(null);
   
-  const currentSlide = slides[currentSlideIndex];
+  const currentSlide = slides[currentSlideIndex] || null;
   
   // Fetch project size
   const fetchProjectSize = useCallback(async () => {
@@ -561,7 +513,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     toast.success("Slide restored");
   };
   
-  const value = {
+  const value: SlideEditorContextValue = {
     // State
     slides,
     currentSlideIndex,
@@ -583,6 +535,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     projectSize,
     isFramePickerModalOpen,
     videoMetadata,
+    projectId,
     
     // Setters
     setSlides,

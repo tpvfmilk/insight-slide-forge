@@ -23,7 +23,7 @@ export const SlideEditor: React.FC<SlideEditorProps> = ({ projectId: propProject
 };
 
 // Inner component that uses the context
-const SlideEditorContent: React.FC<SlideEditorProps> = () => {
+const SlideEditorContent: React.FC<SlideEditorProps> = ({ projectId }) => {
   const {
     isLoading,
     currentSlide,
@@ -31,8 +31,7 @@ const SlideEditorContent: React.FC<SlideEditorProps> = () => {
     setIsFramePickerModalOpen,
     handleFrameSelection,
     allExtractedFrames,
-    videoPath,
-    projectId
+    videoPath
   } = useSlideEditor();
 
   if (isLoading) {
