@@ -31,6 +31,10 @@ export const useVideoPlayer = ({
   const [loadAttempts, setLoadAttempts] = useState(0);
   const [durationUpdatedInDB, setDurationUpdatedInDB] = useState(false);
   
+  // Add a ref to store the last seek action time to prevent rapid seeks
+  const lastSeekTimeRef = useRef(0);
+  const seekOperationPending = useRef(false);
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   
   // Debug log for props
@@ -244,24 +248,79 @@ export const useVideoPlayer = ({
     onTimeUpdate?.(video.currentTime);
   };
   
-  // Handle seeking via slider
-  const handleSeekStart = () => {
+  // Handle seeking via slider - Modified to fix the seeking issue
+  const handleSeekStart = useCallback(() => {
+    console.log("Seek start");
     setIsSeeking(true);
-  };
-
-  const handleSeekChange = (value: number[]) => {
-    setSeekingValue(value[0]);
-  };
-
-  const handleSeekEnd = () => {
-    const video = videoRef.current;
-    if (!video) return;
+    seekOperationPending.current = true;
     
-    video.currentTime = seekingValue;
-    setCurrentTime(seekingValue);
-    setIsSeeking(false);
-    onTimeUpdate?.(seekingValue);
-  };
+    // Pause video while seeking for better performance
+    if (videoRef.current && isPlaying) {
+      videoRef.current.pause();
+    }
+  }, [isPlaying]);
+
+  const handleSeekChange = useCallback((value: number[]) => {
+    // Update the seeking value in state
+    const newSeekValue = value[0];
+    console.log("Seek change:", newSeekValue);
+    setSeekingValue(newSeekValue);
+    
+    // Throttle visual updates during rapid seeking
+    const now = Date.now();
+    if (now - lastSeekTimeRef.current > 100) { // 100ms throttle
+      lastSeekTimeRef.current = now;
+      
+      // Update video time visually during seeking without committing
+      // This helps provide visual feedback during the drag operation
+      if (videoRef.current) {
+        videoRef.current.currentTime = newSeekValue;
+        setCurrentTime(newSeekValue);
+      }
+    }
+  }, []);
+
+  const handleSeekEnd = useCallback(() => {
+    console.log("Seek end at value:", seekingValue);
+    const video = videoRef.current;
+    if (!video) {
+      console.error("Video reference not available during seek end");
+      setIsSeeking(false);
+      return;
+    }
+    
+    try {
+      // Set the video time directly
+      video.currentTime = seekingValue;
+      console.log(`Video time set to ${video.currentTime}`);
+      
+      // Update state AFTER setting video time to prevent race conditions
+      setCurrentTime(seekingValue);
+      
+      // Notify parent component
+      if (onTimeUpdate) {
+        onTimeUpdate(seekingValue);
+      }
+      
+      // Resume playback if it was playing before seeking
+      if (isPlaying) {
+        video.play().catch(error => {
+          console.error("Error resuming playback after seek:", error);
+        });
+      }
+    } catch (error) {
+      console.error("Error during seek end:", error);
+      toast({
+        variant: "destructive",
+        title: "Seeking Error",
+        description: "Failed to seek to position"
+      });
+    } finally {
+      // Always reset the seeking state
+      setIsSeeking(false);
+      seekOperationPending.current = false;
+    }
+  }, [seekingValue, isPlaying, onTimeUpdate]);
   
   // Handle video load events
   const handleVideoLoaded = () => {
@@ -339,9 +398,11 @@ export const useVideoPlayer = ({
       isVideoLoaded,
       videoError: videoError || "None",
       isLoadingVideo, 
-      loadAttempts 
+      loadAttempts,
+      isSeeking,
+      seekingValue: Math.round(seekingValue)
     });
-  }, [isPlaying, currentTime, duration, videoUrl, isVideoLoaded, videoError, isLoadingVideo, loadAttempts]);
+  }, [isPlaying, currentTime, duration, videoUrl, isVideoLoaded, videoError, isLoadingVideo, loadAttempts, isSeeking, seekingValue]);
 
   return {
     videoRef,

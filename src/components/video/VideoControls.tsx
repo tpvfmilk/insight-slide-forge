@@ -35,6 +35,11 @@ export const VideoControls = ({
 }: VideoControlsProps) => {
   // Custom render for slider with captured frame markers
   const renderSliderWithMarkers = () => {
+    // Log when slider is interacted with
+    const handleSliderInteraction = (type: string, value?: number[]) => {
+      console.log(`Slider ${type}`, value);
+    };
+
     return (
       <div className="relative w-full">
         <Slider 
@@ -42,9 +47,20 @@ export const VideoControls = ({
           min={0} 
           max={duration || 100}
           step={0.01}
-          onValueChange={onSeekChange}
-          onValueCommit={onSeekEnd}
-          onPointerDown={onSeekStart}
+          onValueChange={(val) => {
+            handleSliderInteraction('valueChange', val);
+            onSeekChange(val);
+          }}
+          onValueCommit={() => {
+            handleSliderInteraction('valueCommit');
+            onSeekEnd();
+          }}
+          onPointerDown={(e) => {
+            handleSliderInteraction('pointerDown');
+            // Prevent any default behavior that might interfere with seeking
+            e.stopPropagation();
+            onSeekStart();
+          }}
           className="z-10"
         />
         
