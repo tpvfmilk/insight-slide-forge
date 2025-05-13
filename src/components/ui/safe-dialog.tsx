@@ -12,7 +12,7 @@ interface DialogProps extends React.ComponentPropsWithoutRef<typeof Dialog> {
 // Extended DialogProps with onOpenChange
 interface SafeDialogProps extends DialogProps {
   children: React.ReactNode;
-  className?: string; // Add className prop here
+  className?: string;
 }
 
 export const SafeDialog = ({ children, onOpenChange, open, className, ...props }: SafeDialogProps) => {

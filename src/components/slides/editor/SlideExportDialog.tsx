@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { RefreshCw } from "lucide-react";
 import { useSlideEditor } from "./SlideEditorContext";

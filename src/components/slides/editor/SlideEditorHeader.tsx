@@ -13,6 +13,9 @@ export const SlideEditorHeader: React.FC = () => {
     slides, 
     projectId 
   } = useSlideEditor();
+  
+  // Add state to control dialog open/close state
+  const [exportDialogOpen, setExportDialogOpen] = React.useState(false);
 
   return (
     <div className="flex justify-between items-center p-4 border-b w-full">
@@ -33,7 +36,7 @@ export const SlideEditorHeader: React.FC = () => {
           </Link>
         </Button>
         
-        <Dialog>
+        <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
               <svg xmlns="http://www.w3.org/2000/svg" 
