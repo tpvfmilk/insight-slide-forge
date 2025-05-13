@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { SafeDialog, SafeDialogContent } from "@/components/ui/safe-dialog";
 import { Button } from "@/components/ui/button";
@@ -114,7 +113,14 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
     if (!projectId || isPurgingFrames) return;
     
     setIsPurgingFrames(true);
-    toast.loading("Purging unused frames...", { id: "purge-frames" });
+    
+    // Create a loading toast instead of using toast.loading
+    const toastId = "purge-frames";
+    toast({
+      id: toastId,
+      title: "Purging unused frames",
+      description: "Please wait while we clean up unused frames...",
+    });
     
     try {
       // Ensure slides is treated as appropriate type for purgeUnusedFrames
@@ -128,16 +134,26 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
         await onRefresh();
       }
       
-      toast.dismiss("purge-frames");
+      // Dismiss the toast using toast({ id }) instead of toast.dismiss
+      toast({
+        id: toastId,
+        title: "Success",
+        description: "Successfully purged unused frames",
+      });
       
       if (success) {
-        toast.success("Successfully purged unused frames");
         // Close dialog after successful purge
         handleClose();
       }
     } catch (error) {
       console.error("Error purging frames:", error);
-      toast.error("Failed to purge unused frames", { id: "purge-frames" });
+      // Show error toast
+      toast({
+        id: toastId,
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to purge unused frames",
+      });
     } finally {
       setIsPurgingFrames(false);
     }
