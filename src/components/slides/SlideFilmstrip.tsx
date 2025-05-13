@@ -143,10 +143,10 @@ export const SlideFilmstrip = ({
         </div>
       </div>
       
-      {/* Filmstrip with increased height for taller cards */}
+      {/* Filmstrip with decreased height by 2px (from 138px to 136px) */}
       <div className="w-full overflow-hidden px-4 py-2">
         <ScrollArea 
-          className="h-[138px] border rounded-md w-full" 
+          className="h-[136px] border rounded-md w-full" 
           orientation="horizontal" 
           ref={scrollContainerRef}
         >
@@ -162,10 +162,10 @@ export const SlideFilmstrip = ({
                 )}
                 onClick={() => onSlideSelect(index)}
               >
-                {/* Slide Number Badge */}
+                {/* Slide Number Badge - moved inside the card at top right */}
                 <Badge 
                   variant="outline" 
-                  className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 bg-background"
+                  className="absolute top-1 right-1 bg-background z-10"
                 >
                   {index + 1}
                 </Badge>
