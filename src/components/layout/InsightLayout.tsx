@@ -17,10 +17,10 @@ export const InsightLayout = ({ children }: InsightLayoutProps) => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full overflow-hidden">
+      <div className="min-h-screen flex w-full">
         <InsightSidebar isOpen={sidebarOpen} onClose={handleCloseSidebar} />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <main className="flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col">
+          <main className="flex-1 overflow-y-auto">
             {children}
           </main>
         </div>

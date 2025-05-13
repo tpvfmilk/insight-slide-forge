@@ -1,6 +1,7 @@
+
 import React from "react";
 import { Link } from "react-router-dom";
-import { FileText, MoreHorizontal, GripVertical } from "lucide-react";
+import { FileText, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Project } from "@/services/projectService";
 import { FileSizeBadge } from "./FileSizeBadge";
@@ -31,7 +32,6 @@ import {
 import { Folder, fetchFolders, moveProjectsToFolder } from "@/services/folderService";
 import { toast } from "sonner";
 import { TableRow, TableCell } from "@/components/ui/table";
-import { useDragAndDrop } from "@/context/DragAndDropContext";
 
 interface ProjectRowProps {
   project: Project;
@@ -49,7 +49,6 @@ export function ProjectRow({
   const [folders, setFolders] = React.useState<Folder[]>([]);
   const [loadingFolders, setLoadingFolders] = React.useState(false);
   const [movingToFolder, setMovingToFolder] = React.useState(false);
-  const { setDraggedProject } = useDragAndDrop();
 
   React.useEffect(() => {
     // Only load folders when the dropdown is opened
@@ -93,72 +92,32 @@ export function ProjectRow({
   const originalFileName = project.video_metadata?.original_file_name || "Unknown file";
   
   // Get the duration and format it, or display "Transcript Only" for transcript projects
-  let durationDisplay = "Processing...";
+  let durationDisplay = "Unknown";
   if (project.video_metadata?.duration) {
     durationDisplay = formatDuration(project.video_metadata.duration);
   } else if (project.source_type === 'transcript-only' || project.source_type === 'transcript') {
     durationDisplay = "Transcript Only";
-  } else if (project.source_type === 'video') {
-    // For video projects without duration, show "Processing..." instead of "Unknown"
-    durationDisplay = "Processing...";
   }
 
   // Check if we should show the file name (only for video-based projects)
   const isTranscriptOnly = project.source_type === 'transcript-only' || project.source_type === 'transcript';
 
-  const handleDragStart = (e: React.DragEvent<HTMLTableRowElement>) => {
-    // Set drag data
-    e.dataTransfer.setData("text/plain", project.id);
-    e.dataTransfer.effectAllowed = "move";
-    
-    // Update global state
-    setDraggedProject(project);
-    
-    // Add a semi-transparent effect to the dragged element
-    if (e.currentTarget) {
-      requestAnimationFrame(() => {
-        e.currentTarget.style.opacity = "0.5";
-      });
-    }
-  };
-
-  const handleDragEnd = (e: React.DragEvent<HTMLTableRowElement>) => {
-    // Reset opacity
-    if (e.currentTarget) {
-      e.currentTarget.style.opacity = "";
-    }
-    
-    // Reset global state
-    setDraggedProject(null);
-  };
-
   return (
-    <TableRow 
-      key={project.id}
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      className="group hover:bg-muted/20 transition-colors"
-    >
+    <TableRow key={project.id}>
       <TableCell>
-        <div className="flex items-center gap-3">
-          <div className="p-1 cursor-grab hover:bg-muted/40 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
+        <Link to={`/projects/${project.id}`} className="flex items-center gap-3 hover:underline">
+          <div className="p-2 bg-primary/10 rounded">
+            <FileText className="h-5 w-5 text-primary" />
           </div>
-          <Link to={`/projects/${project.id}`} className="flex items-center gap-3 hover:underline">
-            <div className="p-2 bg-primary/10 rounded">
-              <FileText className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <div className="font-medium">{project.title}</div>
-              {!isTranscriptOnly && (
-                <div className="text-xs text-muted-foreground">
-                  {originalFileName}
-                </div>
-              )}
-            </div>
-          </Link>
-        </div>
+          <div>
+            <div className="font-medium">{project.title}</div>
+            {!isTranscriptOnly && (
+              <div className="text-xs text-muted-foreground">
+                {originalFileName}
+              </div>
+            )}
+          </div>
+        </Link>
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">
         {formatDate(project.created_at)}

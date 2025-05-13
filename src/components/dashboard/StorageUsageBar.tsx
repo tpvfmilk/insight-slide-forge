@@ -8,7 +8,6 @@ import { syncStorageUsage } from "@/services/storageUsageService";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CleanupStorageButton } from "./CleanupStorageButton";
-
 export function StorageUsageBar() {
   const [percentage, setPercentage] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -71,8 +70,9 @@ export function StorageUsageBar() {
   } else if (percentage > 75) {
     progressColor = "bg-warning";
   }
-  return <div className="space-y-3 px-[25px] py-[16px] border-t">
+  return <div className="space-y-3 px-[25px] py-[16px]">
       <div className="flex justify-between text-xs text-muted-foreground">
+        
         <div className="flex items-center gap-2 px-[11px]">
           <span className="px-0 mx-0">
             {usedFormatted} / {limitFormatted}

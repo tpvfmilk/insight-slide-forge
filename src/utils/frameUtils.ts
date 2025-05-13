@@ -94,48 +94,38 @@ export async function mergeAndSaveFrames(
     
     // First add all project frames
     currentProjectFrames.forEach(frame => {
-      if (frame && frame.imageUrl) {
-        const key = frame.id || frame.imageUrl;
-        frameMap.set(key, frame);
+      if (frame.id) {
+        frameMap.set(frame.id, frame);
+      } else if (frame.timestamp) {
+        frameMap.set(frame.timestamp, frame);
       }
     });
     
     // Then add all existing frames from state (might have newer updates)
     existingFrames.forEach(frame => {
-      if (frame && frame.imageUrl) {
-        const key = frame.id || frame.imageUrl;
-        frameMap.set(key, frame);
+      if (frame.id) {
+        frameMap.set(frame.id, frame);
+      } else if (frame.timestamp) {
+        frameMap.set(frame.timestamp, frame);
       }
     });
     
     // Finally, add/override with new frames
     newFrames.forEach(frame => {
-      if (frame && frame.imageUrl) {
-        // Make sure new frames have IDs
-        const frameWithId = {
-          ...frame,
-          id: frame.id || `frame-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-        };
-        
-        const key = frameWithId.id;
-        frameMap.set(key, frameWithId);
+      const key = frame.id || frame.timestamp;
+      if (key) {
+        frameMap.set(key, frame);
       }
     });
     
     // Convert map back to array
-    const mergedFrames = Array.from(frameMap.values()).filter(frame => 
-      frame && frame.imageUrl && !frame.imageUrl.startsWith('blob:')
-    );
-    
+    const mergedFrames = Array.from(frameMap.values());
     console.log(`Merged to ${mergedFrames.length} total frames`);
     
     // Save to project
     const { error } = await supabase
       .from('projects')
-      .update({ 
-        extracted_frames: mergedFrames,
-        updated_at: new Date().toISOString()
-      })
+      .update({ extracted_frames: mergedFrames })
       .eq('id', projectId);
       
     if (error) {
@@ -208,10 +198,7 @@ export async function purgeUnusedFrames(
     
     const { error: updateError } = await supabase
       .from('projects')
-      .update({ 
-        extracted_frames: newExtractedFrames,
-        updated_at: new Date().toISOString()
-      })
+      .update({ extracted_frames: newExtractedFrames })
       .eq('id', projectId);
     
     if (updateError) {
@@ -245,8 +232,8 @@ export async function handleManualFrameSelectionComplete(
   slides: Slide[],
   setSlides: (slides: Slide[]) => void,
   updateSlidesInDatabase?: (slides: Slide[]) => Promise<void>
-): Promise<boolean> {
-  if (!selectedFrames.length || !projectId) return false;
+) {
+  if (!selectedFrames.length || !projectId) return;
 
   try {
     // Update current slide with selected frames
@@ -254,7 +241,7 @@ export async function handleManualFrameSelectionComplete(
     
     if (!updatedSlides[currentSlideIndex]) {
       console.error("No slide found at index", currentSlideIndex);
-      return false;
+      return;
     }
     
     updatedSlides[currentSlideIndex] = {
@@ -268,21 +255,6 @@ export async function handleManualFrameSelectionComplete(
     // Update in database if function is provided
     if (updateSlidesInDatabase) {
       await updateSlidesInDatabase(updatedSlides);
-    } else {
-      // Default database update if no function provided
-      const { error } = await supabase
-        .from('projects')
-        .update({ 
-          slides: updatedSlides,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', projectId);
-        
-      if (error) {
-        console.error("Error updating slides in database:", error);
-        toast.error("Failed to update slides in database");
-        return false;
-      }
     }
 
     if (selectedFrames.length > 1) {

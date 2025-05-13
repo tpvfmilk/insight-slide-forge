@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import { SlidePreview, SlideData } from "@/components/slides/SlidePreview";
+import { SlidePreview } from "@/components/slides/SlidePreview";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
@@ -11,8 +11,6 @@ const PresentationPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [projectTitle, setProjectTitle] = useState<string>("");
-  const [slides, setSlides] = useState<SlideData[]>([]);
-  const [currentSlide, setCurrentSlide] = useState<number>(0);
   
   useEffect(() => {
     const loadProjectInfo = async () => {
@@ -32,9 +30,6 @@ const PresentationPage = () => {
         // Check if slides exist
         if (!project.slides || !Array.isArray(project.slides) || project.slides.length === 0) {
           toast.error("No slides available for this project");
-          setSlides([]);
-        } else {
-          setSlides(project.slides as SlideData[]);
         }
       } catch (error) {
         console.error("Error loading project data:", error);
@@ -46,10 +41,6 @@ const PresentationPage = () => {
     
     loadProjectInfo();
   }, [projectId]);
-  
-  const handleSlideChange = (index: number) => {
-    setCurrentSlide(index);
-  };
   
   // Show a mini control bar at the very top for easy navigation back to editor
   return (
@@ -75,18 +66,7 @@ const PresentationPage = () => {
       </div>
       
       <div className="flex-1">
-        {isLoading ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent"></div>
-          </div>
-        ) : (
-          <SlidePreview 
-            slides={slides} 
-            currentSlide={currentSlide}
-            onSlideClick={handleSlideChange}
-            isEditable={false}
-          />
-        )}
+        <SlidePreview />
       </div>
     </div>
   );

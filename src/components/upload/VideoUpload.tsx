@@ -17,7 +17,6 @@ export const VideoUpload = () => {
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>("");
-  const [videoDuration, setVideoDuration] = useState<number>(0);
   const navigate = useNavigate();
   
   // Set default title from filename when a file is selected
@@ -30,27 +29,7 @@ export const VideoUpload = () => {
     }
   }, [videoFile, title]);
   
-  // Function to get video duration
-  const getVideoDuration = (file: File): Promise<number> => {
-    return new Promise((resolve) => {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      
-      video.onloadedmetadata = () => {
-        window.URL.revokeObjectURL(video.src);
-        resolve(video.duration);
-      };
-      
-      video.onerror = () => {
-        console.error("Error loading video metadata");
-        resolve(0); // Return 0 if we can't get the duration
-      };
-      
-      video.src = URL.createObjectURL(file);
-    });
-  };
-  
-  const handleFileSelected = async (files: FileList | null) => {
+  const handleFileSelected = (files: FileList | null) => {
     if (!files || files.length === 0) return;
     
     const file = files[0]; // Only use the first file
@@ -67,22 +46,11 @@ export const VideoUpload = () => {
       return;
     }
     
-    // Get video duration
-    try {
-      const duration = await getVideoDuration(file);
-      setVideoDuration(duration);
-      console.log(`Video duration: ${duration} seconds`);
-    } catch (error) {
-      console.error("Failed to get video duration:", error);
-      // Still continue even if we can't get the duration
-    }
-    
     setVideoFile(file);
   };
   
   const handleRemoveFile = () => {
     setVideoFile(null);
-    setVideoDuration(0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,15 +83,14 @@ export const VideoUpload = () => {
     }, 300);
     
     try {
-      console.log("Creating project from video file:", videoFile.name, "with duration:", videoDuration);
+      console.log("Creating project from video file:", videoFile.name);
       
       // Create project from the single video file
       const project = await createProjectFromVideo(
         videoFile, 
         title, 
         contextPrompt,
-        "", // No transcript
-        videoDuration // Pass the duration we captured
+        "" // No transcript
       );
       
       clearInterval(interval);
