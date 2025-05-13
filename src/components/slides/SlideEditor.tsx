@@ -180,7 +180,6 @@ export const SlideEditor = () => {
           currentSlide={currentSlide}
           slides={slides}
           currentSlideIndex={currentSlideIndex}
-          setSlides={setSlides}
           updateSlidesInDatabase={updateSlidesInDatabase}
           handleSelectFrames={handleSelectFrames}
           mergeFramesWithLibrary={mergeFramesWithLibrary}

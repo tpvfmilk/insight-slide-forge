@@ -528,6 +528,7 @@ export const useSlides = (projectId?: string) => {
     syncFramesWithDatabase,
     updateSlidesInDatabase,
     mergeFramesWithLibrary,
-    removeImage
+    removeImage,
+    fetchProjectSize  // Make sure fetchProjectSize is returned
   };
 };

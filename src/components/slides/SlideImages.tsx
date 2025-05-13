@@ -11,7 +11,6 @@ interface SlideImagesProps {
   currentSlide: Slide;
   slides: Slide[];
   currentSlideIndex: number;
-  setSlides: (slides: Slide[]) => void;
   updateSlidesInDatabase: (slides: Slide[]) => Promise<void>;
   handleSelectFrames: () => void;
   mergeFramesWithLibrary: (frames: ExtractedFrame[]) => Promise<LocalExtractedFrame[]>;
@@ -24,7 +23,6 @@ export const SlideImages = ({
   currentSlide,
   slides,
   currentSlideIndex,
-  setSlides,
   updateSlidesInDatabase,
   handleSelectFrames,
   mergeFramesWithLibrary,
@@ -73,7 +71,7 @@ export const SlideImages = ({
           imageUrls: [uploadResult.url]
         };
       }
-      setSlides(updatedSlides);
+      
       updateSlidesInDatabase(updatedSlides);
       toast.success("Image uploaded successfully!", {
         id: "upload-image"
