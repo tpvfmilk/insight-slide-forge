@@ -106,7 +106,7 @@ export function ProjectRow({
   // Check if we should show the file name (only for video-based projects)
   const isTranscriptOnly = project.source_type === 'transcript-only' || project.source_type === 'transcript';
 
-  const handleDragStart = (e: React.DragEvent) => {
+  const handleDragStart = (e: React.DragEvent<HTMLTableRowElement>) => {
     // Set drag data
     e.dataTransfer.setData("text/plain", project.id);
     e.dataTransfer.effectAllowed = "move";
@@ -115,16 +115,16 @@ export function ProjectRow({
     setDraggedProject(project);
     
     // Add a semi-transparent effect to the dragged element
-    if (e.currentTarget instanceof HTMLElement) {
+    if (e.currentTarget) {
       requestAnimationFrame(() => {
         e.currentTarget.style.opacity = "0.5";
       });
     }
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
+  const handleDragEnd = (e: React.DragEvent<HTMLTableRowElement>) => {
     // Reset opacity
-    if (e.currentTarget instanceof HTMLElement) {
+    if (e.currentTarget) {
       e.currentTarget.style.opacity = "";
     }
     

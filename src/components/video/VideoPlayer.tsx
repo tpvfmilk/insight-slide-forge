@@ -94,7 +94,7 @@ export const VideoPlayer = ({
         crossOrigin="anonymous"
         onLoadedData={handleVideoLoaded}
         onLoadedMetadata={handleVideoLoaded}
-        onError={handleVideoError}
+        onError={(e) => handleVideoError(e.nativeEvent)}
         playsInline
         preload="auto"
       >
