@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,9 +32,10 @@ export const useVideoPlayer = ({
   
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  // Function to load the video
+  // Function to load the video with improved path handling and error logging
   const loadVideo = async () => {
     if (!videoPath) {
+      console.error("Cannot load video: No video path provided");
       setVideoError("No video path provided");
       setIsLoadingVideo(false);
       return;
@@ -51,15 +51,13 @@ export const useVideoPlayer = ({
       // Get a fresh signed URL with longer expiry
       const signedUrl = await getVideoSignedUrl(supabase, videoPath);
       
-      console.log("Got signed URL for video");
+      console.log("Got signed URL for video:", signedUrl.substring(0, 100) + "...");
       setVideoUrl(signedUrl);
       
       // Critical: Notify parent immediately of URL update with a small delay to ensure it's processed
       if (onVideoUrlUpdate) {
         console.log("Notifying parent of video URL update");
-        setTimeout(() => {
-          onVideoUrlUpdate(signedUrl);
-        }, 100);
+        onVideoUrlUpdate(signedUrl);
       }
     } catch (error) {
       console.error("Error getting fresh video URL:", error);
@@ -75,7 +73,7 @@ export const useVideoPlayer = ({
             .single();
             
           if (projectData?.source_url) {
-            console.log("Using project source URL as fallback");
+            console.log("Using project source URL as fallback:", projectData.source_url.substring(0, 100) + "...");
             setVideoUrl(projectData.source_url);
             
             // Important: Notify parent of URL update
@@ -86,6 +84,7 @@ export const useVideoPlayer = ({
           } else if (projectData?.source_file_path) {
             // Try with the source file path from project
             try {
+              console.log("Trying with alternative source file path:", projectData.source_file_path);
               const altUrl = await getVideoSignedUrl(supabase, projectData.source_file_path);
               console.log("Using alternate file path from project");
               setVideoUrl(altUrl);

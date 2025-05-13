@@ -260,9 +260,10 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     }
   };
   
-  // Handle video URL update from VideoPlayer
+  // Handle video URL update from VideoPlayer with more detailed logging
   const handleVideoUrlUpdate = (url: string) => {
-    console.log("FramePickerModal received URL update:", url);
+    console.log("FramePickerModal received URL update, length:", url?.length || 0);
+    console.log("FramePickerModal URL preview:", url ? `${url.substring(0, 50)}...` : "null");
     setVideoUrl(url);
     if (url) {
       setIsVideoLoading(false);
@@ -271,7 +272,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   
   useEffect(() => {
     // Debug log to track videoUrl changes
-    console.log("VideoUrl state changed:", videoUrl);
+    console.log("VideoUrl state changed in FramePickerModal:", videoUrl ? "Available" : "Not available");
   }, [videoUrl]);
   
   // Get count of selected frames

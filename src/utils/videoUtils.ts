@@ -10,7 +10,7 @@ export const formatTime = (timeInSeconds: number): string => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-// Get signed URL from Supabase storage
+// Get signed URL from Supabase storage with improved path handling
 export const getVideoSignedUrl = async (
   supabase: any, 
   videoPath: string, 
@@ -20,18 +20,30 @@ export const getVideoSignedUrl = async (
     throw new Error("No video path provided");
   }
   
-  // Extract bucket and file path
+  console.log("Getting signed URL for video path:", videoPath);
+  
+  // Default bucket and path
   let bucket = 'video_uploads';
   let filePath = videoPath;
   
-  // If path includes '/', extract the actual file path without bucket name
+  // Handle paths with bucket/filename format
   if (videoPath.includes('/')) {
-    const pathParts = videoPath.split('/');
-    if (pathParts.length > 1) {
-      filePath = pathParts.pop() || '';
-      bucket = pathParts.join('/');
+    const parts = videoPath.split('/');
+    
+    // If path has format 'bucket/file.mp4'
+    if (parts.length === 2) {
+      bucket = parts[0];
+      filePath = parts[1];
+    } 
+    // If path has deeper nesting like 'bucket/folder/file.mp4'
+    else if (parts.length > 2) {
+      bucket = parts[0];
+      // Join all remaining parts as the file path
+      filePath = parts.slice(1).join('/');
     }
   }
+  
+  console.log(`Parsed video path - Bucket: ${bucket}, File path: ${filePath}`);
   
   // Get a fresh signed URL with specified expiry
   const { data, error } = await supabase
@@ -39,9 +51,17 @@ export const getVideoSignedUrl = async (
     .from(bucket)
     .createSignedUrl(filePath, expirySeconds);
     
-  if (error || !data?.signedUrl) {
-    throw new Error("Couldn't create access link for video");
+  if (error) {
+    console.error("Error creating signed URL:", error);
+    throw new Error("Couldn't create access link for video: " + error.message);
   }
+  
+  if (!data?.signedUrl) {
+    console.error("No signed URL in response");
+    throw new Error("Couldn't create access link for video: Empty response");
+  }
+  
+  console.log("Successfully created signed URL");
   
   return data.signedUrl;
 };

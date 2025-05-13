@@ -53,7 +53,9 @@ export const VideoPlayer = ({
   });
 
   // Debug logging to track videoUrl
-  console.log("VideoPlayer videoUrl:", videoUrl);
+  console.log("VideoPlayer component - videoUrl state:", videoUrl ? "Available" : "Not available");
+  console.log("VideoPlayer component - videoPath prop:", videoPath);
+  console.log("VideoPlayer component - projectId prop:", projectId);
   
   return (
     <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
