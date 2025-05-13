@@ -41,47 +41,50 @@ export const SlideFilmstrip = ({
     const scrollContainer = scrollContainerRef.current?.querySelector('[data-radix-scroll-area-viewport]');
     if (!scrollContainer) return;
     
+    // Cast scrollContainer to HTMLElement to fix TypeScript errors
+    const scrollContainerHtml = scrollContainer as HTMLElement;
+    
     const handleMouseDown = (e: MouseEvent) => {
       isMouseDown.current = true;
-      startX.current = e.pageX - scrollContainer.getBoundingClientRect().left;
-      scrollLeft.current = scrollContainer.scrollLeft;
-      scrollContainer.style.cursor = 'grabbing';
-      scrollContainer.style.userSelect = 'none';
+      startX.current = e.pageX - scrollContainerHtml.getBoundingClientRect().left;
+      scrollLeft.current = scrollContainerHtml.scrollLeft;
+      scrollContainerHtml.style.cursor = 'grabbing';
+      scrollContainerHtml.style.userSelect = 'none';
     };
     
     const handleMouseUp = () => {
       isMouseDown.current = false;
-      scrollContainer.style.cursor = 'grab';
-      scrollContainer.style.userSelect = '';
+      scrollContainerHtml.style.cursor = 'grab';
+      scrollContainerHtml.style.userSelect = '';
     };
     
     const handleMouseLeave = () => {
       isMouseDown.current = false;
-      scrollContainer.style.cursor = 'grab';
-      scrollContainer.style.userSelect = '';
+      scrollContainerHtml.style.cursor = 'grab';
+      scrollContainerHtml.style.userSelect = '';
     };
     
     const handleMouseMove = (e: MouseEvent) => {
       if (!isMouseDown.current) return;
       e.preventDefault();
-      const x = e.pageX - scrollContainer.getBoundingClientRect().left;
+      const x = e.pageX - scrollContainerHtml.getBoundingClientRect().left;
       const walk = (x - startX.current) * 2; // Scroll speed multiplier
-      scrollContainer.scrollLeft = scrollLeft.current - walk;
+      scrollContainerHtml.scrollLeft = scrollLeft.current - walk;
     };
     
     // Add event listeners
-    scrollContainer.addEventListener('mousedown', handleMouseDown);
-    scrollContainer.addEventListener('mouseleave', handleMouseLeave);
+    scrollContainerHtml.addEventListener('mousedown', handleMouseDown);
+    scrollContainerHtml.addEventListener('mouseleave', handleMouseLeave);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousemove', handleMouseMove);
     
     // Initialize cursor style
-    scrollContainer.style.cursor = 'grab';
+    scrollContainerHtml.style.cursor = 'grab';
     
     return () => {
       // Clean up event listeners
-      scrollContainer.removeEventListener('mousedown', handleMouseDown);
-      scrollContainer.removeEventListener('mouseleave', handleMouseLeave);
+      scrollContainerHtml.removeEventListener('mousedown', handleMouseDown);
+      scrollContainerHtml.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('mousemove', handleMouseMove);
     };
