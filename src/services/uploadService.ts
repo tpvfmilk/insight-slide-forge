@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
 
-// Update this function to remove the slides per minute parameter
+// Updated function to include the duration parameter
 export const createProjectFromVideo = async (
   videoFile: File,
   title: string,
   contextPrompt: string = "",
-  transcript: string = ""
+  transcript: string = "",
+  duration: number = 0
 ): Promise<Project | null> => {
   try {
     // Verify user is authenticated
@@ -33,11 +34,12 @@ export const createProjectFromVideo = async (
       return null;
     }
     
-    // Get video metadata
+    // Get video metadata with duration
     const videoMetadata = {
       original_file_name: videoFile.name,
       file_type: videoFile.type,
       file_size: videoFile.size,
+      duration: duration || null, // Include duration if we have it
     };
     
     // Create a new project in the database

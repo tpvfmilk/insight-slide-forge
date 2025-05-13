@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link } from "react-router-dom";
 import { FileText, MoreHorizontal } from "lucide-react";
@@ -92,11 +91,14 @@ export function ProjectRow({
   const originalFileName = project.video_metadata?.original_file_name || "Unknown file";
   
   // Get the duration and format it, or display "Transcript Only" for transcript projects
-  let durationDisplay = "Unknown";
+  let durationDisplay = "Processing...";
   if (project.video_metadata?.duration) {
     durationDisplay = formatDuration(project.video_metadata.duration);
   } else if (project.source_type === 'transcript-only' || project.source_type === 'transcript') {
     durationDisplay = "Transcript Only";
+  } else if (project.source_type === 'video') {
+    // For video projects without duration, show "Processing..." instead of "Unknown"
+    durationDisplay = "Processing...";
   }
 
   // Check if we should show the file name (only for video-based projects)

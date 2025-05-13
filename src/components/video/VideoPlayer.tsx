@@ -10,10 +10,10 @@ interface VideoPlayerProps {
   projectId: string;
   onTimeUpdate?: (currentTime: number) => void;
   onVideoLoaded?: (duration: number) => void;
-  onVideoUrlUpdate?: (url: string) => void;  // Add new prop for URL updates
+  onVideoUrlUpdate?: (url: string) => void;
   capturedTimemarks?: number[];
   isCapturingFrame?: boolean;
-  children?: ReactNode; // Add support for children prop
+  children?: ReactNode;
 }
 
 export const VideoPlayer = ({
@@ -21,10 +21,10 @@ export const VideoPlayer = ({
   projectId,
   onTimeUpdate,
   onVideoLoaded,
-  onVideoUrlUpdate, // New prop for URL updates
+  onVideoUrlUpdate,
   capturedTimemarks = [],
   isCapturingFrame = false,
-  children // Add children to props
+  children
 }: VideoPlayerProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -36,6 +36,7 @@ export const VideoPlayer = ({
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isLoadingVideo, setIsLoadingVideo] = useState(true);
   const [loadAttempts, setLoadAttempts] = useState(0);
+  const [durationUpdatedInDB, setDurationUpdatedInDB] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   
@@ -172,14 +173,59 @@ export const VideoPlayer = ({
     };
   }, [isSeeking, onTimeUpdate]);
 
-  // Handle video duration
+  // Handle video duration and update project metadata in database
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const handleLoadedMetadata = () => {
-      setDuration(video.duration);
-      onVideoLoaded?.(video.duration);
+    const handleLoadedMetadata = async () => {
+      const videoDuration = video.duration;
+      setDuration(videoDuration);
+      
+      if (onVideoLoaded) {
+        onVideoLoaded(videoDuration);
+      }
+      
+      // Update the project's video_metadata with the accurate duration
+      // Only do this once per video load to avoid unnecessary DB operations
+      if (projectId && videoDuration && !durationUpdatedInDB) {
+        try {
+          // First get the current metadata
+          const { data: projectData, error: fetchError } = await supabase
+            .from('projects')
+            .select('video_metadata')
+            .eq('id', projectId)
+            .single();
+            
+          if (fetchError) {
+            console.error("Error fetching project metadata:", fetchError);
+            return;
+          }
+          
+          if (projectData && projectData.video_metadata) {
+            // Update the duration in the metadata
+            const updatedMetadata = {
+              ...projectData.video_metadata,
+              duration: videoDuration
+            };
+            
+            // Save the updated metadata back to the database
+            const { error: updateError } = await supabase
+              .from('projects')
+              .update({ video_metadata: updatedMetadata })
+              .eq('id', projectId);
+              
+            if (updateError) {
+              console.error("Error updating project metadata:", updateError);
+            } else {
+              console.log("Updated project with accurate video duration:", videoDuration);
+              setDurationUpdatedInDB(true);
+            }
+          }
+        } catch (error) {
+          console.error("Error updating video duration in project:", error);
+        }
+      }
     };
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -187,7 +233,7 @@ export const VideoPlayer = ({
     return () => {
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
     };
-  }, [onVideoLoaded]);
+  }, [projectId, onVideoLoaded, durationUpdatedInDB]);
   
   // Handle video playback control
   const togglePlayPause = () => {
