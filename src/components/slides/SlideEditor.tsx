@@ -742,20 +742,20 @@ export const SlideEditor = () => {
       {/* Main slide editing area with responsive layout and max width */}
       <div className="flex-1 w-full overflow-hidden">
         <div className="max-w-screen-xl mx-auto p-4">
-          <ResizablePanelGroup direction="horizontal">
+          <ResizablePanelGroup direction="horizontal" className="min-h-[600px]">
             {/* Left side - Images */}
             <ResizablePanel defaultSize={50} minSize={30}>
-              <div className="w-full h-full flex flex-col">
+              <div className="w-full h-full flex flex-col p-6">
                 {/* Images header */}
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold">Images</h3>
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="font-semibold text-lg">Images</h3>
                   <div className="flex items-center gap-2">
                     <Button 
                       variant="outline" 
                       size="sm"
                       onClick={handleSelectFrames}
                     >
-                      <Film className="h-3.5 w-3.5 mr-1" />
+                      <Film className="h-3.5 w-3.5 mr-1.5" />
                       Select Frames
                     </Button>
                     <label>
@@ -775,12 +775,12 @@ export const SlideEditor = () => {
                         <span>
                           {isUploadingImage ? (
                             <>
-                              <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" />
+                              <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                               Uploading...
                             </>
                           ) : (
                             <>
-                              <Upload className="h-3.5 w-3.5 mr-1" />
+                              <Upload className="h-3.5 w-3.5 mr-1.5" />
                               Upload
                             </>
                           )}
@@ -791,12 +791,12 @@ export const SlideEditor = () => {
                 </div>
                 
                 {/* Image gallery */}
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto pr-2">
                   {currentSlide && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-4">
                       {/* Show from imageUrl (legacy) */}
                       {currentSlide.imageUrl && (
-                        <div className="relative group aspect-video rounded-md overflow-hidden border">
+                        <div className="relative group aspect-video rounded-md overflow-hidden border shadow-sm">
                           <img 
                             src={currentSlide.imageUrl} 
                             alt="Slide image"
@@ -806,10 +806,10 @@ export const SlideEditor = () => {
                             <Button 
                               variant="destructive"
                               size="sm"
-                              className="h-7"
+                              className="h-8"
                               onClick={() => removeImage(currentSlide.imageUrl!)}
                             >
-                              <Trash2 className="h-3.5 w-3.5 mr-1" />
+                              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                               Remove
                             </Button>
                           </div>
@@ -818,7 +818,7 @@ export const SlideEditor = () => {
                       
                       {/* Show from imageUrls (new approach) */}
                       {currentSlide.imageUrls && currentSlide.imageUrls.map((url, i) => (
-                        <div key={i} className="relative group aspect-video rounded-md overflow-hidden border">
+                        <div key={i} className="relative group aspect-video rounded-md overflow-hidden border shadow-sm">
                           <img 
                             src={url} 
                             alt={`Slide image ${i + 1}`}
@@ -828,10 +828,10 @@ export const SlideEditor = () => {
                             <Button 
                               variant="destructive"
                               size="sm"
-                              className="h-7"
+                              className="h-8"
                               onClick={() => removeImage(url)}
                             >
-                              <Trash2 className="h-3.5 w-3.5 mr-1" />
+                              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                               Remove
                             </Button>
                           </div>
@@ -840,9 +840,9 @@ export const SlideEditor = () => {
                       
                       {/* Empty state */}
                       {(!currentSlide.imageUrl && (!currentSlide.imageUrls || currentSlide.imageUrls.length === 0)) && (
-                        <div className="col-span-full flex items-center justify-center h-32 border rounded-md bg-muted/20">
+                        <div className="col-span-full flex items-center justify-center h-40 border rounded-md bg-muted/20">
                           <div className="text-center text-muted-foreground">
-                            <ImageIcon className="h-6 w-6 mx-auto mb-2" />
+                            <ImageIcon className="h-8 w-8 mx-auto mb-2" />
                             <p className="text-sm">No images for this slide</p>
                           </div>
                         </div>
@@ -854,23 +854,23 @@ export const SlideEditor = () => {
             </ResizablePanel>
             
             {/* Resizable handle with grip */}
-            <ResizableHandle withHandle />
+            <ResizableHandle withHandle className="bg-muted/30 hover:bg-muted/50 transition-colors" />
             
             {/* Right side - Slide content */}
             <ResizablePanel defaultSize={50} minSize={30}>
-              <div className="w-full h-full flex flex-col">
+              <div className="w-full h-full flex flex-col p-6">
                 {/* Title */}
-                <div className="mb-4">
+                <div className="mb-5">
                   {isEditing ? (
                     <input
                       type="text"
                       value={editedTitle}
                       onChange={(e) => setEditedTitle(e.target.value)}
-                      className="w-full text-xl font-semibold border-b border-primary/20 focus:border-primary outline-none pb-1 bg-transparent"
+                      className="w-full text-xl font-semibold border-b border-primary/20 focus:border-primary outline-none pb-2 bg-transparent"
                     />
                   ) : (
                     <h2 
-                      className="text-xl font-semibold pb-1 border-b border-transparent cursor-pointer hover:border-muted-foreground" 
+                      className="text-xl font-semibold pb-2 border-b border-transparent cursor-pointer hover:border-muted-foreground" 
                       onClick={startEditing}
                     >
                       {currentSlide?.title}
@@ -879,12 +879,12 @@ export const SlideEditor = () => {
                 </div>
 
                 {/* Content */}
-                <div className="mb-4 flex-1">
+                <div className="mb-6 flex-1">
                   {isEditing ? (
                     <Textarea
                       value={editedContent}
                       onChange={(e) => setEditedContent(e.target.value)}
-                      className="min-h-[200px] h-full resize-none"
+                      className="min-h-[250px] h-full resize-none"
                     />
                   ) : (
                     <div 
@@ -892,7 +892,7 @@ export const SlideEditor = () => {
                       onClick={startEditing}
                     >
                       {currentSlide?.content.split("\n").map((paragraph, i) => (
-                        <p key={i}>{paragraph}</p>
+                        <p key={i} className="mb-3">{paragraph}</p>
                       ))}
                     </div>
                   )}
@@ -922,19 +922,19 @@ export const SlideEditor = () => {
       </div>
         
       {/* Slide navigation */}
-      <div className="border-t p-2 px-4 flex items-center justify-between">
+      <div className="border-t p-3 flex items-center justify-between">
         {/* Left side - empty */}
         <div className="w-1/4"></div>
         
         {/* Center - navigation buttons */}
-        <div className="flex items-center justify-center w-1/2 space-x-2">
+        <div className="flex items-center justify-center w-1/2 space-x-3">
           <Button
             variant="outline"
             size="sm"
             onClick={goToPrevSlide}
             disabled={currentSlideIndex === 0}
           >
-            <ChevronLeft className="h-4 w-4 mr-1" />
+            <ChevronLeft className="h-4 w-4 mr-1.5" />
             Previous
           </Button>
           
@@ -943,7 +943,7 @@ export const SlideEditor = () => {
             size="sm"
             onClick={addNewSlide}
           >
-            <Plus className="h-4 w-4 mr-1" />
+            <Plus className="h-4 w-4 mr-1.5" />
             Add Slide
           </Button>
           
@@ -954,7 +954,7 @@ export const SlideEditor = () => {
             disabled={currentSlideIndex === slides.length - 1}
           >
             Next
-            <ChevronRight className="h-4 w-4 ml-1" />
+            <ChevronRight className="h-4 w-4 ml-1.5" />
           </Button>
         </div>
         
@@ -966,7 +966,7 @@ export const SlideEditor = () => {
             onClick={deleteCurrentSlide}
             disabled={slides.length <= 1}
           >
-            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
             Delete Slide
           </Button>
         </div>
@@ -976,14 +976,14 @@ export const SlideEditor = () => {
       <div className="h-40 border-t w-full flex-shrink-0">
         <div className="max-w-screen-xl mx-auto px-4 h-full">
           <ScrollArea orientation="horizontal" className="h-full w-full">
-            <div ref={filmstripRef} className="flex gap-2 p-2 h-full">
+            <div ref={filmstripRef} className="flex gap-3 p-3 h-full">
               {slides.map((slide, index) => (
                 <div 
                   key={slide.id}
                   onClick={() => goToSlide(index)}
                   className={`h-full w-48 flex-shrink-0 cursor-pointer flex flex-col items-center justify-center relative ${
                     currentSlideIndex === index ? "border-2 border-primary" : "border border-border hover:border-muted-foreground/30"
-                  } rounded-md overflow-hidden shadow-sm bg-card p-2`}
+                  } rounded-md overflow-hidden shadow-sm bg-card p-3`}
                 >
                   {/* Delete button in the top-right corner */}
                   <Button
@@ -1019,7 +1019,6 @@ export const SlideEditor = () => {
           projectId={projectId || ""}
           onFramesSelected={handleFrameSelection}
           allExtractedFrames={allExtractedFrames}
-          // Convert string URLs to ExtractedFrame objects for compatibility
           existingFrames={currentSlide?.imageUrls?.map(url => {
             // Try to find the matching extracted frame by URL
             const matchingFrame = allExtractedFrames.find(frame => frame.imageUrl === url);
