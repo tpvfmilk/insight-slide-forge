@@ -33,10 +33,10 @@ export const SlideContent = ({
   if (!currentSlide) return null;
   
   return (
-    <div className="w-full flex flex-col h-full">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Content</h3>
-        <div className="flex items-center gap-2">
+    <div className="w-full flex flex-col h-full p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="font-semibold text-lg">Content</h3>
+        <div className="flex items-center gap-3">
           {isEditing ? (
             <Button
               size="sm"
@@ -98,8 +98,8 @@ export const SlideContent = ({
           )}
         </div>
         
-        {/* Copy Content button positioned at the bottom right */}
-        <div className="absolute bottom-0 right-0 pb-2">
+        {/* Copy Content button positioned at the bottom right with proper spacing */}
+        <div className="absolute bottom-2 right-2">
           <Button variant="outline" size="sm" onClick={onCopyContent} disabled={!currentSlide}>
             <Copy className="h-4 w-4 mr-1" />
             Copy Content

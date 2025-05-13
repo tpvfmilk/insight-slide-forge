@@ -88,9 +88,13 @@ export const SlideFilmstrip = ({
   }, []);
   
   return (
-    <div className="border-t">
-      <div className="border-b px-4 py-2 flex justify-between items-center">
-        <div className="flex items-center gap-2">
+    <div className="border-t w-full">
+      <div className="border-b px-6 py-3 flex justify-between items-center">
+        <div className="flex-1">
+          {/* Empty space to balance the layout */}
+        </div>
+        
+        <div className="flex items-center gap-3 flex-1 justify-center">
           <Button
             variant="outline"
             size="icon"
@@ -100,7 +104,7 @@ export const SlideFilmstrip = ({
             <ChevronLeft className="h-4 w-4" />
           </Button>
           
-          <span className="text-sm">
+          <span className="text-sm px-2">
             Slide {currentSlideIndex + 1} of {slides.length}
           </span>
           
@@ -119,8 +123,8 @@ export const SlideFilmstrip = ({
           </Button>
         </div>
         
-        {/* New section for export and delete buttons */}
-        <div className="flex items-center gap-2">
+        {/* Right-aligned export and delete buttons */}
+        <div className="flex items-center gap-3 flex-1 justify-end">
           <Button size="sm" variant="outline" onClick={onExportOptions}>
             <Download className="h-4 w-4 mr-1" />
             Export
@@ -134,7 +138,7 @@ export const SlideFilmstrip = ({
       </div>
       
       {/* Filmstrip */}
-      <ScrollArea className="h-24 border rounded-md" ref={filmstripRef}>
+      <ScrollArea className="h-24 border rounded-md mx-6 my-3" ref={filmstripRef}>
         <div className="flex gap-2 p-2 min-w-full">
           {slides.map((slide, index) => (
             <div 

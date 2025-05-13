@@ -100,11 +100,11 @@ export const SlideImages = ({
   };
   
   return (
-    <div className="w-full lg:w-1/2 flex flex-col">
-      {/* Images header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Images</h3>
-        <div className="flex items-center gap-2">
+    <div className="w-full flex flex-col h-full p-6">
+      {/* Images header with consistent spacing */}
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="font-semibold text-lg">Images</h3>
+        <div className="flex items-center gap-3">
           <Button 
             variant="outline" 
             size="sm"
@@ -150,10 +150,10 @@ export const SlideImages = ({
         </div>
       </div>
       
-      {/* Image gallery */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Image gallery with proper padding */}
+      <div className="flex-1 overflow-y-auto pb-4">
         {currentSlide && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-4">
             {/* Show from imageUrl (legacy) */}
             {currentSlide.imageUrl && (
               <div className="relative group aspect-video rounded-md overflow-hidden border">
