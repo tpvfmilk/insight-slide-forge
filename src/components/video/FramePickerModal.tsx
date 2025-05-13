@@ -899,23 +899,28 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           }}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleApplyFrames} 
-            className="gap-1"
-            disabled={selectedFramesCount === 0 || isUploadingFrames}
-          >
-            {isUploadingFrames ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4 mr-1" />
-                Insert {selectedFramesCount > 0 ? `${selectedFramesCount} Frame${selectedFramesCount !== 1 ? 's' : ''}` : 'to Slide'}
-              </>
-            )}
-          </Button>
+          <div className="flex flex-col items-end">
+            <Button 
+              onClick={handleApplyFrames} 
+              className="gap-1"
+              disabled={selectedFramesCount === 0 || isUploadingFrames}
+            >
+              {isUploadingFrames ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add {selectedFramesCount > 0 ? `${selectedFramesCount} Frame${selectedFramesCount !== 1 ? 's' : ''}` : 'to Slide'}
+                </>
+              )}
+            </Button>
+            <div className="text-xs text-muted-foreground mt-1">
+              Frames remain in your library after being added to slides
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
