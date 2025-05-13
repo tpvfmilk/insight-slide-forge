@@ -20,6 +20,9 @@ export const SlideEditor: React.FC = () => {
     projectId
   } = useSlideEditor();
   
+  // Add state for export dialog
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  
   // Determine which frames are selected for the current slide
   const currentSelectedFrames = currentSlide?.imageUrls 
     ? allExtractedFrames.filter(frame => 
@@ -77,7 +80,7 @@ export const SlideEditor: React.FC = () => {
       )}
       
       {/* Export dialog */}
-      <SlideExportDialog />
+      <SlideExportDialog open={exportDialogOpen} onOpenChange={setExportDialogOpen} />
     </div>
   );
 };
