@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { useParams } from "react-router-dom";
@@ -245,14 +246,42 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
       return;
     }
 
-    console.log(`Applying ${selectedFrames.length} selected frames to slide #${currentSlideIndex + 1}`, selectedFrames);
+    console.log(`Adding ${selectedFrames.length} selected frames to slide #${currentSlideIndex + 1}`, selectedFrames);
 
-    // Update current slide with selected frames
+    // Update current slide by APPENDING selected frames to any existing frames
     const updatedSlides = [...slides];
+    const currentSlide = updatedSlides[currentSlideIndex];
+    
+    // Get existing frame URLs from the slide
+    const existingFrameUrls: string[] = [];
+    
+    // Check for single imageUrl (legacy)
+    if (currentSlide.imageUrl) {
+      existingFrameUrls.push(currentSlide.imageUrl);
+    }
+    
+    // Check for imageUrls array (new approach)
+    if (currentSlide.imageUrls && Array.isArray(currentSlide.imageUrls)) {
+      existingFrameUrls.push(...currentSlide.imageUrls);
+    }
+    
+    // Get URLs of newly selected frames
+    const newFrameUrls = selectedFrames.map(frame => frame.imageUrl);
+    
+    // Combine existing and new URLs, removing duplicates
+    const combinedUrls = [...new Set([...existingFrameUrls, ...newFrameUrls])];
+    
+    // Update slide with combined URLs
     updatedSlides[currentSlideIndex] = {
       ...updatedSlides[currentSlideIndex],
-      imageUrls: selectedFrames.map(frame => frame.imageUrl)
+      imageUrls: combinedUrls
     };
+    
+    // If there was a single imageUrl, remove it since we're using imageUrls array now
+    if (updatedSlides[currentSlideIndex].imageUrl) {
+      updatedSlides[currentSlideIndex].imageUrl = undefined;
+    }
+    
     setSlides(updatedSlides);
 
     // Also update in the database
@@ -260,9 +289,9 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     
     // Give feedback based on selection count
     if (selectedFrames.length === 1) {
-      toast.success(`Applied 1 frame to slide`);
+      toast.success(`Added 1 frame to slide`);
     } else {
-      toast.success(`Applied ${selectedFrames.length} frames to slide`);
+      toast.success(`Added ${selectedFrames.length} frames to slide`);
     }
     
     // Update project size

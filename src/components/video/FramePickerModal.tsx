@@ -10,7 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Slider } from "@/components/ui/slider";
 import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 import { Separator } from "@/components/ui/separator";
-import { mergeAndSaveFrames } from "@/utils/frameUtils";
+import { mergeAndSaveFrames, purgeUnusedFrames } from "@/utils/frameUtils";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 // Create a separate interface for frames with blobs that extends ExtractedFrame
 interface CapturedFrameWithBlob {
@@ -58,6 +59,10 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   const [libraryFrames, setLibraryFrames] = useState<ExtractedFrame[]>([]);
   const [isUploadingFrames, setIsUploadingFrames] = useState(false);
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [framesToDelete, setFramesToDelete] = useState<{[key: string]: boolean}>({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeletingFrames, setIsDeletingFrames] = useState(false);
   
   // Reset state when opening modal
   useEffect(() => {
@@ -75,6 +80,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       }
       
       setSelectedFrames(initialSelectedState);
+      setFramesToDelete({});
+      setIsDeleteMode(false);
       setVideoError(null);
       setIsVideoLoaded(false);
       setIsLoadingVideo(true);
@@ -589,18 +596,35 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const toggleFrameSelection = (frame: ExtractedFrame) => {
     if (!frame.id) return;
     
-    setSelectedFrames(prev => {
-      const updated = {...prev};
-      
-      // Toggle selection
-      if (updated[frame.id!]) {
-        delete updated[frame.id!];
-      } else {
-        updated[frame.id!] = true;
-      }
-      
-      return updated;
-    });
+    if (isDeleteMode) {
+      // In delete mode, add/remove from framesToDelete
+      setFramesToDelete(prev => {
+        const updated = {...prev};
+        
+        // Toggle selection
+        if (updated[frame.id!]) {
+          delete updated[frame.id!];
+        } else {
+          updated[frame.id!] = true;
+        }
+        
+        return updated;
+      });
+    } else {
+      // Normal selection mode for adding to slide
+      setSelectedFrames(prev => {
+        const updated = {...prev};
+        
+        // Toggle selection
+        if (updated[frame.id!]) {
+          delete updated[frame.id!];
+        } else {
+          updated[frame.id!] = true;
+        }
+        
+        return updated;
+      });
+    }
   };
   
   // Remove a frame from the library
@@ -627,6 +651,93 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     
     // Also remove from captured frames if it exists there
     setCapturedFrames(prev => prev.filter(frame => frame.id !== frameId));
+  };
+  
+  // Enter delete mode for bulk frame deletion
+  const toggleDeleteMode = () => {
+    setIsDeleteMode(!isDeleteMode);
+    if (isDeleteMode) {
+      // Exiting delete mode, clear selection
+      setFramesToDelete({});
+    }
+  };
+  
+  // Delete selected frames
+  const deleteSelectedFrames = async () => {
+    const frameIdsToDelete = Object.keys(framesToDelete);
+    if (frameIdsToDelete.length === 0) {
+      toast.info("No frames selected for deletion");
+      return;
+    }
+    
+    setShowDeleteConfirm(true);
+  };
+  
+  // Confirm and execute deletion of frames
+  const confirmDeleteFrames = async () => {
+    const frameIdsToDelete = Object.keys(framesToDelete);
+    if (frameIdsToDelete.length === 0) return;
+    
+    try {
+      setIsDeletingFrames(true);
+      
+      // Create a copy of frames to delete for user feedback
+      const framesToDeleteCount = frameIdsToDelete.length;
+      
+      // Find the frames to remove
+      const framesToRemove = libraryFrames.filter(frame => 
+        frame.id && framesToDelete[frame.id]
+      );
+      
+      // Remove frames from library
+      const updatedLibraryFrames = libraryFrames.filter(
+        frame => frame.id && !framesToDelete[frame.id]
+      );
+      
+      setLibraryFrames(updatedLibraryFrames);
+      
+      // Also update the timestamps for the video timeline
+      const remainingTimemarks = capturedTimemarks.filter(time => {
+        // Keep timemarks that don't match any deleted frame
+        return !framesToRemove.some(frame => {
+          const frameTime = timeToSeconds(frame.timestamp);
+          return Math.abs(time - frameTime) < 0.5;
+        });
+      });
+      setCapturedTimemarks(remainingTimemarks);
+      
+      // Show toast
+      toast.loading(`Deleting ${framesToDeleteCount} frames...`, {
+        id: "delete-frames"
+      });
+      
+      // Update project's frame library in Supabase
+      const { error } = await supabase
+        .from('projects')
+        .update({ extracted_frames: updatedLibraryFrames })
+        .eq('id', projectId);
+        
+      if (error) {
+        throw error;
+      }
+      
+      // Reset deletion state
+      setFramesToDelete({});
+      setIsDeleteMode(false);
+      
+      toast.success(`Successfully deleted ${framesToDeleteCount} frames`, {
+        id: "delete-frames"
+      });
+      
+    } catch (error) {
+      console.error("Error deleting frames:", error);
+      toast.error("Failed to delete frames", {
+        id: "delete-frames"
+      });
+    } finally {
+      setIsDeletingFrames(false);
+      setShowDeleteConfirm(false);
+    }
   };
   
   // Apply selected frames to slide with proper upload and frame preservation
@@ -713,211 +824,306 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     );
   };
   
-  // Get count of selected frames
+  // Get count of selected frames for each mode
   const selectedFramesCount = Object.keys(selectedFrames).length;
+  const framesToDeleteCount = Object.keys(framesToDelete).length;
   
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogTitle>Frame Library</DialogTitle>
-        
-        {/* Main content area */}
-        <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
-          {/* Video player section */}
-          <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
-            {isLoadingVideo ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
-                <RefreshCw className="h-8 w-8 animate-spin mr-2" />
-                <span>Loading video...</span>
-              </div>
-            ) : videoError ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
-                <div>
-                  <AlertCircle className="h-10 w-10 mb-2 mx-auto text-destructive" />
-                  <p className="mb-4">{videoError}</p>
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogTitle>Frame Library</DialogTitle>
+          
+          {/* Main content area */}
+          <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
+            {/* Video player section */}
+            <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
+              {isLoadingVideo ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
+                  <RefreshCw className="h-8 w-8 animate-spin mr-2" />
+                  <span>Loading video...</span>
+                </div>
+              ) : videoError ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
+                  <div>
+                    <AlertCircle className="h-10 w-10 mb-2 mx-auto text-destructive" />
+                    <p className="mb-4">{videoError}</p>
+                    <Button 
+                      variant="secondary" 
+                      onClick={retryLoadVideo}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Retry Loading Video
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              
+              <video
+                ref={videoRef}
+                src={videoUrl || undefined}
+                className="w-full h-full"
+                crossOrigin="anonymous"
+                onLoadedData={handleVideoLoaded}
+                onLoadedMetadata={handleVideoLoaded}
+                onError={handleVideoError}
+                playsInline
+                preload="auto" // Force full preload
+              >
+                Your browser does not support the video tag.
+              </video>
+              
+              {/* Video controls overlay */}
+              <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
+                <div className="flex items-center space-x-4 w-full">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={seekBack}
+                    className="text-white hover:bg-white/20"
+                    disabled={!isVideoLoaded}
+                  >
+                    <Rewind className="h-5 w-5" />
+                  </Button>
+
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={togglePlayPause}
+                    className="text-white hover:bg-white/20"
+                    disabled={!isVideoLoaded}
+                  >
+                    {isPlaying ? (
+                      <Pause className="h-5 w-5" />
+                    ) : (
+                      <Play className="h-5 w-5" />
+                    )}
+                  </Button>
+                  
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={seekForward}
+                    className="text-white hover:bg-white/20"
+                    disabled={!isVideoLoaded}
+                  >
+                    <FastForward className="h-5 w-5" />
+                  </Button>
+                  
+                  <div className="text-white text-sm">
+                    {formatTime(currentTime)} / {formatTime(duration)}
+                  </div>
+                  
+                  <div className="flex-1"></div>
+                  
                   <Button 
                     variant="secondary" 
-                    onClick={retryLoadVideo}
+                    size="sm"
+                    onClick={captureFrame}
+                    className="flex items-center space-x-1"
+                    disabled={!isVideoLoaded || isCapturingFrame}
                   >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Retry Loading Video
+                    {isCapturingFrame ? (
+                      <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Camera className="h-4 w-4 mr-1" />
+                    )}
+                    {isCapturingFrame ? 'Capturing...' : 'Capture Frame'}
                   </Button>
                 </div>
-              </div>
-            ) : null}
-            
-            <video
-              ref={videoRef}
-              src={videoUrl || undefined}
-              className="w-full h-full"
-              crossOrigin="anonymous"
-              onLoadedData={handleVideoLoaded}
-              onLoadedMetadata={handleVideoLoaded}
-              onError={handleVideoError}
-              playsInline
-              preload="auto" // Force full preload
-            >
-              Your browser does not support the video tag.
-            </video>
-            
-            {/* Video controls overlay */}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
-              <div className="flex items-center space-x-4 w-full">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={seekBack}
-                  className="text-white hover:bg-white/20"
-                  disabled={!isVideoLoaded}
-                >
-                  <Rewind className="h-5 w-5" />
-                </Button>
-
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={togglePlayPause}
-                  className="text-white hover:bg-white/20"
-                  disabled={!isVideoLoaded}
-                >
-                  {isPlaying ? (
-                    <Pause className="h-5 w-5" />
-                  ) : (
-                    <Play className="h-5 w-5" />
-                  )}
-                </Button>
                 
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={seekForward}
-                  className="text-white hover:bg-white/20"
-                  disabled={!isVideoLoaded}
-                >
-                  <FastForward className="h-5 w-5" />
-                </Button>
-                
-                <div className="text-white text-sm">
-                  {formatTime(currentTime)} / {formatTime(duration)}
+                {/* Video seek slider with markers */}
+                <div className="px-1">
+                  {renderSliderWithMarkers()}
                 </div>
-                
-                <div className="flex-1"></div>
-                
-                <Button 
-                  variant="secondary" 
-                  size="sm"
-                  onClick={captureFrame}
-                  className="flex items-center space-x-1"
-                  disabled={!isVideoLoaded || isCapturingFrame}
-                >
-                  {isCapturingFrame ? (
-                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+              </div>
+            </div>
+            
+            <Separator />
+            
+            {/* Combined Library & Selected Frames Section */}
+            <div className="space-y-2 flex-1 overflow-hidden">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">Frame Library</h3>
+                <div className="text-sm text-muted-foreground">
+                  {isDeleteMode ? (
+                    `${framesToDeleteCount} frame${framesToDeleteCount !== 1 ? 's' : ''} selected for deletion`
                   ) : (
-                    <Camera className="h-4 w-4 mr-1" />
+                    `${selectedFramesCount} frame${selectedFramesCount !== 1 ? 's' : ''} selected`
                   )}
-                  {isCapturingFrame ? 'Capturing...' : 'Capture Frame'}
-                </Button>
+                </div>
               </div>
               
-              {/* Video seek slider with markers */}
-              <div className="px-1">
-                {renderSliderWithMarkers()}
-              </div>
-            </div>
-          </div>
-          
-          <Separator />
-          
-          {/* Combined Library & Selected Frames Section */}
-          <div className="space-y-2 flex-1 overflow-hidden">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium">Frame Library</h3>
-              <div className="text-sm text-muted-foreground">
-                {selectedFramesCount} frame{selectedFramesCount !== 1 ? 's' : ''} selected
+              <div className="h-[300px] bg-muted/30 rounded-md overflow-hidden">
+                <ScrollArea className="h-full">
+                  {libraryFrames.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2">
+                      {libraryFrames.map((frame) => (
+                        <div 
+                          key={frame.id} 
+                          className={`relative aspect-video cursor-pointer rounded-md overflow-hidden border-2 ${
+                            isDeleteMode 
+                              ? framesToDelete[frame.id!] ? 'border-destructive' : 'border-transparent' 
+                              : selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
+                          }`}
+                          onClick={() => toggleFrameSelection(frame)}
+                        >
+                          <img
+                            src={frame.imageUrl}
+                            alt={`Frame at ${frame.timestamp}`}
+                            className={isDeleteMode && framesToDelete[frame.id!] ? "h-full w-full object-cover opacity-50" : "h-full w-full object-cover"}
+                          />
+                          <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
+                          
+                          {/* Show selection indicator based on mode */}
+                          {isDeleteMode ? (
+                            framesToDelete[frame.id!] && (
+                              <div className="absolute top-1 right-1 bg-destructive rounded-full p-0.5">
+                                <Trash2 className="h-3 w-3 text-destructive-foreground" />
+                              </div>
+                            )
+                          ) : (
+                            selectedFrames[frame.id!] && (
+                              <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
+                                <Check className="h-3 w-3 text-primary-foreground" />
+                              </div>
+                            )
+                          )}
+                          
+                          {/* Show delete button in normal mode */}
+                          {!isDeleteMode && (
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="h-6 w-6 absolute bottom-1 right-1 opacity-0 hover:opacity-100 transition-opacity"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeFrame(frame.id as string);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-center text-muted-foreground">
+                        <p>No frames in library</p>
+                        <p className="text-sm mt-2">Capture frames from the video to add them to the library</p>
+                      </div>
+                    </div>
+                  )}
+                </ScrollArea>
               </div>
             </div>
             
-            <div className="h-[300px] bg-muted/30 rounded-md overflow-hidden">
-              <ScrollArea className="h-full">
-                {libraryFrames.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2">
-                    {libraryFrames.map((frame) => (
-                      <div 
-                        key={frame.id} 
-                        className={`relative aspect-video cursor-pointer rounded-md overflow-hidden border-2 ${
-                          selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
-                        }`}
-                        onClick={() => toggleFrameSelection(frame)}
-                      >
-                        <img
-                          src={frame.imageUrl}
-                          alt={`Frame at ${frame.timestamp}`}
-                          className="h-full w-full object-cover"
-                        />
-                        <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
-                        {selectedFrames[frame.id!] && (
-                          <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
-                            <Check className="h-3 w-3 text-primary-foreground" />
-                          </div>
-                        )}
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          className="h-6 w-6 absolute bottom-1 right-1 opacity-0 hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeFrame(frame.id as string);
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="h-full flex items-center justify-center">
-                    <div className="text-center text-muted-foreground">
-                      <p>No frames in library</p>
-                      <p className="text-sm mt-2">Capture frames from the video to add them to the library</p>
-                    </div>
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
+            {/* Hidden canvas for frame capture */}
+            <canvas ref={canvasRef} className="hidden"></canvas>
           </div>
           
-          {/* Hidden canvas for frame capture */}
-          <canvas ref={canvasRef} className="hidden"></canvas>
-        </div>
-        
-        <div className="flex justify-between items-center pt-4 border-t mt-2">
-          <Button variant="outline" onClick={() => {
-            // Make sure to properly close and clean up
-            toast.dismiss("processing-frames");
-            toast.dismiss("capture-frame");
-            onClose();
-          }}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleApplyFrames} 
-            className="gap-1"
-            disabled={selectedFramesCount === 0 || isUploadingFrames}
-          >
-            {isUploadingFrames ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                Processing...
-              </>
+          <div className="flex justify-between items-center pt-4 border-t mt-2">
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  // Make sure to properly close and clean up
+                  toast.dismiss("processing-frames");
+                  toast.dismiss("capture-frame");
+                  onClose();
+                }}
+              >
+                Cancel
+              </Button>
+              
+              {/* Delete mode toggle button */}
+              {libraryFrames.length > 0 && (
+                <Button 
+                  variant={isDeleteMode ? "default" : "outline"}
+                  onClick={toggleDeleteMode}
+                  className={isDeleteMode ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  {isDeleteMode ? "Exit Delete Mode" : "Delete Frames"}
+                </Button>
+              )}
+            </div>
+            
+            {isDeleteMode ? (
+              <Button 
+                variant="destructive" 
+                onClick={deleteSelectedFrames}
+                disabled={framesToDeleteCount === 0 || isDeletingFrames}
+                className="gap-1"
+              >
+                {isDeletingFrames ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete {framesToDeleteCount > 0 ? `${framesToDeleteCount} Frame${framesToDeleteCount !== 1 ? 's' : ''}` : 'Selected'}
+                  </>
+                )}
+              </Button>
             ) : (
-              <>
-                <Plus className="h-4 w-4 mr-1" />
-                Insert {selectedFramesCount > 0 ? `${selectedFramesCount} Frame${selectedFramesCount !== 1 ? 's' : ''}` : 'to Slide'}
-              </>
+              <Button 
+                onClick={handleApplyFrames} 
+                className="gap-1"
+                disabled={selectedFramesCount === 0 || isUploadingFrames}
+              >
+                {isUploadingFrames ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add {selectedFramesCount > 0 ? `${selectedFramesCount} Frame${selectedFramesCount !== 1 ? 's' : ''}` : ''} to Slide
+                  </>
+                )}
+              </Button>
             )}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Confirmation Dialog for Deleting Frames */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Selected Frames</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {framesToDeleteCount} selected frame{framesToDeleteCount !== 1 ? 's' : ''}? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingFrames}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDeleteFrames();
+              }}
+              disabled={isDeletingFrames}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingFrames ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Frames"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };

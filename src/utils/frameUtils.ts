@@ -142,6 +142,43 @@ export async function mergeAndSaveFrames(
 }
 
 /**
+ * Delete frames from storage and project data
+ */
+export async function deleteFrames(
+  projectId: string,
+  framesToDelete: ExtractedFrame[],
+  allFrames: ExtractedFrame[]
+): Promise<boolean> {
+  try {
+    if (framesToDelete.length === 0) {
+      return true;
+    }
+    
+    // Create a set of frame IDs to delete for quick lookup
+    const idsToDelete = new Set(framesToDelete.map(frame => frame.id));
+    
+    // Filter out frames being deleted
+    const updatedFrames = allFrames.filter(frame => !idsToDelete.has(frame.id));
+    
+    // Update the project with the filtered frames
+    const { error } = await supabase
+      .from('projects')
+      .update({ extracted_frames: updatedFrames })
+      .eq('id', projectId);
+    
+    if (error) {
+      console.error("Error updating project frames:", error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error deleting frames:", error);
+    return false;
+  }
+}
+
+/**
  * Purge unused frames from storage and project data
  */
 export async function purgeUnusedFrames(
@@ -218,12 +255,6 @@ export async function purgeUnusedFrames(
 
 /**
  * Handle the frame selection from the manual frame picker
- * @param projectId The ID of the project
- * @param selectedFrames The frames selected in the picker
- * @param currentSlideIndex The index of the current slide
- * @param slides The current slides array
- * @param setSlides Function to update the slides state
- * @param updateSlidesInDatabase Optional function to update slides in the database
  */
 export async function handleManualFrameSelectionComplete(
   projectId: string,
@@ -233,21 +264,42 @@ export async function handleManualFrameSelectionComplete(
   setSlides: (slides: Slide[]) => void,
   updateSlidesInDatabase?: (slides: Slide[]) => Promise<void>
 ) {
-  if (!selectedFrames.length || !projectId) return;
+  if (!selectedFrames.length || !projectId) return false;
 
   try {
-    // Update current slide with selected frames
+    // Update current slide by APPENDING selected frames to any existing frames
     const updatedSlides = [...slides];
+    const currentSlide = updatedSlides[currentSlideIndex];
     
-    if (!updatedSlides[currentSlideIndex]) {
-      console.error("No slide found at index", currentSlideIndex);
-      return;
+    // Get existing frame URLs from the slide
+    const existingFrameUrls: string[] = [];
+    
+    // Check for single imageUrl (legacy)
+    if (currentSlide.imageUrl) {
+      existingFrameUrls.push(currentSlide.imageUrl);
     }
     
+    // Check for imageUrls array (new approach)
+    if (currentSlide.imageUrls && Array.isArray(currentSlide.imageUrls)) {
+      existingFrameUrls.push(...currentSlide.imageUrls);
+    }
+    
+    // Get URLs of newly selected frames
+    const newFrameUrls = selectedFrames.map(frame => frame.imageUrl);
+    
+    // Combine existing and new URLs, removing duplicates
+    const combinedUrls = [...new Set([...existingFrameUrls, ...newFrameUrls])];
+    
+    // Update slide with combined URLs
     updatedSlides[currentSlideIndex] = {
       ...updatedSlides[currentSlideIndex],
-      imageUrls: selectedFrames.map(frame => frame.imageUrl)
+      imageUrls: combinedUrls
     };
+    
+    // If there was a single imageUrl, remove it since we're using imageUrls array now
+    if (updatedSlides[currentSlideIndex].imageUrl) {
+      updatedSlides[currentSlideIndex].imageUrl = undefined;
+    }
     
     // Update slides state
     setSlides(updatedSlides);
@@ -255,18 +307,28 @@ export async function handleManualFrameSelectionComplete(
     // Update in database if function is provided
     if (updateSlidesInDatabase) {
       await updateSlidesInDatabase(updatedSlides);
+    } else {
+      // Default fallback if no update function provided
+      const { error } = await supabase
+        .from('projects')
+        .update({ slides: updatedSlides })
+        .eq('id', projectId);
+        
+      if (error) {
+        throw error;
+      }
     }
 
     if (selectedFrames.length > 1) {
-      toast.success(`${selectedFrames.length} frames applied to slide`);
+      toast.success(`${selectedFrames.length} frames added to slide`);
     } else {
-      toast.success(`Frame applied to slide`);
+      toast.success(`Frame added to slide`);
     }
     
     return true;
   } catch (error) {
     console.error("Error handling manual frame selection:", error);
-    toast.error("Failed to apply selected frames to slide");
+    toast.error("Failed to add selected frames to slide");
     return false;
   }
 }
