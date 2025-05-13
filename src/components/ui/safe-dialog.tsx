@@ -38,7 +38,6 @@ export const SafeDialog = ({ children, onOpenChange, open, className, ...props }
     }
   }, [open, id, registerUIElement, unregisterUIElement, onOpenChange]);
   
-  // Remove className from props being passed to Dialog since it doesn't accept it
   return (
     <Dialog open={open} onOpenChange={onOpenChange} {...props}>
       <div className={className}>{children}</div>
