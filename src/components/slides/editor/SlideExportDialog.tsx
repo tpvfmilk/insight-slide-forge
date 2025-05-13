@@ -1,8 +1,8 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { DialogContent } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { toast } from "@/hooks/use-toast";
 import { RefreshCw } from "lucide-react";
 import { useSlideEditor } from "./SlideEditorContext";
 import { exportToPDF, exportToCSV, exportToAnki, downloadFile } from "@/services/exportService";
@@ -20,7 +20,11 @@ export const SlideExportDialog: React.FC = () => {
   // Export functions
   const handleExport = async (format: ExportFormat) => {
     if (!slides || slides.length === 0) {
-      toast.error("No slides to export");
+      toast({
+        title: "Error",
+        description: "No slides to export",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -28,7 +32,11 @@ export const SlideExportDialog: React.FC = () => {
     
     try {
       // Show loading toast
-      toast.loading(`Generating ${format.toUpperCase()}...`, { id: toastId });
+      toast({
+        id: toastId,
+        title: `Generating ${format.toUpperCase()}...`,
+        description: "Please wait while your file is being prepared."
+      });
 
       let exportedBlob: Blob;
       let fileName: string;
@@ -53,10 +61,20 @@ export const SlideExportDialog: React.FC = () => {
       downloadFile(exportedBlob, fileName);
       
       // Show success toast
-      toast.success(`${format.toUpperCase()} exported successfully!`, { id: toastId });
+      toast({
+        id: toastId,
+        title: `${format.toUpperCase()} exported successfully!`,
+        description: "Your file is ready.",
+        variant: "default"
+      });
     } catch (error) {
       console.error(`Error exporting ${format}:`, error);
-      toast.error(`Failed to export ${format}`, { id: toastId });
+      toast({
+        id: toastId,
+        title: `Failed to export ${format}`,
+        description: "An error occurred while exporting.",
+        variant: "destructive"
+      });
     }
   };
 
