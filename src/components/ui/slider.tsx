@@ -16,7 +16,15 @@ const Slider = React.forwardRef<
     )}
     {...props}
   >
-    <SliderPrimitive.Track className="relative h-2 w-full grow overflow-hidden rounded-full bg-secondary">
+    <SliderPrimitive.Track 
+      className="relative h-2 w-full grow overflow-hidden rounded-full bg-secondary"
+      onPointerDown={(e) => {
+        // When clicking directly on the track, make sure we capture that event
+        if (props.onPointerDown) {
+          props.onPointerDown(e);
+        }
+      }}
+    >
       <SliderPrimitive.Range className="absolute h-full bg-primary" />
     </SliderPrimitive.Track>
     <SliderPrimitive.Thumb 

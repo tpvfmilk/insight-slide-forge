@@ -33,13 +33,8 @@ export const VideoControls = ({
   onSeekForward,
   capturedTimemarks = []
 }: VideoControlsProps) => {
-  // Custom render for slider with captured frame markers
+  // Improved slider with optimized event handlers for seeking
   const renderSliderWithMarkers = () => {
-    // Log when slider is interacted with
-    const handleSliderInteraction = (type: string, value?: number[]) => {
-      console.log(`Slider ${type}`, value);
-    };
-
     return (
       <div className="relative w-full">
         <Slider 
@@ -48,19 +43,19 @@ export const VideoControls = ({
           max={duration || 100}
           step={0.01}
           onValueChange={(val) => {
-            handleSliderInteraction('valueChange', val);
+            console.log('Slider value changed:', val);
             onSeekChange(val);
           }}
           onValueCommit={() => {
-            handleSliderInteraction('valueCommit');
+            console.log('Slider value committed');
             onSeekEnd();
           }}
           onPointerDown={(e) => {
-            handleSliderInteraction('pointerDown');
-            // Prevent any default behavior that might interfere with seeking
+            console.log('Slider pointer down');
             e.stopPropagation();
             onSeekStart();
           }}
+          disabled={!isVideoLoaded || duration <= 0}
           className="z-10"
         />
         
@@ -86,7 +81,10 @@ export const VideoControls = ({
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={onSeekBack}
+          onClick={() => {
+            console.log('Seek back button clicked');
+            onSeekBack();
+          }}
           className="text-white hover:bg-white/20"
           disabled={!isVideoLoaded}
         >
@@ -96,7 +94,10 @@ export const VideoControls = ({
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={onPlay}
+          onClick={() => {
+            console.log('Play/Pause button clicked');
+            onPlay();
+          }}
           className="text-white hover:bg-white/20"
           disabled={!isVideoLoaded}
         >
@@ -110,7 +111,10 @@ export const VideoControls = ({
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={onSeekForward}
+          onClick={() => {
+            console.log('Seek forward button clicked');
+            onSeekForward();
+          }}
           className="text-white hover:bg-white/20"
           disabled={!isVideoLoaded}
         >

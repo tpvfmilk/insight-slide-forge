@@ -54,7 +54,7 @@ export const VideoPlayer = ({
 
   // Debug logging to track videoUrl and immediately update parent
   useEffect(() => {
-    console.log("VideoPlayer component - videoUrl state:", videoUrl ? "Available" : "Not available");
+    console.log("VideoPlayer component - videoUrl:", videoUrl ? "Available" : "Not available");
     if (videoUrl && onVideoUrlUpdate) {
       console.log("VideoPlayer notifying parent of URL update");
       onVideoUrlUpdate(videoUrl);
@@ -63,12 +63,19 @@ export const VideoPlayer = ({
   
   useEffect(() => {
     console.log("VideoPlayer mounted with:", { 
-      videoPath, 
+      videoPath: videoPath?.substring(0, 30) + '...' || "None", 
       projectId,
       hasVideoUrl: !!videoUrl,
+      isVideoLoaded,
+      duration,
       error: videoError || "None" 
     });
-  }, [videoPath, projectId, videoUrl, videoError]);
+    
+    // Return cleanup function
+    return () => {
+      console.log("VideoPlayer unmounting, cleaning up...");
+    };
+  }, [videoPath, projectId, videoUrl, videoError, isVideoLoaded, duration]);
   
   return (
     <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
