@@ -1,8 +1,9 @@
+
 import { useState, useEffect, useRef, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Play, Pause, Rewind, FastForward, RefreshCw, AlertCircle } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface VideoPlayerProps {
@@ -202,25 +203,26 @@ export const VideoPlayer = ({
             return;
           }
           
-          if (projectData && projectData.video_metadata) {
-            // Update the duration in the metadata
-            const updatedMetadata = {
-              ...projectData.video_metadata,
-              duration: videoDuration
-            };
-            
-            // Save the updated metadata back to the database
-            const { error: updateError } = await supabase
-              .from('projects')
-              .update({ video_metadata: updatedMetadata })
-              .eq('id', projectId);
+          // Initialize metadata as an empty object if it doesn't exist
+          const currentMetadata = projectData?.video_metadata || {};
+          
+          // Update the duration in the metadata
+          const updatedMetadata = {
+            ...currentMetadata,
+            duration: videoDuration
+          };
+          
+          // Save the updated metadata back to the database
+          const { error: updateError } = await supabase
+            .from('projects')
+            .update({ video_metadata: updatedMetadata })
+            .eq('id', projectId);
               
-            if (updateError) {
-              console.error("Error updating project metadata:", updateError);
-            } else {
-              console.log("Updated project with accurate video duration:", videoDuration);
-              setDurationUpdatedInDB(true);
-            }
+          if (updateError) {
+            console.error("Error updating project metadata:", updateError);
+          } else {
+            console.log("Updated project with accurate video duration:", videoDuration);
+            setDurationUpdatedInDB(true);
           }
         } catch (error) {
           console.error("Error updating video duration in project:", error);
