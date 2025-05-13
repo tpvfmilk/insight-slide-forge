@@ -242,10 +242,18 @@ export const useProjectState = (projectId: string | undefined) => {
     }
   };
 
-  // Modified to be a no-op as we don't want automatic extraction
+  // Restore frame extraction functionality
   const handleExtractFrames = async () => {
-    // This is now intentionally empty - we only want manual frame selection
-    return;
+    if (!projectId || !project || isExtractingFrames) return;
+    
+    // Get timestamps from slides
+    if (!allTimestamps || allTimestamps.length === 0) {
+      toast.error("No timestamps available to extract frames from");
+      return;
+    }
+    
+    // Show the frame extraction modal - this is now handled by the UI directly
+    toast.info("Please use the frame extraction window to capture and select frames");
   };
   
   const handleFrameExtractionComplete = async (frames: Array<{ timestamp: string, imageUrl: string }>) => {

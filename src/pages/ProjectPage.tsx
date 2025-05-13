@@ -10,7 +10,7 @@ import { TranscriptView } from "@/components/project/TranscriptView";
 import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
-import { FramePickerModal } from "@/components/video/FramePickerModal";
+import { FrameExtractionModal } from "@/components/video/FrameExtractionModal";
 import { LocalExtractedFrame } from "@/components/slides/editor/SlideEditorTypes";
 
 const ProjectPage = () => {
@@ -54,7 +54,7 @@ const ProjectPage = () => {
     loadProject();
   };
   
-  // Handler for when frames are selected in the frame picker
+  // Handler for when frames are captured in the extraction modal
   const handleFrameSelection = async (selectedFrames) => {
     console.log(`Frame selection complete with ${selectedFrames.length} frames`);
     const toastId = "frame-processing";
@@ -68,8 +68,6 @@ const ProjectPage = () => {
       }
       
       // Pass the selected frames to be handled in the project state
-      // Note: we're now only applying these frames to the current slide,
-      // not removing them from the global library
       const success = await handleManualFrameSelectionComplete(selectedFrames);
       
       if (success) {
@@ -78,7 +76,6 @@ const ProjectPage = () => {
         toast.success(`Successfully applied ${selectedFrames.length} frames to slide`, { id: toastId });
         
         // After frames are processed, reload the project to reflect changes
-        // This is crucial for keeping the frame library in sync
         await loadProject();
       } else {
         toast.error("Failed to apply frames to slide", { id: toastId });
@@ -126,7 +123,7 @@ const ProjectPage = () => {
               isTranscriptOnlyProject={isTranscriptOnlyProject}
               refreshProject={loadProject}
               totalDuration={totalVideoDuration}
-              hideSelectFrames={true} // Add this prop to hide the Select Frames button
+              hideSelectFrames={false} // Changed to false to show the Select Frames button
             />
           </div>
         </div>
@@ -152,9 +149,9 @@ const ProjectPage = () => {
         </div>
       </div>
 
-      {/* Frame Picker Modal with Library */}
+      {/* Frame Extraction Modal with video player */}
       {modals.isFramePickerModalOpen && project?.source_file_path && (
-        <FramePickerModal
+        <FrameExtractionModal
           open={modals.isFramePickerModalOpen}
           onClose={() => {
             modals.closeFramePickerModal();
@@ -163,13 +160,10 @@ const ProjectPage = () => {
           }} 
           videoPath={project.source_file_path}
           projectId={projectId || ""}
-          onFramesSelected={handleFrameSelection}
-          // Convert ExtractedFrame[] to LocalExtractedFrame[] by adding required id field if missing
-          allExtractedFrames={(extractedFrames || []).map(frame => ({
-            ...frame,
-            // Ensure id exists by using existing id or generating one from timestamp
-            id: frame.id || `frame-${frame.timestamp?.replace(/:/g, "-") || Date.now()}`
-          }))}
+          timestamps={allTimestamps}
+          onComplete={handleFrameSelection}
+          videoMetadata={videoMetadata}
+          previouslyExtractedFrames={extractedFrames || []}
         />
       )}
     </InsightLayout>
