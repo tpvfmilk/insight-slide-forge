@@ -1,5 +1,4 @@
 
-import { useState } from "react";
 import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
