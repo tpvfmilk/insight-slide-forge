@@ -1,3 +1,4 @@
+
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -10,6 +11,7 @@ import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
+import { LocalExtractedFrame } from "@/components/slides/editor/SlideEditorTypes";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -162,7 +164,12 @@ const ProjectPage = () => {
           videoPath={project.source_file_path}
           projectId={projectId || ""}
           onFramesSelected={handleFrameSelection}
-          allExtractedFrames={extractedFrames || []}
+          // Convert ExtractedFrame[] to LocalExtractedFrame[] by adding required id field if missing
+          allExtractedFrames={(extractedFrames || []).map(frame => ({
+            ...frame,
+            // Ensure id exists by using existing id or generating one from timestamp
+            id: frame.id || `frame-${frame.timestamp?.replace(/:/g, "-") || Date.now()}`
+          }))}
         />
       )}
     </InsightLayout>
