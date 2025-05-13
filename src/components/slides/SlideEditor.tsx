@@ -35,6 +35,7 @@ export const SlideEditor = () => {
     projectTitle,
     allExtractedFrames,
     videoPath,
+    isSyncingFrames,
     
     // Functions
     loadFramesFromProject,
@@ -51,7 +52,8 @@ export const SlideEditor = () => {
     deleteSlideFromFilmstrip,
     updateSlidesInDatabase,
     mergeFramesWithLibrary,
-    removeImage
+    removeImage,
+    fetchProjectSize
   } = useSlides(projectId);
   
   // Local state for slide editor
@@ -176,10 +178,15 @@ export const SlideEditor = () => {
         {/* Right panel - slide images */}
         <SlideImages
           currentSlide={currentSlide}
-          onSelectFrames={handleSelectFrames}
-          onImageUpload={handleImageUpload}
-          onRemoveImage={removeImage}
-          isUploadingImage={isUploadingImage}
+          slides={slides}
+          currentSlideIndex={currentSlideIndex}
+          setSlides={setSlides}
+          updateSlidesInDatabase={updateSlidesInDatabase}
+          handleSelectFrames={handleSelectFrames}
+          mergeFramesWithLibrary={mergeFramesWithLibrary}
+          removeImage={removeImage}
+          isSyncingFrames={isSyncingFrames}
+          fetchProjectSize={fetchProjectSize}
         />
       </div>
       
@@ -188,7 +195,10 @@ export const SlideEditor = () => {
         projectId={projectId}
         videoPath={videoPath}
         allExtractedFrames={allExtractedFrames}
-        currentSlide={currentSlide || { title: '', content: '' }}
+        currentSlide={{
+          imageUrl: currentSlide?.imageUrl,
+          imageUrls: currentSlide?.imageUrls
+        }}
         isFramePickerModalOpen={isFramePickerModalOpen}
         setIsFramePickerModalOpen={setIsFramePickerModalOpen}
         onFramesSelected={handleFrameSelection}
