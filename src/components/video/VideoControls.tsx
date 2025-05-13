@@ -43,15 +43,12 @@ export const VideoControls = ({
           max={duration || 100}
           step={0.01}
           onValueChange={(val) => {
-            console.log('Slider value changed:', val);
             onSeekChange(val);
           }}
           onValueCommit={() => {
-            console.log('Slider value committed');
             onSeekEnd();
           }}
           onPointerDown={(e) => {
-            console.log('Slider pointer down');
             e.stopPropagation();
             onSeekStart();
           }}
@@ -82,7 +79,6 @@ export const VideoControls = ({
           variant="ghost" 
           size="icon" 
           onClick={() => {
-            console.log('Seek back button clicked');
             onSeekBack();
           }}
           className="text-white hover:bg-white/20"
@@ -95,7 +91,6 @@ export const VideoControls = ({
           variant="ghost" 
           size="icon" 
           onClick={() => {
-            console.log('Play/Pause button clicked');
             onPlay();
           }}
           className="text-white hover:bg-white/20"
@@ -112,7 +107,6 @@ export const VideoControls = ({
           variant="ghost" 
           size="icon" 
           onClick={() => {
-            console.log('Seek forward button clicked');
             onSeekForward();
           }}
           className="text-white hover:bg-white/20"

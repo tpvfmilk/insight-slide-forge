@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import { Folder } from "@/services/folderService";
+import { Folder, moveProjectsToFolder } from "@/services/folderService";
 import { Project } from "@/services/projectService";
 import { ProjectRow } from "@/components/projects/ProjectRow";
 import { Folder as FolderIcon, MoreVertical, Trash } from "lucide-react";
@@ -10,6 +10,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useDragAndDrop } from "@/context/DragAndDropContext";
+import { cn } from "@/lib/utils";
 
 interface FolderListProps {
   folders: Folder[];
@@ -57,6 +60,8 @@ export function FolderList({
     }
   });
 
+  const { draggedProject, setDraggedProject, isDraggingOver, setIsDraggingOver } = useDragAndDrop();
+
   // Save expanded folders state to localStorage whenever it changes
   useEffect(() => {
     try {
@@ -66,6 +71,25 @@ export function FolderList({
       console.error("Error saving folder state to localStorage:", error);
     }
   }, [expandedFolders]);
+
+  // Auto-expand folder when dragging over
+  useEffect(() => {
+    const draggingOverFolders = Object.entries(isDraggingOver)
+      .filter(([_, isDragging]) => isDragging)
+      .map(([folderId]) => folderId);
+    
+    if (draggingOverFolders.length > 0) {
+      setExpandedFolders(prev => {
+        const newExpanded = [...prev];
+        draggingOverFolders.forEach(folderId => {
+          if (!newExpanded.includes(folderId)) {
+            newExpanded.push(folderId);
+          }
+        });
+        return newExpanded;
+      });
+    }
+  }, [isDraggingOver]);
 
   // Ensure "unassigned" is always in the expanded folders list
   useEffect(() => {
@@ -106,7 +130,58 @@ export function FolderList({
     }
   };
 
-  return <div className="space-y-4">
+  // Handle drop event on folder
+  const handleDrop = async (e: React.DragEvent, folderId: string | null) => {
+    e.preventDefault();
+    setIsDraggingOver(folderId || "unassigned", false);
+    
+    const projectId = e.dataTransfer.getData("text/plain");
+    if (!projectId) return;
+    
+    if (draggedProject && (draggedProject.folder_id || null) === folderId) {
+      return; // Already in this folder
+    }
+
+    try {
+      // Visual feedback immediately
+      const projectToUpdate = projects.find(p => p.id === projectId);
+      if (!projectToUpdate) return;
+      
+      const originalFolderId = projectToUpdate.folder_id;
+      
+      // Optimistic update
+      projectToUpdate.folder_id = folderId;
+      
+      // Update in database
+      await moveProjectsToFolder([projectId], folderId);
+      
+      // Show success message
+      const targetFolderName = folderId 
+        ? folders.find(f => f.id === folderId)?.name 
+        : "Unfiled Projects";
+        
+      toast.success(`Moved "${projectToUpdate.title}" to ${targetFolderName}`);
+    } catch (error) {
+      console.error("Error moving project:", error);
+      toast.error("Failed to move project");
+    }
+  };
+
+  // Handle drag over event
+  const handleDragOver = (e: React.DragEvent, folderId: string | null) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsDraggingOver(folderId || "unassigned", true);
+  };
+
+  // Handle drag leave event
+  const handleDragLeave = (e: React.DragEvent, folderId: string | null) => {
+    e.preventDefault();
+    setIsDraggingOver(folderId || "unassigned", false);
+  };
+
+  return (
+    <div className="space-y-4">
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={toggleAllFolders}>
           {expandedFolders.length === folders.length + 1 ? "Collapse All" : "Expand All"}
@@ -116,8 +191,22 @@ export function FolderList({
       <Accordion type="multiple" value={expandedFolders} onValueChange={handleValueChange} className="w-full">
         {/* Render folders */}
         {folders.map(folder => {
-        const folderProjects = projectsByFolder[folder.id] || [];
-        return <AccordionItem key={folder.id} value={folder.id} className="border rounded-md mb-4">
+          const folderProjects = projectsByFolder[folder.id] || [];
+          const isOver = isDraggingOver[folder.id] || false;
+          
+          return (
+            <AccordionItem 
+              key={folder.id} 
+              value={folder.id} 
+              className={cn(
+                "border rounded-md mb-4 transition-colors",
+                draggedProject && draggedProject.folder_id !== folder.id && "hover:bg-muted/30",
+                isOver && "bg-muted/30 ring-2 ring-primary/20"
+              )}
+              onDragOver={(e) => handleDragOver(e, folder.id)}
+              onDragLeave={(e) => handleDragLeave(e, folder.id)}
+              onDrop={(e) => handleDrop(e, folder.id)}
+            >
               <div className="flex items-center justify-between pr-4">
                 <AccordionTrigger className="flex-1 hover:no-underline px-4">
                   <div className="flex items-center gap-2 text-left">
@@ -169,7 +258,8 @@ export function FolderList({
               </div>
               
               <AccordionContent className="overflow-hidden">
-                {folderProjects.length > 0 ? <div className="border rounded-md">
+                {folderProjects.length > 0 ? (
+                  <div className="border rounded-md">
                     <table className="w-full">
                       <thead className="bg-muted/50">
                         <tr>
@@ -181,18 +271,39 @@ export function FolderList({
                         </tr>
                       </thead>
                       <tbody>
-                        {folderProjects.map(project => <ProjectRow key={project.id} project={project} handleDeleteProject={handleDeleteProject} handleEditTitle={handleEditTitle} handleExport={handleExport} />)}
+                        {folderProjects.map(project => (
+                          <ProjectRow 
+                            key={project.id} 
+                            project={project} 
+                            handleDeleteProject={handleDeleteProject} 
+                            handleEditTitle={handleEditTitle} 
+                            handleExport={handleExport} 
+                          />
+                        ))}
                       </tbody>
                     </table>
-                  </div> : <div className="py-6 text-center text-muted-foreground">
+                  </div>
+                ) : (
+                  <div className="py-6 text-center text-muted-foreground">
                     No projects in this folder
-                  </div>}
+                  </div>
+                )}
               </AccordionContent>
-            </AccordionItem>;
-      })}
+            </AccordionItem>
+          );
+        })}
         
         {/* Unfiled Projects - Using Collapsible instead of AccordionItem to make it always open */}
-        <div className="border rounded-md mb-4">
+        <div 
+          className={cn(
+            "border rounded-md mb-4 transition-colors",
+            draggedProject && draggedProject.folder_id !== null && "hover:bg-muted/30",
+            isDraggingOver["unassigned"] && "bg-muted/30 ring-2 ring-primary/20"
+          )}
+          onDragOver={(e) => handleDragOver(e, null)}
+          onDragLeave={(e) => handleDragLeave(e, null)}
+          onDrop={(e) => handleDrop(e, null)}
+        >
           <div className="flex items-center gap-2 px-4 py-4">
             <FolderIcon className="h-5 w-5 text-muted-foreground" />
             <div>
@@ -201,7 +312,8 @@ export function FolderList({
           </div>
           
           <div className="overflow-hidden">
-            {projectsByFolder["unassigned"] && projectsByFolder["unassigned"].length > 0 ? <div className="border rounded-md">
+            {projectsByFolder["unassigned"] && projectsByFolder["unassigned"].length > 0 ? (
+              <div className="border rounded-md">
                 <table className="w-full">
                   <thead className="bg-muted/50">
                     <tr>
@@ -213,14 +325,26 @@ export function FolderList({
                     </tr>
                   </thead>
                   <tbody>
-                    {projectsByFolder["unassigned"].map(project => <ProjectRow key={project.id} project={project} handleDeleteProject={handleDeleteProject} handleEditTitle={handleEditTitle} handleExport={handleExport} />)}
+                    {projectsByFolder["unassigned"].map(project => (
+                      <ProjectRow 
+                        key={project.id} 
+                        project={project} 
+                        handleDeleteProject={handleDeleteProject} 
+                        handleEditTitle={handleEditTitle} 
+                        handleExport={handleExport} 
+                      />
+                    ))}
                   </tbody>
                 </table>
-              </div> : <div className="py-6 text-center text-muted-foreground">
+              </div>
+            ) : (
+              <div className="py-6 text-center text-muted-foreground">
                 No unfiled projects
-              </div>}
+              </div>
+            )}
           </div>
         </div>
       </Accordion>
-    </div>;
+    </div>
+  );
 }

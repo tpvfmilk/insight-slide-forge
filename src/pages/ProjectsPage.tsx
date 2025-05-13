@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { InsightLayout } from "@/components/layout/InsightLayout";
@@ -13,6 +12,7 @@ import { FolderDialog } from "@/components/folders/FolderDialog";
 import { Folder as FolderIcon } from "lucide-react";
 import { Folder as FolderType, createFolder, deleteFolder, fetchFolders } from "@/services/folderService";
 import { syncStorageUsage } from "@/services/storageService";
+import { DragAndDropProvider } from "@/context/DragAndDropContext";
 
 const ProjectsPage = () => {
   const queryClient = useQueryClient();
@@ -142,68 +142,70 @@ const ProjectsPage = () => {
   
   return (
     <InsightLayout>
-      <div className="p-6 space-y-6">
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
-          <ProjectsHeader 
-            searchQuery={searchQuery} 
-            setSearchQuery={setSearchQuery} 
-          />
-          
-          <Button onClick={handleCreateFolder} className="w-full md:w-auto">
-            <FolderIcon className="h-4 w-4 mr-2" />
-            Create Folder
-          </Button>
-        </div>
-        
-        {loading || loadingFolders ? (
-          <div className="border rounded-lg p-8 text-center">
-            <div className="text-muted-foreground">Loading projects and folders...</div>
+      <DragAndDropProvider>
+        <div className="p-6 space-y-6">
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+            <ProjectsHeader 
+              searchQuery={searchQuery} 
+              setSearchQuery={setSearchQuery} 
+            />
+            
+            <Button onClick={handleCreateFolder} className="w-full md:w-auto">
+              <FolderIcon className="h-4 w-4 mr-2" />
+              Create Folder
+            </Button>
           </div>
-        ) : (
-          <FolderList
-            folders={folders}
-            projects={filteredProjects}
-            onDeleteFolder={handleDeleteFolder}
-            onEditFolder={handleEditFolder}
-            handleDeleteProject={handleDeleteProject}
-            handleEditTitle={handleEditTitle}
-            handleExport={handleExport}
-            loading={loading}
-          />
-        )}
-      </div>
-
-      {/* Edit Project Title Dialog */}
-      <SafeDialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
-        <SafeDialogContent className="sm:max-w-md">
-          {editingProject && (
-            <ProjectTitleEditor
-              project={editingProject}
-              onSave={handleTitleSave}
-              onCancel={() => setEditingProject(null)}
+          
+          {loading || loadingFolders ? (
+            <div className="border rounded-lg p-8 text-center">
+              <div className="text-muted-foreground">Loading projects and folders...</div>
+            </div>
+          ) : (
+            <FolderList
+              folders={folders}
+              projects={filteredProjects}
+              onDeleteFolder={handleDeleteFolder}
+              onEditFolder={handleEditFolder}
+              handleDeleteProject={handleDeleteProject}
+              handleEditTitle={handleEditTitle}
+              handleExport={handleExport}
+              loading={loading}
             />
           )}
-        </SafeDialogContent>
-      </SafeDialog>
-      
-      {/* Create Folder Dialog */}
-      <SafeDialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
-        <FolderDialog
-          onSuccess={handleFolderSaved}
-          onCancel={() => setIsCreateFolderOpen(false)}
-        />
-      </SafeDialog>
-      
-      {/* Edit Folder Dialog */}
-      <SafeDialog open={!!editingFolder} onOpenChange={(open) => !open && setEditingFolder(null)}>
-        {editingFolder && (
+        </div>
+
+        {/* Edit Project Title Dialog */}
+        <SafeDialog open={!!editingProject} onOpenChange={(open) => !open && setEditingProject(null)}>
+          <SafeDialogContent className="sm:max-w-md">
+            {editingProject && (
+              <ProjectTitleEditor
+                project={editingProject}
+                onSave={handleTitleSave}
+                onCancel={() => setEditingProject(null)}
+              />
+            )}
+          </SafeDialogContent>
+        </SafeDialog>
+        
+        {/* Create Folder Dialog */}
+        <SafeDialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
           <FolderDialog
-            folder={editingFolder}
             onSuccess={handleFolderSaved}
-            onCancel={() => setEditingFolder(null)}
+            onCancel={() => setIsCreateFolderOpen(false)}
           />
-        )}
-      </SafeDialog>
+        </SafeDialog>
+        
+        {/* Edit Folder Dialog */}
+        <SafeDialog open={!!editingFolder} onOpenChange={(open) => !open && setEditingFolder(null)}>
+          {editingFolder && (
+            <FolderDialog
+              folder={editingFolder}
+              onSuccess={handleFolderSaved}
+              onCancel={() => setEditingFolder(null)}
+            />
+          )}
+        </SafeDialog>
+      </DragAndDropProvider>
     </InsightLayout>
   );
 };
