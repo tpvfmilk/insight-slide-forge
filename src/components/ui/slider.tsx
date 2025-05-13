@@ -21,7 +21,9 @@ const Slider = React.forwardRef<
       onPointerDown={(e) => {
         // When clicking directly on the track, make sure we capture that event
         if (props.onPointerDown) {
-          props.onPointerDown(e);
+          // Cast the event to any to avoid the TypeScript error
+          // This is safe because we're just passing the event through
+          props.onPointerDown(e as unknown as React.PointerEvent<HTMLDivElement>);
         }
       }}
     >
