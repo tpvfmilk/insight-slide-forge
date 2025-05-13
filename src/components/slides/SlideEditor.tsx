@@ -727,14 +727,11 @@ export const SlideEditor = () => {
   // Render the component with the updated layout
   return (
     <div className="h-full flex flex-col">
-      {/* Navigation and toolbar */}
-      <div className="flex justify-between items-center p-4 border-b">
+      {/* Navigation and toolbar - modified to take full width and removed timestamp/file size */}
+      <div className="flex justify-between items-center p-4 border-b w-full">
         <div className="text-sm text-muted-foreground flex items-center">
           <Clock className="h-4 w-4 mr-1" />
           <span>Slide {currentSlideIndex + 1} of {slides.length}</span>
-          {currentSlide?.timestamp && <span className="ml-2">• Timestamp: {currentSlide.timestamp}</span>}
-          <span className="ml-2">•</span>
-          <FileSizeBadge projectId={projectId} />
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" asChild disabled={slides.length <= 1 || slides[0].id === "slide-placeholder"}>
@@ -791,7 +788,7 @@ export const SlideEditor = () => {
 
       {/* Main slide editing area with responsive layout and max width */}
       <div className="flex-1 w-full overflow-hidden">
-        <div className="max-w-screen-xl mx-auto h-full p-4">
+        <div className="w-full h-full p-4">
           <ResizablePanelGroup direction="horizontal" className="h-full">
             {/* Left side - Images */}
             <ResizablePanel defaultSize={50} minSize={30}>
