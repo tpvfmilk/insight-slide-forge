@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Play, Pause, Rewind, FastForward, RefreshCw, AlertCircle } from "lucide-react";
@@ -13,6 +13,7 @@ interface VideoPlayerProps {
   onVideoLoaded?: (duration: number) => void;
   capturedTimemarks?: number[];
   isCapturingFrame?: boolean;
+  children?: ReactNode; // Add support for children prop
 }
 
 export const VideoPlayer = ({
@@ -21,7 +22,8 @@ export const VideoPlayer = ({
   onTimeUpdate,
   onVideoLoaded,
   capturedTimemarks = [],
-  isCapturingFrame = false
+  isCapturingFrame = false,
+  children // Add children to props
 }: VideoPlayerProps) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -379,8 +381,6 @@ export const VideoPlayer = ({
           </div>
           
           <div className="flex-1"></div>
-          
-          {/* Child components can render additional buttons here */}
         </div>
         
         {/* Video seek slider with markers */}
@@ -388,6 +388,10 @@ export const VideoPlayer = ({
           {renderSliderWithMarkers()}
         </div>
       </div>
+      
+      {/* Render children (if provided) */}
+      {children}
     </div>
   );
 };
+
