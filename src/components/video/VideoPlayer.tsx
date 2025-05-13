@@ -56,6 +56,7 @@ export const VideoPlayer = ({
     
     setIsLoadingVideo(true);
     setVideoError(null);
+    console.log("Starting video loading process for path:", videoPath);
     
     try {
       console.log(`Attempting to load video from path: ${videoPath}`);
@@ -96,6 +97,11 @@ export const VideoPlayer = ({
           if (projectData?.source_url) {
             console.log("Using project source URL as fallback");
             setVideoUrl(projectData.source_url);
+            
+            // Important: Notify parent of URL update
+            if (onVideoUrlUpdate) {
+              onVideoUrlUpdate(projectData.source_url);
+            }
             return;
           } else if (projectData?.source_file_path) {
             // Try with the source file path from project
@@ -110,6 +116,11 @@ export const VideoPlayer = ({
             if (!altError && altData?.signedUrl) {
               console.log("Using alternate file path from project");
               setVideoUrl(altData.signedUrl);
+              
+              // Important: Notify parent of URL update
+              if (onVideoUrlUpdate) {
+                onVideoUrlUpdate(altData.signedUrl);
+              }
               return;
             }
           }
@@ -121,9 +132,12 @@ export const VideoPlayer = ({
       console.log("Got signed URL for video");
       setVideoUrl(data.signedUrl);
       
-      // Notify parent of URL update
+      // Critical: Notify parent immediately of URL update with a small delay to ensure it's processed
       if (onVideoUrlUpdate) {
-        onVideoUrlUpdate(data.signedUrl);
+        console.log("Notifying parent of video URL update");
+        setTimeout(() => {
+          onVideoUrlUpdate(data.signedUrl);
+        }, 100);
       }
     } catch (error) {
       console.error("Error getting fresh video URL:", error);
@@ -261,6 +275,11 @@ export const VideoPlayer = ({
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
       onVideoLoaded?.(videoRef.current.duration);
+      
+      // Additional notification of URL when video is fully loaded
+      if (videoUrl && onVideoUrlUpdate) {
+        onVideoUrlUpdate(videoUrl);
+      }
     }
   };
   

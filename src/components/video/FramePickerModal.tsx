@@ -37,6 +37,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
   const [libraryFrames, setLibraryFrames] = useState<ExtractedFrame[]>([]);
   const [isUploadingFrames, setIsUploadingFrames] = useState(false);
+  const [isVideoLoading, setIsVideoLoading] = useState(true); // Add loading state
   
   // Helper function to convert timestamp string to seconds
   const timeToSeconds = (timestamp: string): number => {
@@ -135,6 +136,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   // Handle video loaded
   const handleVideoLoaded = (videoDuration: number) => {
     setDuration(videoDuration);
+    setIsVideoLoading(false); // Mark video as loaded
   };
   
   // Toggle selection of a frame in library
@@ -260,8 +262,17 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   
   // Handle video URL update from VideoPlayer
   const handleVideoUrlUpdate = (url: string) => {
+    console.log("FramePickerModal received URL update:", url);
     setVideoUrl(url);
+    if (url) {
+      setIsVideoLoading(false);
+    }
   };
+  
+  useEffect(() => {
+    // Debug log to track videoUrl changes
+    console.log("VideoUrl state changed:", videoUrl);
+  }, [videoUrl]);
   
   // Get count of selected frames
   const selectedFramesCount = Object.keys(selectedFrames).length;
@@ -287,13 +298,14 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
             </VideoPlayer>
             
             {/* Capture frame button positioned absolutely with proper z-index */}
-            <div className="absolute bottom-16 right-4 z-10">
+            <div className="absolute bottom-16 right-4 z-20">
               <FrameCapture
                 videoUrl={videoUrl}
                 currentTime={currentTime}
                 duration={duration}
                 projectId={projectId}
                 onFrameCaptured={handleFrameCaptured}
+                isVideoLoading={isVideoLoading}
               />
             </div>
           </div>

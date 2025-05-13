@@ -13,6 +13,7 @@ interface FrameCaptureProps {
   duration: number;
   projectId: string;
   onFrameCaptured: (frame: ExtractedFrame, timeInSeconds: number) => void;
+  isVideoLoading?: boolean; // Add new prop for video loading state
 }
 
 export const FrameCapture = ({
@@ -20,7 +21,8 @@ export const FrameCapture = ({
   currentTime,
   duration,
   projectId,
-  onFrameCaptured
+  onFrameCaptured,
+  isVideoLoading = false
 }: FrameCaptureProps) => {
   const [isCapturingFrame, setIsCapturingFrame] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -166,6 +168,15 @@ export const FrameCapture = ({
     }
   };
 
+  // Add console.log to track videoUrl and disabled state
+  const isButtonDisabled = !videoUrl || isCapturingFrame || isVideoLoading;
+  console.log("FrameCapture Button State:", { 
+    videoUrl: videoUrl ? "Available" : "Not Available", 
+    isCapturingFrame, 
+    isVideoLoading, 
+    isDisabled: isButtonDisabled 
+  });
+
   return (
     <>
       <Button 
@@ -173,14 +184,14 @@ export const FrameCapture = ({
         size="sm"
         onClick={captureFrame}
         className="flex items-center space-x-1"
-        disabled={!videoUrl || isCapturingFrame}
+        disabled={isButtonDisabled}
       >
         {isCapturingFrame ? (
           <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
         ) : (
           <Camera className="h-4 w-4 mr-1" />
         )}
-        {isCapturingFrame ? 'Capturing...' : 'Capture Frame'}
+        {isCapturingFrame ? 'Capturing...' : isVideoLoading ? 'Loading Video...' : 'Capture Frame'}
       </Button>
       {/* Hidden canvas for frame capture */}
       <canvas ref={canvasRef} className="hidden"></canvas>
