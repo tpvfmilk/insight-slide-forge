@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useUIReset } from "@/context/UIResetContext";
 import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 import { getFrameStatistics, purgeUnusedFrames } from "@/utils/frameUtils";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast"; 
 import { Separator } from "@/components/ui/separator";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Slide } from "@/utils/frameUtils";
@@ -79,6 +79,17 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
         // Add the frame
         return [...prev, frame];
       }
+    });
+  };
+
+  // New function to remove a frame from selection
+  const removeSelectedFrame = (e: React.MouseEvent, frame: ExtractedFrame) => {
+    e.stopPropagation(); // Prevent triggering the toggle selection
+    setLocalSelected(prev => prev.filter(f => f.id !== frame.id));
+    toast({
+      title: "Frame removed",
+      description: "Frame has been removed from selection",
+      duration: 2000,
     });
   };
 
@@ -220,7 +231,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
               {filteredFrames.map((frame) => (
                 <div 
                   key={frame.id || frame.timestamp}
-                  className={`relative rounded-md border overflow-hidden cursor-pointer transition-all ${
+                  className={`relative rounded-md border overflow-hidden cursor-pointer transition-all group ${
                     isSelected(frame) ? 'ring-2 ring-primary' : 'hover:opacity-90'
                   }`}
                   onClick={() => toggleFrameSelection(frame)}
@@ -236,6 +247,21 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
                       <Check className="h-4 w-4 text-primary" />
                     )}
                   </div>
+                  
+                  {/* Add remove button that appears on hover if the frame is selected */}
+                  {isSelected(frame) && (
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button 
+                        variant="destructive" 
+                        size="icon" 
+                        className="h-7 w-7 rounded-full" 
+                        onClick={(e) => removeSelectedFrame(e, frame)}
+                      >
+                        <X className="h-4 w-4" />
+                        <span className="sr-only">Remove frame</span>
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
