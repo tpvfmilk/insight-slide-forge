@@ -247,7 +247,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
 
     console.log(`Applying ${selectedFrames.length} selected frames to slide #${currentSlideIndex + 1}`, selectedFrames);
 
-    // Update current slide with selected frames
+    // Update current slide with selected frames - COPY frames, don't remove from library
     const updatedSlides = [...slides];
     updatedSlides[currentSlideIndex] = {
       ...updatedSlides[currentSlideIndex],
@@ -258,11 +258,11 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
     
-    // Give feedback based on selection count
+    // Give feedback based on selection count with clarified messaging
     if (selectedFrames.length === 1) {
-      toast.success(`Applied 1 frame to slide`);
+      toast.success(`Applied 1 frame to slide (frame remains in library)`);
     } else {
-      toast.success(`Applied ${selectedFrames.length} frames to slide`);
+      toast.success(`Applied ${selectedFrames.length} frames to slide (frames remain in library)`);
     }
     
     // Update project size
