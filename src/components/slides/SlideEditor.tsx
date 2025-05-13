@@ -163,6 +163,16 @@ export const SlideEditor = () => {
     setIsExportDialogOpen(false);
   };
   
+  // Create a wrapper function with the right signature for the SlideFilmstrip component
+  const handleDeleteSlide = (index: number) => {
+    // Create a synthetic event to pass to deleteSlideFromFilmstrip
+    const syntheticEvent = {
+      stopPropagation: () => {}
+    } as React.MouseEvent<Element, MouseEvent>;
+    
+    deleteSlideFromFilmstrip(syntheticEvent, index);
+  };
+  
   return (
     <div className="h-full flex flex-col">
       {/* Navigation and toolbar */}
@@ -233,7 +243,7 @@ export const SlideEditor = () => {
         currentSlideIndex={currentSlideIndex}
         onSlideSelect={goToSlide}
         onAddSlide={addNewSlide}
-        onDeleteSlide={deleteSlideFromFilmstrip}
+        onDeleteSlide={handleDeleteSlide}
         onNextSlide={goToNextSlide}
         onPrevSlide={goToPrevSlide}
         onExportOptions={handleExportDialog}

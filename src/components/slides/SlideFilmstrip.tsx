@@ -1,3 +1,4 @@
+
 import { useRef, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, X, Download, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -170,7 +171,10 @@ export const SlideFilmstrip = ({
                   "absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity",
                   index === currentSlideIndex && "text-primary"
                 )}
-                onClick={(e) => onDeleteSlide(e, index)}
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent slide selection when deleting
+                  onDeleteSlide(index);
+                }}
               >
                 <X className="h-3 w-3" />
               </Button>
