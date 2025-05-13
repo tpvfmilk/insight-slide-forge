@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -261,6 +260,6 @@ export const TranscriptDialog = ({
     );
   }
 
-  // For tabbed mode - just return content without Dialog wrapper since it's already in a Dialog
+  // For tabbed mode
   return <TabContent />;
 };

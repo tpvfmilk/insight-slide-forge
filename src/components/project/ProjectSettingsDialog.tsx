@@ -52,35 +52,31 @@ export const ProjectSettingsDialog = ({
           </TabsList>
           
           <TabsContent value="transcript" className="focus:outline-none">
-            {activeTab === "transcript" && (
-              <TranscriptDialog 
-                project={project}
-                transcript={transcript}
-                setTranscript={setTranscript}
-                isOpen={true}
-                onOpenChange={(open) => {
-                  if (!open) {
-                    handleClose();
-                  }
-                }}
-              />
-            )}
+            <TranscriptDialog 
+              project={project}
+              transcript={transcript}
+              setTranscript={setTranscript}
+              isOpen={activeTab === "transcript"}
+              onOpenChange={(open) => {
+                if (!open) {
+                  handleClose();
+                }
+              }}
+            />
           </TabsContent>
           
           <TabsContent value="context" className="focus:outline-none">
-            {activeTab === "context" && (
-              <ContextDialog 
-                project={project}
-                contextPrompt={contextPrompt}
-                setContextPrompt={setContextPrompt}
-                isOpen={true}
-                onOpenChange={(open) => {
-                  if (!open) {
-                    handleClose();
-                  }
-                }}
-              />
-            )}
+            <ContextDialog 
+              project={project}
+              contextPrompt={contextPrompt}
+              setContextPrompt={setContextPrompt}
+              isOpen={activeTab === "context"}
+              onOpenChange={(open) => {
+                if (!open) {
+                  handleClose();
+                }
+              }}
+            />
           </TabsContent>
         </Tabs>
       </SafeDialogContent>

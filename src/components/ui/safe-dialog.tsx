@@ -1,7 +1,7 @@
 
 import React, { useId, useEffect } from 'react';
 import { useUIReset } from '@/context/UIResetContext';
-import { Dialog, DialogContent, DialogPortal } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 // Define DialogProps interface since it's not exported from dialog.tsx
 interface DialogProps extends React.ComponentPropsWithoutRef<typeof Dialog> {
@@ -12,7 +12,7 @@ interface DialogProps extends React.ComponentPropsWithoutRef<typeof Dialog> {
 // Extended DialogProps with onOpenChange
 interface SafeDialogProps extends DialogProps {
   children: React.ReactNode;
-  className?: string;
+  className?: string; // Add className prop here
 }
 
 export const SafeDialog = ({ children, onOpenChange, open, className, ...props }: SafeDialogProps) => {
@@ -38,6 +38,7 @@ export const SafeDialog = ({ children, onOpenChange, open, className, ...props }
     }
   }, [open, id, registerUIElement, unregisterUIElement, onOpenChange]);
   
+  // Remove className from props being passed to Dialog since it doesn't accept it
   return (
     <Dialog open={open} onOpenChange={onOpenChange} {...props}>
       <div className={className}>{children}</div>
@@ -49,10 +50,6 @@ export const SafeDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogContent>,
   React.ComponentPropsWithoutRef<typeof DialogContent>
 >(({ children, ...props }, ref) => {
-  return (
-    <DialogContent ref={ref} {...props}>
-      {children}
-    </DialogContent>
-  );
+  return <DialogContent ref={ref} {...props}>{children}</DialogContent>;
 });
 SafeDialogContent.displayName = 'SafeDialogContent';
