@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getVideoSignedUrl, updateProjectDuration } from '@/utils/videoUtils';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/use-toast';
 
 interface UseVideoPlayerProps {
   videoPath: string;
@@ -28,18 +29,31 @@ export const useVideoPlayer = ({
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [isLoadingVideo, setIsLoadingVideo] = useState(true);
   const [isSeeking, setIsSeeking] = useState(false);
-  const timeUpdateRef = useRef({ currentTime: 0 });
-
-  // Important - track seeking state with a ref so we don't get race conditions
-  const seekingRef = useRef({
+  
+  // Use refs to track state without triggering re-renders
+  const stateRef = useRef({
+    isPlaying: false,
+    currentTime: 0,
     isSeeking: false,
-    targetTime: 0
+    seekingValue: 0,
+    isVideoLoaded: false,
+    playAttempted: false
   });
+
+  // Sync state with refs to avoid closure issues
+  useEffect(() => {
+    stateRef.current.isPlaying = isPlaying;
+    stateRef.current.currentTime = currentTime;
+    stateRef.current.isSeeking = isSeeking;
+    stateRef.current.seekingValue = seekingValue;
+    stateRef.current.isVideoLoaded = isVideoLoaded;
+  }, [isPlaying, currentTime, isSeeking, seekingValue, isVideoLoaded]);
 
   // Load the video URL
   useEffect(() => {
     const loadVideo = async () => {
       if (!videoPath) {
+        console.log("No video path provided");
         setVideoError("No video file path provided.");
         setIsLoadingVideo(false);
         return;
@@ -48,25 +62,32 @@ export const useVideoPlayer = ({
       try {
         setIsLoadingVideo(true);
         setVideoError(null);
-        console.log("Loading video path:", videoPath);
+        console.log("[VideoPlayer] Loading video path:", videoPath);
         
         // Get signed URL for the video
         const signedUrl = await getVideoSignedUrl(supabase, videoPath);
-        console.log("Video URL obtained:", signedUrl ? "Success" : "Failed");
+        console.log("[VideoPlayer] Video URL obtained:", signedUrl ? "Success" : "Failed");
         
         if (signedUrl) {
           setVideoUrl(signedUrl);
+          console.log("[VideoPlayer] Video URL set successfully");
           
           // Notify parent component of the URL update
           if (onVideoUrlUpdate) {
+            console.log("[VideoPlayer] Notifying parent of URL update");
             onVideoUrlUpdate(signedUrl);
           }
         } else {
           throw new Error("Failed to get video URL");
         }
       } catch (error) {
-        console.error("Error loading video:", error);
+        console.error("[VideoPlayer] Error loading video:", error);
         setVideoError(`Error loading video: ${error instanceof Error ? error.message : String(error)}`);
+        toast({
+          title: "Video Error",
+          description: "Failed to load video. Please try again.",
+          variant: "destructive"
+        });
       } finally {
         setIsLoadingVideo(false);
       }
@@ -75,16 +96,17 @@ export const useVideoPlayer = ({
     loadVideo();
   }, [videoPath, onVideoUrlUpdate]);
 
-  // Update video time - use this as a stable reference to be called in interval
+  // Update video time using requestAnimationFrame for smoother updates
   const updateTime = useCallback(() => {
-    if (videoRef.current && !seekingRef.current.isSeeking) {
+    if (videoRef.current && !stateRef.current.isSeeking) {
       const newTime = videoRef.current.currentTime;
       
       // Only update state if the time has changed significantly (prevent unnecessary re-renders)
-      if (Math.abs(timeUpdateRef.current.currentTime - newTime) >= 0.1) {
+      if (Math.abs(stateRef.current.currentTime - newTime) >= 0.1) {
+        console.log(`[VideoPlayer] Time updated: ${newTime.toFixed(2)}s`);
         setCurrentTime(newTime);
         setSeekingValue(newTime);
-        timeUpdateRef.current.currentTime = newTime;
+        stateRef.current.currentTime = newTime;
         
         // Call the onTimeUpdate callback
         if (onTimeUpdate) {
@@ -92,46 +114,114 @@ export const useVideoPlayer = ({
         }
       }
     }
+    
+    // Continue animation loop only if playing
+    if (stateRef.current.isPlaying) {
+      requestAnimationFrame(updateTime);
+    }
   }, [onTimeUpdate]);
 
-  // Set up time update interval instead of relying on the timeupdate event
-  // This makes the UI more responsive and prevents video.currentTime and our state from getting out of sync
+  // Setup animation frame for time updates when playing state changes
   useEffect(() => {
-    const interval = setInterval(updateTime, 100); // Update 10 times per second
-    return () => clearInterval(interval);
-  }, [updateTime]);
+    if (isPlaying) {
+      console.log("[VideoPlayer] Starting playback time updates");
+      requestAnimationFrame(updateTime);
+    }
+  }, [isPlaying, updateTime]);
+
+  // Add event listeners for video element
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    const handlePlay = () => {
+      console.log("[VideoPlayer] Play event fired");
+      setIsPlaying(true);
+      stateRef.current.isPlaying = true;
+    };
+    
+    const handlePause = () => {
+      console.log("[VideoPlayer] Pause event fired");
+      setIsPlaying(false);
+      stateRef.current.isPlaying = false;
+    };
+    
+    const handleEnded = () => {
+      console.log("[VideoPlayer] Video ended");
+      setIsPlaying(false);
+      stateRef.current.isPlaying = false;
+    };
+    
+    const handleError = (e: Event) => {
+      console.error("[VideoPlayer] Video error event:", e);
+      handleVideoError(e);
+    };
+    
+    // Listen for native video events
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('ended', handleEnded);
+    video.addEventListener('error', handleError);
+    
+    return () => {
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('error', handleError);
+    };
+  }, []);
 
   // Handle video loaded
   const handleVideoLoaded = useCallback(() => {
-    if (videoRef.current) {
-      const videoDuration = videoRef.current.duration;
-      console.log("Video loaded with duration:", videoDuration);
+    if (!videoRef.current) return;
+    
+    const videoDuration = videoRef.current.duration;
+    console.log("[VideoPlayer] Video loaded with duration:", videoDuration);
+    
+    if (!isNaN(videoDuration) && videoDuration > 0) {
+      setDuration(videoDuration);
+      setIsVideoLoaded(true);
+      stateRef.current.isVideoLoaded = true;
       
-      if (!isNaN(videoDuration) && videoDuration > 0) {
-        setDuration(videoDuration);
-        setIsVideoLoaded(true);
-        
-        // Update seekingValue to match current time
-        setSeekingValue(videoRef.current.currentTime);
-        
-        // Call onVideoLoaded callback
-        if (onVideoLoaded) {
-          onVideoLoaded(videoDuration);
-        }
-        
-        // Update project metadata with video duration
-        updateProjectDuration(supabase, projectId, videoDuration)
-          .then(() => console.log("Updated project duration metadata"))
-          .catch(err => console.error("Failed to update project duration:", err));
-      } else {
-        console.warn("Invalid video duration:", videoDuration);
+      // Update seekingValue to match current time
+      setSeekingValue(videoRef.current.currentTime);
+      stateRef.current.seekingValue = videoRef.current.currentTime;
+      
+      // Call onVideoLoaded callback
+      if (onVideoLoaded) {
+        console.log("[VideoPlayer] Notifying parent of video load with duration:", videoDuration);
+        onVideoLoaded(videoDuration);
       }
+      
+      // Update project metadata with video duration
+      updateProjectDuration(supabase, projectId, videoDuration)
+        .then(() => console.log("[VideoPlayer] Updated project duration metadata"))
+        .catch(err => console.error("[VideoPlayer] Failed to update project duration:", err));
+        
+      // If there was a play attempt during loading, try to play now
+      if (stateRef.current.playAttempted) {
+        console.log("[VideoPlayer] Auto-playing after load due to previous attempt");
+        videoRef.current.play()
+          .then(() => {
+            console.log("[VideoPlayer] Auto-play successful");
+            setIsPlaying(true);
+            stateRef.current.isPlaying = true;
+          })
+          .catch(error => {
+            console.error("[VideoPlayer] Auto-play failed:", error);
+            setIsPlaying(false);
+            stateRef.current.isPlaying = false;
+          });
+        stateRef.current.playAttempted = false;
+      }
+    } else {
+      console.warn("[VideoPlayer] Invalid video duration:", videoDuration);
     }
   }, [onVideoLoaded, projectId]);
 
   // Handle video error
   const handleVideoError = useCallback((e: Event) => {
-    console.error("Video error event:", e);
+    console.error("[VideoPlayer] Video error event:", e);
     const videoElement = e.target as HTMLVideoElement;
     let errorMessage = "Unknown video error";
     
@@ -157,44 +247,94 @@ export const useVideoPlayer = ({
     setVideoError(errorMessage);
     setIsLoadingVideo(false);
     setIsVideoLoaded(false);
-    console.error("Video error:", errorMessage);
+    stateRef.current.isVideoLoaded = false;
+    console.error("[VideoPlayer] Video error:", errorMessage);
+    
+    toast({
+      title: "Video Playback Error",
+      description: errorMessage,
+      variant: "destructive"
+    });
   }, []);
 
-  // Toggle play/pause
+  // Toggle play/pause with improved error handling
   const togglePlayPause = useCallback(() => {
-    if (!videoRef.current) return;
-    
-    if (isPlaying) {
-      videoRef.current.pause();
-    } else {
-      // If seeking is active, first apply the seek before playing
-      if (seekingRef.current.isSeeking) {
-        videoRef.current.currentTime = seekingRef.current.targetTime;
-        seekingRef.current.isSeeking = false;
-      }
-      
-      videoRef.current.play()
-        .catch(error => {
-          console.error("Error playing video:", error);
-          setVideoError(`Error playing video: ${error.message}`);
-        });
+    const videoEl = videoRef.current;
+    if (!videoEl) {
+      console.error("[VideoPlayer] No video element reference");
+      return;
     }
     
-    setIsPlaying(!isPlaying);
+    console.log("[VideoPlayer] Toggle play/pause. Current state:", isPlaying ? "playing" : "paused");
+    
+    if (isPlaying) {
+      // Pause the video
+      console.log("[VideoPlayer] Attempting to pause");
+      videoEl.pause();
+      // Note: state will be updated via the pause event listener
+    } else {
+      // Try to play the video
+      console.log("[VideoPlayer] Attempting to play");
+      
+      // If seeking is active, first apply the seek
+      if (stateRef.current.isSeeking) {
+        console.log("[VideoPlayer] Applying seek before play:", stateRef.current.seekingValue);
+        videoEl.currentTime = stateRef.current.seekingValue;
+        stateRef.current.isSeeking = false;
+        setIsSeeking(false);
+      }
+      
+      // Attempt to play with proper error handling
+      const playPromise = videoEl.play();
+      
+      // Handle the play promise
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log("[VideoPlayer] Play successful");
+            // State update will happen via play event listener
+          })
+          .catch(error => {
+            console.error("[VideoPlayer] Play failed:", error);
+            // Since play failed, make sure UI reflects paused state
+            setIsPlaying(false);
+            stateRef.current.isPlaying = false;
+            
+            if (!stateRef.current.isVideoLoaded) {
+              console.log("[VideoPlayer] Video not fully loaded, marking play attempted");
+              stateRef.current.playAttempted = true;
+            }
+            
+            toast({
+              title: "Playback Error",
+              description: "Could not play the video. Please try again.",
+              variant: "destructive"
+            });
+          });
+      } else {
+        console.log("[VideoPlayer] Play call did not return a promise");
+      }
+    }
   }, [isPlaying]);
 
   // Seek back 5 seconds
   const seekBack = useCallback(() => {
-    if (!videoRef.current || !isVideoLoaded) return;
+    if (!videoRef.current || !isVideoLoaded) {
+      console.log("[VideoPlayer] Can't seek back - video not loaded");
+      return;
+    }
     
     const newTime = Math.max(0, videoRef.current.currentTime - 5);
+    console.log(`[VideoPlayer] Seeking back to ${newTime.toFixed(2)}s`);
+    
     videoRef.current.currentTime = newTime;
     setCurrentTime(newTime);
     setSeekingValue(newTime);
     
-    // If we were seeking, update the seeking state
-    seekingRef.current.isSeeking = false;
-    timeUpdateRef.current.currentTime = newTime;
+    // Update state refs
+    stateRef.current.isSeeking = false;
+    stateRef.current.currentTime = newTime;
+    stateRef.current.seekingValue = newTime;
     
     // Notify parent of time update
     if (onTimeUpdate) {
@@ -204,16 +344,22 @@ export const useVideoPlayer = ({
 
   // Seek forward 5 seconds
   const seekForward = useCallback(() => {
-    if (!videoRef.current || !isVideoLoaded) return;
+    if (!videoRef.current || !isVideoLoaded) {
+      console.log("[VideoPlayer] Can't seek forward - video not loaded");
+      return;
+    }
     
     const newTime = Math.min(videoRef.current.duration, videoRef.current.currentTime + 5);
+    console.log(`[VideoPlayer] Seeking forward to ${newTime.toFixed(2)}s`);
+    
     videoRef.current.currentTime = newTime;
     setCurrentTime(newTime);
     setSeekingValue(newTime);
     
-    // If we were seeking, update the seeking state
-    seekingRef.current.isSeeking = false;
-    timeUpdateRef.current.currentTime = newTime;
+    // Update state refs
+    stateRef.current.isSeeking = false;
+    stateRef.current.currentTime = newTime;
+    stateRef.current.seekingValue = newTime;
     
     // Notify parent of time update
     if (onTimeUpdate) {
@@ -221,65 +367,101 @@ export const useVideoPlayer = ({
     }
   }, [isVideoLoaded, onTimeUpdate]);
 
-  // Seek to specific time
+  // Seek handling
   const handleSeekStart = useCallback(() => {
-    if (!videoRef.current || !isVideoLoaded) return;
+    if (!videoRef.current || !isVideoLoaded) {
+      console.log("[VideoPlayer] Can't start seeking - video not loaded");
+      return;
+    }
     
-    // Set seeking flag and pause video during seek
+    console.log("[VideoPlayer] Seek start");
+    
+    // Set seeking flag
     setIsSeeking(true);
-    seekingRef.current.isSeeking = true;
+    stateRef.current.isSeeking = true;
     
-    if (isPlaying) {
+    // Store playing state before pausing
+    const wasPlaying = isPlaying;
+    
+    // Pause video while seeking
+    if (wasPlaying && videoRef.current) {
+      console.log("[VideoPlayer] Pausing for seek");
       videoRef.current.pause();
+      // State will update via event listener
     }
   }, [isPlaying, isVideoLoaded]);
 
   const handleSeekChange = useCallback((values: number[]) => {
-    if (!isVideoLoaded) return;
+    if (!isVideoLoaded) {
+      console.log("[VideoPlayer] Can't change seek - video not loaded");
+      return;
+    }
     
     // Update the seeking value for the UI
     const newValue = values[0];
-    setSeekingValue(newValue);
+    console.log(`[VideoPlayer] Seek change to ${newValue.toFixed(2)}s`);
     
-    // Store the target time in seekingRef
-    seekingRef.current.targetTime = newValue;
+    setSeekingValue(newValue);
+    stateRef.current.seekingValue = newValue;
   }, [isVideoLoaded]);
 
   const handleSeekEnd = useCallback(() => {
-    if (!videoRef.current || !isVideoLoaded) return;
-    
-    // Apply the seek
-    const targetTime = seekingRef.current.targetTime;
-    videoRef.current.currentTime = targetTime;
-    
-    // Update state
-    setCurrentTime(targetTime);
-    timeUpdateRef.current.currentTime = targetTime;
-    setIsSeeking(false);
-    
-    // Notify parent of time update
-    if (onTimeUpdate) {
-      onTimeUpdate(targetTime);
+    if (!videoRef.current || !isVideoLoaded) {
+      console.log("[VideoPlayer] Can't end seeking - video not loaded");
+      return;
     }
     
-    // Resume playback if it was playing before
-    if (isPlaying) {
-      videoRef.current.play()
-        .catch(error => {
-          console.error("Error resuming playback after seek:", error);
-        });
-    }
+    // Get the target time from state
+    const targetTime = stateRef.current.seekingValue;
+    console.log(`[VideoPlayer] Seek end, applying time: ${targetTime.toFixed(2)}s`);
     
-    // Clear seeking flag after a short delay to prevent race conditions
-    setTimeout(() => {
-      seekingRef.current.isSeeking = false;
-    }, 50);
-  }, [isPlaying, isVideoLoaded, onTimeUpdate]);
+    try {
+      // Apply the seek
+      videoRef.current.currentTime = targetTime;
+      console.log(`[VideoPlayer] Seek applied to ${targetTime.toFixed(2)}s`);
+      
+      // Update state
+      setCurrentTime(targetTime);
+      stateRef.current.currentTime = targetTime;
+      
+      // Notify parent of time update
+      if (onTimeUpdate) {
+        onTimeUpdate(targetTime);
+      }
+      
+      // Wait a short delay before clearing the seeking state
+      // This helps prevent race conditions with other events
+      setTimeout(() => {
+        console.log("[VideoPlayer] Clearing seek state");
+        setIsSeeking(false);
+        stateRef.current.isSeeking = false;
+        
+        // If it was playing before seeking, resume playback
+        if (stateRef.current.isPlaying) {
+          console.log("[VideoPlayer] Resuming playback after seek");
+          videoRef.current?.play()
+            .catch(error => {
+              console.error("[VideoPlayer] Error resuming playback after seek:", error);
+              setIsPlaying(false);
+              stateRef.current.isPlaying = false;
+            });
+        }
+      }, 50);
+    } catch (error) {
+      console.error("[VideoPlayer] Error during seek end:", error);
+      setIsSeeking(false);
+      stateRef.current.isSeeking = false;
+    }
+  }, [isVideoLoaded, onTimeUpdate]);
 
   // Retry loading the video if there was an error
   const retryLoadVideo = useCallback(async () => {
-    if (!videoPath) return;
+    if (!videoPath) {
+      console.log("[VideoPlayer] No video path to retry");
+      return;
+    }
     
+    console.log("[VideoPlayer] Retrying video load");
     setVideoError(null);
     setIsLoadingVideo(true);
     
@@ -288,6 +470,7 @@ export const useVideoPlayer = ({
       const signedUrl = await getVideoSignedUrl(supabase, videoPath);
       
       if (signedUrl) {
+        console.log("[VideoPlayer] Got new signed URL for retry");
         setVideoUrl(signedUrl);
         
         // Notify parent component of the URL update
@@ -297,35 +480,25 @@ export const useVideoPlayer = ({
         
         // Reset video player state
         setIsVideoLoaded(false);
+        stateRef.current.isVideoLoaded = false;
         setCurrentTime(0);
+        stateRef.current.currentTime = 0;
         setSeekingValue(0);
+        stateRef.current.seekingValue = 0;
         setIsPlaying(false);
+        stateRef.current.isPlaying = false;
+        setIsSeeking(false);
+        stateRef.current.isSeeking = false;
       } else {
         throw new Error("Failed to get video URL");
       }
     } catch (error) {
-      console.error("Error retrying video load:", error);
+      console.error("[VideoPlayer] Error retrying video load:", error);
       setVideoError(`Error loading video: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsLoadingVideo(false);
     }
   }, [videoPath, onVideoUrlUpdate]);
-
-  // Update play state when video ends
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    
-    const handleEnded = () => {
-      setIsPlaying(false);
-    };
-    
-    if (videoElement) {
-      videoElement.addEventListener('ended', handleEnded);
-      return () => {
-        videoElement.removeEventListener('ended', handleEnded);
-      };
-    }
-  }, []);
 
   // Return the hook's API
   return {

@@ -35,6 +35,22 @@ export const VideoControls = ({
 }: VideoControlsProps) => {
   // Improved slider with optimized event handlers for seeking
   const renderSliderWithMarkers = () => {
+    // Log seek interactions for debugging
+    const handleSeekStart = () => {
+      console.log("[VideoControls] Seek start triggered");
+      onSeekStart();
+    };
+    
+    const handleSeekChange = (val: number[]) => {
+      console.log(`[VideoControls] Seek change to ${val[0].toFixed(2)}`);
+      onSeekChange(val);
+    };
+    
+    const handleSeekEnd = () => {
+      console.log("[VideoControls] Seek end triggered");
+      onSeekEnd();
+    };
+    
     return (
       <div className="relative w-full">
         <Slider 
@@ -42,15 +58,9 @@ export const VideoControls = ({
           min={0} 
           max={duration || 100}
           step={0.01}
-          onValueChange={(val) => {
-            onSeekChange(val);
-          }}
-          onValueCommit={() => {
-            onSeekEnd();
-          }}
-          onPointerDown={() => {
-            onSeekStart();
-          }}
+          onValueChange={handleSeekChange}
+          onValueCommit={handleSeekEnd}
+          onPointerDown={handleSeekStart}
           disabled={!isVideoLoaded || duration <= 0}
           className="z-10"
         />
@@ -71,15 +81,29 @@ export const VideoControls = ({
     );
   };
 
+  // Log control interactions for debugging
+  const handlePlayPause = () => {
+    console.log(`[VideoControls] ${isPlaying ? 'Pause' : 'Play'} button clicked`);
+    onPlay();
+  };
+  
+  const handleSeekBack = () => {
+    console.log("[VideoControls] Seek back button clicked");
+    onSeekBack();
+  };
+  
+  const handleSeekForward = () => {
+    console.log("[VideoControls] Seek forward button clicked");
+    onSeekForward();
+  };
+
   return (
     <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
       <div className="flex items-center space-x-4 w-full">
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={() => {
-            onSeekBack();
-          }}
+          onClick={handleSeekBack}
           className="text-white hover:bg-white/20"
           disabled={!isVideoLoaded}
         >
@@ -89,7 +113,7 @@ export const VideoControls = ({
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={onPlay}
+          onClick={handlePlayPause}
           className="text-white hover:bg-white/20"
           disabled={!isVideoLoaded}
         >
@@ -103,9 +127,7 @@ export const VideoControls = ({
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={() => {
-            onSeekForward();
-          }}
+          onClick={handleSeekForward}
           className="text-white hover:bg-white/20"
           disabled={!isVideoLoaded}
         >

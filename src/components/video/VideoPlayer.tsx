@@ -52,30 +52,29 @@ export const VideoPlayer = ({
     onVideoUrlUpdate
   });
 
-  // Debug logging to track videoUrl and immediately update parent
+  // Debug logging to track component lifecycle
   useEffect(() => {
-    console.log("VideoPlayer component - videoUrl:", videoUrl ? "Available" : "Not available");
-    if (videoUrl && onVideoUrlUpdate) {
-      console.log("VideoPlayer notifying parent of URL update");
-      onVideoUrlUpdate(videoUrl);
-    }
-  }, [videoUrl, onVideoUrlUpdate]);
-  
-  useEffect(() => {
-    console.log("VideoPlayer mounted with:", { 
+    console.log("[VideoPlayer] Component mounted with:", { 
       videoPath: videoPath?.substring(0, 30) + '...' || "None", 
       projectId,
       hasVideoUrl: !!videoUrl,
       isVideoLoaded,
-      duration,
+      duration: duration.toFixed(2),
       error: videoError || "None" 
     });
     
-    // Return cleanup function
     return () => {
-      console.log("VideoPlayer unmounting, cleaning up...");
+      console.log("[VideoPlayer] Component unmounting");
     };
   }, [videoPath, projectId, videoUrl, videoError, isVideoLoaded, duration]);
+  
+  // Separate effect for video URL updates to ensure parent is notified
+  useEffect(() => {
+    if (videoUrl && onVideoUrlUpdate) {
+      console.log("[VideoPlayer] Notifying parent of URL update");
+      onVideoUrlUpdate(videoUrl);
+    }
+  }, [videoUrl, onVideoUrlUpdate]);
   
   return (
     <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
