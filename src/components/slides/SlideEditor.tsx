@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, Download, Clock, Image as ImageIcon, RefreshCw, Presentation, Upload, Trash2, Plus, X, Undo, Film } from "lucide-react";
 import { toast } from "sonner";
@@ -164,14 +163,15 @@ export const SlideEditor = () => {
   };
   
   // Create a wrapper function with the right signature for the SlideFilmstrip component
-  const handleDeleteSlide = (index: number) => {
-    // Create a synthetic event to pass to deleteSlideFromFilmstrip
+  const handleDeleteSlide = useCallback((index: number) => {
+    if (!deleteSlideFromFilmstrip) return;
+    
     const syntheticEvent = {
       stopPropagation: () => {}
-    } as React.MouseEvent<Element, MouseEvent>;
+    } as React.MouseEvent<HTMLButtonElement, MouseEvent>;
     
     deleteSlideFromFilmstrip(syntheticEvent, index);
-  };
+  }, [deleteSlideFromFilmstrip]);
   
   return (
     <div className="h-full flex flex-col">

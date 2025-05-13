@@ -89,7 +89,8 @@ export const SlideFilmstrip = ({
   
   return (
     <div className="border-t w-full">
-      <div className="border-b px-6 py-3 flex justify-between items-center">
+      {/* Reduced height of this navigation bar */}
+      <div className="border-b px-6 py-2 flex justify-between items-center">
         <div className="flex-1">
           {/* Empty space to balance the layout */}
         </div>
@@ -137,55 +138,57 @@ export const SlideFilmstrip = ({
         </div>
       </div>
       
-      {/* Filmstrip */}
-      <ScrollArea className="h-24 border rounded-md mx-6 my-3" ref={filmstripRef}>
-        <div className="flex gap-2 p-2 min-w-full">
-          {slides.map((slide, index) => (
-            <div 
-              key={slide.id || index}
-              className={cn(
-                "group relative min-w-[160px] h-16 p-2 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center",
-                index === currentSlideIndex 
-                  ? "border-primary bg-primary/5" 
-                  : "border-border hover:border-muted-foreground"
-              )}
-              onClick={() => onSlideSelect(index)}
-            >
-              {/* Slide Number Badge */}
-              <Badge 
-                variant="outline" 
-                className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 bg-background"
-              >
-                {index + 1}
-              </Badge>
-              
-              {/* Only show the slide title */}
-              <p className={cn(
-                "text-sm truncate text-center",
-                index === currentSlideIndex ? "text-primary font-medium" : "text-foreground"
-              )}>
-                {slide.title || "Untitled Slide"}
-              </p>
-              
-              {/* Remove button */}
-              <Button
-                variant="ghost"
-                size="icon"
+      {/* Filmstrip with fixed width and horizontal scrolling */}
+      <div className="mx-6 my-3 max-w-full">
+        <ScrollArea className="h-20 border rounded-md" orientation="horizontal" ref={filmstripRef}>
+          <div className="flex gap-2 p-2 w-max">
+            {slides.map((slide, index) => (
+              <div 
+                key={slide.id || index}
                 className={cn(
-                  "absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity",
-                  index === currentSlideIndex && "text-primary"
+                  "group relative min-w-[160px] w-[160px] h-14 p-2 border rounded-md cursor-pointer transition-all duration-200 flex items-center justify-center",
+                  index === currentSlideIndex 
+                    ? "border-primary bg-primary/5" 
+                    : "border-border hover:border-muted-foreground"
                 )}
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent slide selection when deleting
-                  onDeleteSlide(index);
-                }}
+                onClick={() => onSlideSelect(index)}
               >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+                {/* Slide Number Badge */}
+                <Badge 
+                  variant="outline" 
+                  className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 bg-background"
+                >
+                  {index + 1}
+                </Badge>
+                
+                {/* Only show the slide title */}
+                <p className={cn(
+                  "text-sm truncate text-center",
+                  index === currentSlideIndex ? "text-primary font-medium" : "text-foreground"
+                )}>
+                  {slide.title || "Untitled Slide"}
+                </p>
+                
+                {/* Remove button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity",
+                    index === currentSlideIndex && "text-primary"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent slide selection when deleting
+                    onDeleteSlide(index);
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 };
