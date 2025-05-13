@@ -1,3 +1,4 @@
+
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -108,7 +109,7 @@ const ProjectPage = () => {
               setContextPrompt={setContextPrompt}
             />
             
-            {/* Action buttons */}
+            {/* Action buttons - passing hideSelectFrames=true to hide the Select Frames button */}
             <ActionButtons 
               project={project}
               needsFrameExtraction={needsFrameExtraction}
@@ -124,6 +125,7 @@ const ProjectPage = () => {
               isTranscriptOnlyProject={isTranscriptOnlyProject}
               refreshProject={loadProject}
               totalDuration={totalVideoDuration}
+              hideSelectFrames={true} // Add this prop to hide the Select Frames button
             />
           </div>
         </div>

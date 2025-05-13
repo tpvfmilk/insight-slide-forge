@@ -26,6 +26,7 @@ interface ActionButtonsProps {
   isTranscriptOnlyProject: boolean;
   refreshProject: () => void;
   totalDuration?: number;
+  hideSelectFrames?: boolean; // Add this new prop
 }
 
 export const ActionButtons = ({
@@ -37,6 +38,7 @@ export const ActionButtons = ({
   handleGenerateSlides,
   handleOpenManualFramePicker,
   isTranscriptOnlyProject,
+  hideSelectFrames = false, // Default to false for backward compatibility
 }: ActionButtonsProps) => {
   return (
     <>
@@ -60,13 +62,16 @@ export const ActionButtons = ({
         </Button>
       )}
       
-      <Button 
-        variant="outline" 
-        onClick={handleOpenManualFramePicker}
-      >
-        <Film className="mr-2 h-4 w-4" />
-        Select Frames
-      </Button>
+      {/* Only show Select Frames button if hideSelectFrames is false */}
+      {!hideSelectFrames && (
+        <Button 
+          variant="outline" 
+          onClick={handleOpenManualFramePicker}
+        >
+          <Film className="mr-2 h-4 w-4" />
+          Select Frames
+        </Button>
+      )}
       
       <Button 
         disabled={isGenerating || !project}
