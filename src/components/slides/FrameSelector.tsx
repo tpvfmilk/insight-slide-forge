@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useUIReset } from "@/context/UIResetContext";
 import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 import { getFrameStatistics, purgeUnusedFrames } from "@/utils/frameUtils";
-import { toast } from "@/components/ui/use-toast"; 
+import { toast } from "@/hooks/use-toast"; 
 import { Separator } from "@/components/ui/separator";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Slide } from "@/utils/frameUtils";
@@ -114,10 +114,8 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
     
     setIsPurgingFrames(true);
     
-    // Create a loading toast instead of using toast.loading
-    const toastId = "purge-frames";
+    // Create a loading toast
     toast({
-      id: toastId,
       title: "Purging unused frames",
       description: "Please wait while we clean up unused frames...",
     });
@@ -134,9 +132,8 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
         await onRefresh();
       }
       
-      // Dismiss the toast using toast({ id }) instead of toast.dismiss
+      // Success toast
       toast({
-        id: toastId,
         title: "Success",
         description: "Successfully purged unused frames",
       });
@@ -149,7 +146,6 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
       console.error("Error purging frames:", error);
       // Show error toast
       toast({
-        id: toastId,
         variant: "destructive",
         title: "Error",
         description: "Failed to purge unused frames",
