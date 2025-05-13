@@ -50,9 +50,9 @@ export const SafeDialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogContent>
 >(({ children, ...props }, ref) => {
   return (
-    <DialogPortal>
-      <DialogContent ref={ref} {...props}>{children}</DialogContent>
-    </DialogPortal>
+    <DialogContent ref={ref} {...props}>
+      {children}
+    </DialogContent>
   );
 });
 SafeDialogContent.displayName = 'SafeDialogContent';

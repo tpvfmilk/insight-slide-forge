@@ -1,14 +1,22 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { DialogContent, DialogPortal } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { RefreshCw } from "lucide-react";
 import { useSlideEditor } from "./SlideEditorContext";
 import { exportToPDF, exportToCSV, exportToAnki, downloadFile } from "@/services/exportService";
 import { ExportFormat } from "./SlideEditorTypes";
 
-export const SlideExportDialog: React.FC = () => {
+interface SlideExportDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export const SlideExportDialog: React.FC<SlideExportDialogProps> = ({ 
+  open, 
+  onOpenChange 
+}) => {
   const { 
     slides, 
     projectTitle, 
@@ -79,7 +87,7 @@ export const SlideExportDialog: React.FC = () => {
   };
 
   return (
-    <DialogPortal>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <div className="space-y-4 p-4">
           <h3 className="text-lg font-semibold">Export Options</h3>
@@ -149,6 +157,6 @@ export const SlideExportDialog: React.FC = () => {
           </div>
         </div>
       </DialogContent>
-    </DialogPortal>
+    </Dialog>
   );
 };

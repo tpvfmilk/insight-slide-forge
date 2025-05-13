@@ -55,7 +55,7 @@ export const SlideEditorHeader: React.FC = () => {
               Export
             </Button>
           </DialogTrigger>
-          <SlideExportDialog />
+          <SlideExportDialog open={exportDialogOpen} onOpenChange={setExportDialogOpen} />
         </Dialog>
       </div>
     </div>
