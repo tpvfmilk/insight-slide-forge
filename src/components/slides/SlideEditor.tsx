@@ -674,11 +674,11 @@ export const SlideEditor = () => {
     });
   };
 
-  // IMPORTANT: Define the deleteCurrentSlide function here
+  // IMPORTANT: Fix the deleteCurrentSlide function here
   const deleteCurrentSlide = () => {
     // Create a synthetic event to pass to deleteSlideFromFilmstrip
     const syntheticEvent = {
-      stopPropagation: () {}
+      stopPropagation: () => {}  // Fixed: using proper arrow function syntax
     } as React.MouseEvent<Element, MouseEvent>;
     
     deleteSlideFromFilmstrip(syntheticEvent, currentSlideIndex);
