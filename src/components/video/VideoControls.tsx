@@ -48,8 +48,7 @@ export const VideoControls = ({
           onValueCommit={() => {
             onSeekEnd();
           }}
-          onPointerDown={(e) => {
-            e.stopPropagation();
+          onPointerDown={() => {
             onSeekStart();
           }}
           disabled={!isVideoLoaded || duration <= 0}
@@ -90,9 +89,7 @@ export const VideoControls = ({
         <Button 
           variant="ghost" 
           size="icon" 
-          onClick={() => {
-            onPlay();
-          }}
+          onClick={onPlay}
           className="text-white hover:bg-white/20"
           disabled={!isVideoLoaded}
         >
