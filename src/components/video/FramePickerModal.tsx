@@ -1,9 +1,9 @@
+
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { Separator } from "@/components/ui/separator";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { VideoPlayer } from "./VideoPlayer";
 import { FrameLibrary } from "./FrameLibrary";
@@ -37,7 +37,19 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
   const [libraryFrames, setLibraryFrames] = useState<ExtractedFrame[]>([]);
   const [isUploadingFrames, setIsUploadingFrames] = useState(false);
-  const [isVideoLoading, setIsVideoLoading] = useState(true); // Add loading state
+  const [isVideoLoading, setIsVideoLoading] = useState(true);
+  
+  // Log initial props for debugging
+  useEffect(() => {
+    if (open) {
+      console.log("FramePickerModal opened with:", {
+        projectId,
+        videoPath,
+        allExtractedFramesCount: allExtractedFrames?.length || 0,
+        existingFramesCount: existingFrames?.length || 0
+      });
+    }
+  }, [open, projectId, videoPath, allExtractedFrames, existingFrames]);
   
   // Helper function to convert timestamp string to seconds
   const timeToSeconds = (timestamp: string): number => {
@@ -65,9 +77,12 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         });
       }
       
+      console.log(`Initializing modal with ${Object.keys(initialSelectedState).length} selected frames`);
+      
       setSelectedFrames(initialSelectedState);
       setCurrentTime(0);
       setIsUploadingFrames(false);
+      setIsVideoLoading(true);
       
       // Load all project frames from allExtractedFrames
       if (allExtractedFrames && allExtractedFrames.length > 0) {
@@ -108,9 +123,12 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     if (!projectId) return;
     
     try {
+      console.log(`Loading frames from database for project: ${projectId}`);
       const frames = await loadFramesFromProject(projectId);
       
       if (frames && frames.length > 0) {
+        console.log(`Successfully loaded ${frames.length} frames from database`);
+        
         // Sort frames by timestamp
         const sortedFrames = frames.sort((a, b) => {
           return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
@@ -122,6 +140,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         
         // Update library frames
         setLibraryFrames(sortedFrames);
+      } else {
+        console.log("No frames found in database");
       }
     } catch (error) {
       console.error("Error loading frames from project:", error);
@@ -135,8 +155,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   
   // Handle video loaded
   const handleVideoLoaded = (videoDuration: number) => {
+    console.log(`Video loaded with duration: ${videoDuration} seconds`);
     setDuration(videoDuration);
-    setIsVideoLoading(false); // Mark video as loaded
+    setIsVideoLoading(false);
   };
   
   // Toggle selection of a frame in library
@@ -183,6 +204,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   // Handle frame captured
   const handleFrameCaptured = async (frame: ExtractedFrame, timeInSeconds: number) => {
     try {
+      console.log(`Frame captured at ${frame.timestamp}, storing in library`);
+      
       // Add to library frames
       setLibraryFrames(prev => {
         const newFrames = [...prev, frame];
@@ -262,21 +285,31 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   
   // Handle video URL update from VideoPlayer with more detailed logging
   const handleVideoUrlUpdate = (url: string) => {
-    console.log("FramePickerModal received URL update, length:", url?.length || 0);
-    console.log("FramePickerModal URL preview:", url ? `${url.substring(0, 50)}...` : "null");
-    setVideoUrl(url);
+    console.log("FramePickerModal received video URL update, length:", url?.length || 0);
     if (url) {
+      console.log(`URL preview: ${url.substring(0, 30)}...`);
       setIsVideoLoading(false);
+    } else {
+      console.log("Received empty URL");
+      setIsVideoLoading(true);
     }
+    setVideoUrl(url);
   };
-  
-  useEffect(() => {
-    // Debug log to track videoUrl changes
-    console.log("VideoUrl state changed in FramePickerModal:", videoUrl ? "Available" : "Not available");
-  }, [videoUrl]);
   
   // Get count of selected frames
   const selectedFramesCount = Object.keys(selectedFrames).length;
+  
+  // Log video path and URL for debugging
+  useEffect(() => {
+    console.log("Current state:", {
+      videoPath,
+      hasVideoUrl: !!videoUrl,
+      isVideoLoading,
+      capturedTimemarks: capturedTimemarks.length,
+      libraryFrames: libraryFrames.length,
+      selectedFrames: selectedFramesCount
+    });
+  }, [videoPath, videoUrl, isVideoLoading, capturedTimemarks, libraryFrames, selectedFramesCount]);
   
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -297,7 +330,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
             />
           </div>
           
-          {/* Frame capture controls - Moved to its own row */}
+          {/* Frame capture controls - in its own row */}
           <div className="flex justify-end py-2 border-t border-b">
             <FrameCapture
               videoUrl={videoUrl}

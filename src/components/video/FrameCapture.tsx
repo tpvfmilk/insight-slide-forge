@@ -29,7 +29,8 @@ export const FrameCapture = ({
   
   // Log videoUrl changes for debugging
   useEffect(() => {
-    console.log("FrameCapture received videoUrl:", videoUrl ? "Available" : "Not Available");
+    console.log("FrameCapture received videoUrl:", 
+               videoUrl ? `Available (${videoUrl.substring(0, 30)}...)` : "Not Available");
   }, [videoUrl]);
   
   // Format time display (seconds to MM:SS)
@@ -179,12 +180,6 @@ export const FrameCapture = ({
 
   // Add console.log to track videoUrl and disabled state
   const isButtonDisabled = !videoUrl || isCapturingFrame || isVideoLoading;
-  console.log("FrameCapture Button State:", { 
-    videoUrl: videoUrl ? "Available" : "Not Available", 
-    isCapturingFrame, 
-    isVideoLoading, 
-    isDisabled: isButtonDisabled 
-  });
 
   return (
     <>

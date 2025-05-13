@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+
+import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { getVideoSignedUrl, updateProjectDuration } from "@/utils/videoUtils";
@@ -32,8 +33,19 @@ export const useVideoPlayer = ({
   
   const videoRef = useRef<HTMLVideoElement>(null);
   
+  // Debug log for props
+  useEffect(() => {
+    console.log("useVideoPlayer initialized with:", { 
+      projectId, 
+      videoPath: videoPath || "No path provided",
+      hasTimeUpdateCallback: !!onTimeUpdate,
+      hasVideoLoadedCallback: !!onVideoLoaded,
+      hasUrlUpdateCallback: !!onVideoUrlUpdate 
+    });
+  }, [projectId, videoPath, onTimeUpdate, onVideoLoaded, onVideoUrlUpdate]);
+  
   // Function to load the video with improved path handling and error logging
-  const loadVideo = async () => {
+  const loadVideo = useCallback(async () => {
     if (!videoPath) {
       console.error("Cannot load video: No video path provided");
       setVideoError("No video path provided");
@@ -43,21 +55,21 @@ export const useVideoPlayer = ({
     
     setIsLoadingVideo(true);
     setVideoError(null);
-    console.log("Starting video loading process for path:", videoPath);
+    console.log(`[Attempt ${loadAttempts + 1}] Starting video loading process for path:`, videoPath);
     
     try {
-      console.log(`Attempting to load video from path: ${videoPath}`);
-      
       // Get a fresh signed URL with longer expiry
-      const signedUrl = await getVideoSignedUrl(supabase, videoPath);
+      const signedUrl = await getVideoSignedUrl(supabase, videoPath, 7200);
       
-      console.log("Got signed URL for video:", signedUrl.substring(0, 100) + "...");
+      console.log("Got signed URL for video:", signedUrl.substring(0, 50) + "...");
       setVideoUrl(signedUrl);
       
-      // Critical: Notify parent immediately of URL update with a small delay to ensure it's processed
+      // Critical: Notify parent immediately of URL update
       if (onVideoUrlUpdate) {
-        console.log("Notifying parent of video URL update");
-        onVideoUrlUpdate(signedUrl);
+        console.log("Notifying parent component of video URL update");
+        setTimeout(() => {
+          onVideoUrlUpdate(signedUrl);
+        }, 0);
       }
     } catch (error) {
       console.error("Error getting fresh video URL:", error);
@@ -65,6 +77,7 @@ export const useVideoPlayer = ({
       // Try alternate methods to get video URL
       if (projectId) {
         try {
+          console.log("Attempting to get video URL from project data");
           // If we have project ID, try to get source URL from project
           const { data: projectData } = await supabase
             .from('projects')
@@ -73,7 +86,8 @@ export const useVideoPlayer = ({
             .single();
             
           if (projectData?.source_url) {
-            console.log("Using project source URL as fallback:", projectData.source_url.substring(0, 100) + "...");
+            console.log("Using project source URL as fallback:", 
+                       (projectData.source_url || "").substring(0, 50) + "...");
             setVideoUrl(projectData.source_url);
             
             // Important: Notify parent of URL update
@@ -81,7 +95,7 @@ export const useVideoPlayer = ({
               onVideoUrlUpdate(projectData.source_url);
             }
             return;
-          } else if (projectData?.source_file_path) {
+          } else if (projectData?.source_file_path && projectData.source_file_path !== videoPath) {
             // Try with the source file path from project
             try {
               console.log("Trying with alternative source file path:", projectData.source_file_path);
@@ -103,16 +117,16 @@ export const useVideoPlayer = ({
         }
       }
       
-      setVideoError("Failed to access video. The video might be unavailable or the format is not supported.");
+      setVideoError(`Failed to access video (attempt ${loadAttempts + 1}). The video might be unavailable or the format is not supported.`);
     } finally {
       setIsLoadingVideo(false);
     }
-  };
+  }, [videoPath, loadAttempts, projectId, onVideoUrlUpdate]);
   
   // Load video on mount or when videoPath/loadAttempts changes
   useEffect(() => {
     loadVideo();
-  }, [videoPath, loadAttempts]);
+  }, [videoPath, loadAttempts, loadVideo]);
   
   // Handle video duration and update project metadata in database
   useEffect(() => {
@@ -260,23 +274,74 @@ export const useVideoPlayer = ({
       
       // Additional notification of URL when video is fully loaded
       if (videoUrl && onVideoUrlUpdate) {
+        console.log("Video fully loaded, notifying parent of final URL");
         onVideoUrlUpdate(videoUrl);
       }
     }
   };
   
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    console.error("Video error:", e);
-    setVideoError("Failed to load video. Please check the video file format and try again.");
+    console.error("Video element error:", e);
+    
+    const videoElement = e.target as HTMLVideoElement;
+    let errorMessage = "Failed to load video. Please check the video file format and try again.";
+    
+    // Get detailed error information if possible
+    if (videoElement && videoElement.error) {
+      const errorCode = videoElement.error.code;
+      const errorMsg = videoElement.error.message;
+      
+      console.error(`Video error code: ${errorCode}, message: ${errorMsg}`);
+      
+      switch (errorCode) {
+        case 1:
+          errorMessage = "Video loading aborted.";
+          break;
+        case 2:
+          errorMessage = "Network error while loading video.";
+          break;
+        case 3:
+          errorMessage = "Error decoding video. The format may not be supported.";
+          break;
+        case 4:
+          errorMessage = "Video is not available or compatible with this browser.";
+          break;
+        default:
+          errorMessage = `Failed to load video: ${errorMsg || "Unknown error"}`;
+      }
+    }
+    
+    setVideoError(errorMessage);
     setIsVideoLoaded(false);
     setIsLoadingVideo(false);
+    
+    // Automatically retry once after a short delay if this is the first attempt
+    if (loadAttempts === 0) {
+      console.log("First attempt failed, will retry loading video after delay");
+      setTimeout(() => {
+        setLoadAttempts(prev => prev + 1);
+      }, 1000);
+    }
   };
   
   // Retry loading video
   const retryLoadVideo = () => {
     setLoadAttempts(prev => prev + 1);
-    loadVideo();
   };
+
+  // Log state changes for debugging
+  useEffect(() => {
+    console.log("VideoPlayer state updated:", { 
+      isPlaying, 
+      currentTime: Math.round(currentTime), 
+      duration: Math.round(duration),
+      hasVideoUrl: !!videoUrl,
+      isVideoLoaded,
+      videoError: videoError || "None",
+      isLoadingVideo, 
+      loadAttempts 
+    });
+  }, [isPlaying, currentTime, duration, videoUrl, isVideoLoaded, videoError, isLoadingVideo, loadAttempts]);
 
   return {
     videoRef,

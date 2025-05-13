@@ -1,4 +1,3 @@
-
 /**
  * Utility functions for video operations
  */
@@ -22,48 +21,87 @@ export const getVideoSignedUrl = async (
   
   console.log("Getting signed URL for video path:", videoPath);
   
-  // Default bucket and path
-  let bucket = 'video_uploads';
+  // Default bucket name - most videos are stored in this bucket
+  const DEFAULT_BUCKET = 'video_uploads';
+  
+  // Initialize with default values
+  let bucket = DEFAULT_BUCKET;
   let filePath = videoPath;
   
-  // Handle paths with bucket/filename format
-  if (videoPath.includes('/')) {
-    const parts = videoPath.split('/');
-    
-    // If path has format 'bucket/file.mp4'
-    if (parts.length === 2) {
-      bucket = parts[0];
-      filePath = parts[1];
-    } 
-    // If path has deeper nesting like 'bucket/folder/file.mp4'
-    else if (parts.length > 2) {
-      bucket = parts[0];
-      // Join all remaining parts as the file path
-      filePath = parts.slice(1).join('/');
+  try {
+    // Handle paths with various formats
+    if (videoPath.includes('/')) {
+      const parts = videoPath.split('/');
+      
+      // Case 1: 'bucket/file.mp4' format
+      if (parts.length === 2) {
+        bucket = parts[0];
+        filePath = parts[1];
+        console.log(`Parsed as bucket/file: Bucket = ${bucket}, File = ${filePath}`);
+      }
+      // Case 2: 'bucket/folder/file.mp4' format
+      else if (parts.length > 2) {
+        // Common case: uploads/ID/file.mp4 - this should use video_uploads bucket
+        if (parts[0] === 'uploads') {
+          bucket = DEFAULT_BUCKET;
+          filePath = videoPath; // Keep the full path as is
+          console.log(`Uploads path detected: Using ${bucket} bucket with path ${filePath}`);
+        }
+        // Other cases, try with first part as bucket
+        else {
+          bucket = parts[0];
+          filePath = parts.slice(1).join('/'); // Join remaining parts as path
+          console.log(`Multi-part path: Bucket = ${bucket}, Path = ${filePath}`);
+        }
+      }
+    } else {
+      // Simple filename, use default bucket
+      console.log(`Simple filename: Using ${bucket} bucket with file ${filePath}`);
     }
-  }
-  
-  console.log(`Parsed video path - Bucket: ${bucket}, File path: ${filePath}`);
-  
-  // Get a fresh signed URL with specified expiry
-  const { data, error } = await supabase
-    .storage
-    .from(bucket)
-    .createSignedUrl(filePath, expirySeconds);
     
-  if (error) {
-    console.error("Error creating signed URL:", error);
-    throw new Error("Couldn't create access link for video: " + error.message);
+    // First attempt with parsed parameters
+    console.log(`Attempting to get signed URL for bucket: ${bucket}, path: ${filePath}`);
+    
+    const { data, error } = await supabase
+      .storage
+      .from(bucket)
+      .createSignedUrl(filePath, expirySeconds);
+      
+    if (error) {
+      console.error(`Error creating signed URL with bucket ${bucket}:`, error);
+      
+      // If the first attempt fails with a parsed path, try with default bucket
+      if (bucket !== DEFAULT_BUCKET && filePath !== videoPath) {
+        console.log(`Retrying with default bucket ${DEFAULT_BUCKET} and original path ${videoPath}`);
+        
+        const fallbackResult = await supabase
+          .storage
+          .from(DEFAULT_BUCKET)
+          .createSignedUrl(videoPath, expirySeconds);
+          
+        if (fallbackResult.error) {
+          console.error(`Fallback attempt also failed:`, fallbackResult.error);
+          throw new Error("Couldn't create access link for video after multiple attempts");
+        }
+        
+        console.log("Successfully created signed URL with fallback method");
+        return fallbackResult.data.signedUrl;
+      }
+      
+      throw new Error("Couldn't create access link for video: " + error.message);
+    }
+    
+    if (!data?.signedUrl) {
+      console.error("No signed URL in response");
+      throw new Error("Couldn't create access link for video: Empty response");
+    }
+    
+    console.log("Successfully created signed URL");
+    return data.signedUrl;
+  } catch (error) {
+    console.error("Error in getVideoSignedUrl:", error);
+    throw error;
   }
-  
-  if (!data?.signedUrl) {
-    console.error("No signed URL in response");
-    throw new Error("Couldn't create access link for video: Empty response");
-  }
-  
-  console.log("Successfully created signed URL");
-  
-  return data.signedUrl;
 };
 
 // Update project metadata with video duration

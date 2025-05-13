@@ -1,5 +1,5 @@
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { VideoControls } from "@/components/video/VideoControls";
 import { VideoOverlay } from "@/components/video/VideoOverlay";
@@ -52,10 +52,23 @@ export const VideoPlayer = ({
     onVideoUrlUpdate
   });
 
-  // Debug logging to track videoUrl
-  console.log("VideoPlayer component - videoUrl state:", videoUrl ? "Available" : "Not available");
-  console.log("VideoPlayer component - videoPath prop:", videoPath);
-  console.log("VideoPlayer component - projectId prop:", projectId);
+  // Debug logging to track videoUrl and immediately update parent
+  useEffect(() => {
+    console.log("VideoPlayer component - videoUrl state:", videoUrl ? "Available" : "Not available");
+    if (videoUrl && onVideoUrlUpdate) {
+      console.log("VideoPlayer notifying parent of URL update");
+      onVideoUrlUpdate(videoUrl);
+    }
+  }, [videoUrl, onVideoUrlUpdate]);
+  
+  useEffect(() => {
+    console.log("VideoPlayer mounted with:", { 
+      videoPath, 
+      projectId,
+      hasVideoUrl: !!videoUrl,
+      error: videoError || "None" 
+    });
+  }, [videoPath, projectId, videoUrl, videoError]);
   
   return (
     <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
