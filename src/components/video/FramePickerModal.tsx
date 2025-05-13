@@ -284,7 +284,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         
         {/* Main content area */}
         <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
-          {/* Video player component with updated z-index handling */}
+          {/* Video player component */}
           <div className="relative">
             <VideoPlayer
               videoPath={videoPath}
@@ -293,24 +293,20 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               onVideoLoaded={handleVideoLoaded}
               onVideoUrlUpdate={handleVideoUrlUpdate}
               capturedTimemarks={capturedTimemarks}
-            >
-              {/* Empty children to avoid conflicts */}
-            </VideoPlayer>
-            
-            {/* Capture frame button positioned absolutely with proper z-index */}
-            <div className="absolute bottom-16 right-4 z-20">
-              <FrameCapture
-                videoUrl={videoUrl}
-                currentTime={currentTime}
-                duration={duration}
-                projectId={projectId}
-                onFrameCaptured={handleFrameCaptured}
-                isVideoLoading={isVideoLoading}
-              />
-            </div>
+            />
           </div>
           
-          <Separator />
+          {/* Frame capture controls - Moved to its own row */}
+          <div className="flex justify-end py-2 border-t border-b">
+            <FrameCapture
+              videoUrl={videoUrl}
+              currentTime={currentTime}
+              duration={duration}
+              projectId={projectId}
+              onFrameCaptured={handleFrameCaptured}
+              isVideoLoading={isVideoLoading}
+            />
+          </div>
           
           {/* Frame library component */}
           <FrameLibrary

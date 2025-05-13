@@ -51,6 +51,9 @@ export const VideoPlayer = ({
     onVideoLoaded,
     onVideoUrlUpdate
   });
+
+  // Debug logging to track videoUrl
+  console.log("VideoPlayer videoUrl:", videoUrl);
   
   return (
     <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
@@ -92,7 +95,7 @@ export const VideoPlayer = ({
         capturedTimemarks={capturedTimemarks}
       />
       
-      {/* Additional content (e.g., for frame capture UI) */}
+      {/* Additional content */}
       {children}
     </div>
   );

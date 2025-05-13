@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Camera, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -13,7 +13,7 @@ interface FrameCaptureProps {
   duration: number;
   projectId: string;
   onFrameCaptured: (frame: ExtractedFrame, timeInSeconds: number) => void;
-  isVideoLoading?: boolean; // Add new prop for video loading state
+  isVideoLoading?: boolean;
 }
 
 export const FrameCapture = ({
@@ -26,6 +26,11 @@ export const FrameCapture = ({
 }: FrameCaptureProps) => {
   const [isCapturingFrame, setIsCapturingFrame] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Log videoUrl changes for debugging
+  useEffect(() => {
+    console.log("FrameCapture received videoUrl:", videoUrl ? "Available" : "Not Available");
+  }, [videoUrl]);
   
   // Format time display (seconds to MM:SS)
   const formatTime = (timeInSeconds: number): string => {
@@ -101,7 +106,11 @@ export const FrameCapture = ({
   
   // Capture current frame using the improved extraction service
   const captureFrame = async () => {
-    if (!videoUrl || isCapturingFrame) return;
+    if (!videoUrl || isCapturingFrame) {
+      console.log("Cannot capture frame:", 
+                  !videoUrl ? "No video URL available" : "Already capturing");
+      return;
+    }
     
     try {
       setIsCapturingFrame(true);
