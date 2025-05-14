@@ -1,13 +1,12 @@
 
 import { Button } from "@/components/ui/button";
-import { Droplet, Home, UsersRound, FilePlus, Folder as FolderIcon, ChevronRight, Clock } from "lucide-react";
+import { Droplet, Home, UsersRound, FilePlus, Folder as FolderIcon, ChevronRight } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useEffect } from "react";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { cn } from "@/lib/utils";
-import { useSlideEditor } from "@/components/slides/editor/SlideEditorContext";
 import { StorageUsageBar } from "@/components/dashboard/StorageUsageBar";
 
 interface SidebarProps {
@@ -24,18 +23,6 @@ export function InsightSidebar({
   
   // Get slide information if we're in the slide editor
   const isProjectPage = location.pathname.includes('/projects/') && !location.pathname.includes('/present');
-  let slideInfo = null;
-  
-  try {
-    // Only attempt to use the slide editor context if we're on a project page
-    if (isProjectPage) {
-      const { currentSlideIndex, slides } = useSlideEditor();
-      slideInfo = { currentSlideIndex, slides };
-    }
-  } catch (error) {
-    // Silently fail if context isn't available
-    console.log("Slide editor context not available");
-  }
   
   useEffect(() => {
     if (isMobile && isOpen) {
@@ -84,13 +71,7 @@ export function InsightSidebar({
 
         <Separator className="my-4 bg-border/80 h-[1.5px]" />
         
-        {/* Slide count information relocated from header */}
-        {isProjectPage && slideInfo && (
-          <div className="px-3 py-2 text-sm text-muted-foreground flex items-center">
-            <Clock className="h-4 w-4 mr-2" />
-            <span>Slide {slideInfo.currentSlideIndex + 1} of {slideInfo.slides.length}</span>
-          </div>
-        )}
+        {/* Slide count information removed from here */}
       </div>
 
       <div className="p-4 border-t border-border/80 flex justify-between items-center">
