@@ -68,7 +68,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           className="z-10"
         />
         
-        {/* Timemark indicators */}
+        {/* Timemark indicators - Make indicators more visible */}
         {capturedTimemarks.map((time, index) => (
           <div 
             key={index}
@@ -85,7 +85,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   return (
-    <div className="relative w-full bg-black rounded-md overflow-hidden" style={{ height: "360px", maxWidth: "640px", margin: "0 auto" }}>
+    <div className="relative bg-black rounded-md overflow-hidden" style={{ width: "640px", height: "360px" }}>
       {/* Loading state */}
       {isLoadingVideo ? (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">

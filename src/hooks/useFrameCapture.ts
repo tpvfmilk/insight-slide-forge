@@ -36,15 +36,15 @@ export function useFrameCapture({
     return 0;
   };
   
-  // Initialize timemarks from existing frames
+  // Initialize timemarks from existing frames on component mount
   useEffect(() => {
     if (allExtractedFrames && allExtractedFrames.length > 0) {
-      const existingTimemarks = allExtractedFrames
-        .filter(frame => frame.timestamp)
-        .map(frame => timeToSeconds(frame.timestamp));
+      // Filter out frames without timestamps
+      const validFrames = allExtractedFrames.filter(frame => frame && frame.timestamp);
       
-      if (existingTimemarks.length > 0) {
-        console.log(`Initializing ${existingTimemarks.length} timemarks from existing frames`);
+      if (validFrames.length > 0) {
+        console.log(`Initializing ${validFrames.length} timemarks from existing frames`);
+        const existingTimemarks = validFrames.map(frame => timeToSeconds(frame.timestamp));
         setCapturedTimemarks(existingTimemarks);
       }
     }

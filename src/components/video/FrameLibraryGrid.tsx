@@ -33,14 +33,13 @@ export const FrameLibraryGrid: React.FC<FrameLibraryGridProps> = ({
 
   return (
     <ScrollArea className="h-full w-full">
-      <div className="grid grid-cols-3 gap-3 p-2 pb-20" style={{ overflowY: "auto" }}>
+      <div className="grid grid-cols-3 gap-3 p-2 pb-24">
         {libraryFrames.map((frame) => (
           <div 
             key={frame.id} 
             className={`relative cursor-pointer rounded-md overflow-hidden border-2 ${
               selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
             }`}
-            style={{ width: "100%" }}
             onClick={() => toggleFrameSelection(frame)}
           >
             <AspectRatio ratio={16/9}>

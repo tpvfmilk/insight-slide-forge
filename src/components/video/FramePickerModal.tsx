@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -51,10 +50,10 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     videoUrl,
     duration,
     formatTime,
-    allExtractedFrames,
     onFrameCaptured: (frame) => {
       frameLibrary.addFrameToLibrary(frame);
-    }
+    },
+    allExtractedFrames
   });
   
   // Handle removing timemarks when frames are removed
@@ -110,8 +109,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         
         {/* Main content area */}
         <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
-          {/* Video player section */}
-          <div className="flex justify-center">
+          {/* Video player section - fixed height to keep it static */}
+          <div className="flex justify-center" style={{ height: "360px", minHeight: "360px" }}>
             <VideoPlayer
               {...videoPlayer}
               capturedTimemarks={frameCapture.capturedTimemarks}
@@ -131,7 +130,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               </div>
             </div>
             
-            <div className="flex-1 min-h-0 bg-muted/30 rounded-md overflow-hidden" style={{ height: "360px" }}>
+            {/* Fixed height container for the scrollable frame library */}
+            <div className="flex-1 min-h-0 bg-muted/30 rounded-md overflow-hidden" style={{ height: "300px" }}>
               <FrameLibraryGrid 
                 libraryFrames={frameLibrary.libraryFrames}
                 selectedFrames={frameLibrary.selectedFrames}
