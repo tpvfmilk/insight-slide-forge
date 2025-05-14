@@ -1,8 +1,11 @@
 
-// Import from sonner instead of radix-ui
-import { toast as sonnerToast } from "sonner";
-import { useToast as useRadixToast } from "@/components/ui/toast";
+// Import from sonner directly
+import { toast } from "sonner";
 
-// Re-export with compatibility layer
-export const toast = sonnerToast;
-export const useToast = useRadixToast;
+// Export for use throughout the app
+export { toast };
+
+// Re-export the useToast function for backward compatibility
+export function useToast() {
+  return { toast };
+}

@@ -119,9 +119,7 @@ export const clientExtractFramesFromVideo = async (
           );
           
           if (!extractedFrames || extractedFrames.length === 0) {
-            toast.error('No frames could be extracted from the video. Please try again or capture frames manually.', {
-              id: 'extract-frames'
-            });
+            toast.error('No frames could be extracted from the video. Please try again or capture frames manually.');
             return { 
               success: false, 
               error: 'Failed to extract frames from source URL'
@@ -132,9 +130,7 @@ export const clientExtractFramesFromVideo = async (
           const uploadedFrames = await uploadExtractedFrames(projectId, extractedFrames);
           await saveExtractedFramesToProject(projectId, uploadedFrames);
           
-          toast.success(`Successfully extracted ${uploadedFrames.length} frames`, {
-            id: 'extract-frames'
-          });
+          toast.dismiss('extract-frames');
           
           return { 
             success: true, 
@@ -175,9 +171,7 @@ export const clientExtractFramesFromVideo = async (
       
       // Check if any frames were extracted
       if (!extractedFrames || extractedFrames.length === 0) {
-        toast.error('No frames could be extracted from the video. Please try again or capture frames manually.', {
-          id: 'extract-frames'
-        });
+        toast.error('No frames could be extracted from the video. Please try again or capture frames manually.');
         console.error('Client-side extraction failed: No frames extracted');
         
         // Return failure - no fallback to server
@@ -194,9 +188,7 @@ export const clientExtractFramesFromVideo = async (
         // Save these frames to the project
         await saveExtractedFramesToProject(projectId, uploadedFrames);
         
-        toast.success(`Successfully extracted ${uploadedFrames.length} frames`, {
-          id: 'extract-frames'
-        });
+        toast.dismiss('extract-frames');
         
         return { 
           success: true, 
@@ -206,9 +198,7 @@ export const clientExtractFramesFromVideo = async (
         };
       } else {
         console.error('Client-side extraction succeeded but uploads failed');
-        toast.error('Failed to upload extracted frames', {
-          id: 'extract-frames'
-        });
+        toast.error('Failed to upload extracted frames');
         return { 
           success: false, 
           error: 'Failed to upload extracted frames'
@@ -218,9 +208,7 @@ export const clientExtractFramesFromVideo = async (
     } catch (clientError) {
       console.error('Error in client-side extraction:', clientError);
       
-      toast.error('Frame extraction failed. Please try again or try capturing frames manually.', {
-        id: 'extract-frames'
-      });
+      toast.error('Frame extraction failed. Please try again or try capturing frames manually.');
       
       // Return failure - no fallback to server
       return { 

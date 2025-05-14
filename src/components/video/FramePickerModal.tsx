@@ -71,7 +71,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     duration,
     formatTime,
     onFrameCaptured: handleFrameCaptured,
-    togglePlayPause // Pass the togglePlayPause function to useFrameCapture
+    togglePlayPause
   });
   
   // Handle removing timemarks when frames are removed
