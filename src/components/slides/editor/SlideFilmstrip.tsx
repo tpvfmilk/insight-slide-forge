@@ -117,6 +117,33 @@ export const SlideFilmstrip: React.FC = () => {
     };
   }, []);
 
+  // Center the current slide whenever it changes
+  useEffect(() => {
+    if (!filmstripRef.current) return;
+    
+    // Get the current slide element using the index
+    const slideElements = filmstripRef.current.children;
+    if (!slideElements || slideElements.length === 0) return;
+    
+    const currentSlideElement = slideElements[currentSlideIndex] as HTMLElement;
+    if (!currentSlideElement) return;
+    
+    // Calculate the position to center the slide in the viewport
+    const filmstripWidth = filmstripRef.current.offsetWidth;
+    const slideWidth = currentSlideElement.offsetWidth;
+    const slideOffset = currentSlideElement.offsetLeft;
+    
+    // Calculate the scroll position that will center the slide
+    const scrollPosition = slideOffset - (filmstripWidth / 2) + (slideWidth / 2);
+    
+    // Use smooth scrolling to center the current slide
+    filmstripRef.current.scrollTo({
+      left: scrollPosition,
+      behavior: 'smooth'
+    });
+    
+  }, [currentSlideIndex]);
+
   return (
     <div className="h-40 border-t w-full flex-shrink-0 overflow-hidden">
       <div className="max-w-screen-xl mx-auto px-4 h-full">
