@@ -2,7 +2,7 @@
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Plus, RefreshCw, X } from "lucide-react";
+import { Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Separator } from "@/components/ui/separator";
 import { mergeAndSaveFrames } from "@/utils/frameUtils";
@@ -69,6 +69,33 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     frameLibrary.removeFrame(frameId);
   };
   
+  // Handle bulk deletion of selected frames
+  const handleDeleteSelected = async () => {
+    if (frameLibrary.selectedFramesCount === 0) {
+      toast.info("No frames selected to delete");
+      return;
+    }
+    
+    const selectedFrames = frameLibrary.libraryFrames.filter(
+      frame => frame.id && frameLibrary.selectedFrames[frame.id]
+    );
+    
+    const frameIds = selectedFrames.map(frame => frame.id!);
+    
+    // Remove selected frames from captured timemarks
+    selectedFrames.forEach(frame => {
+      if (frame.timestamp) {
+        const timeInSeconds = frameLibrary.timeToSeconds(frame.timestamp);
+        frameCapture.setCapturedTimemarks(prev => 
+          prev.filter(time => Math.abs(time - timeInSeconds) > 0.5)
+        );
+      }
+    });
+    
+    // Delete frames from library and project
+    await frameLibrary.deleteMultipleFrames(frameIds);
+  };
+  
   // Handle dialog clean up on close
   const handleClose = () => {
     // Make sure to properly clean up and dismiss any toasts
@@ -120,28 +147,42 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
-          <div className="flex flex-col items-end">
+          <div className="flex gap-2">
+            {/* Add Delete Selected button */}
             <Button 
-              onClick={() => frameLibrary.handleApplyFrames(onFramesSelected)} 
+              onClick={handleDeleteSelected}
+              variant="destructive"
               className="gap-1"
               disabled={frameLibrary.selectedFramesCount === 0 || frameLibrary.isUploadingFrames}
             >
-              {frameLibrary.isUploadingFrames ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add {frameLibrary.selectedFramesCount > 0 ? 
-                    `${frameLibrary.selectedFramesCount} Frame${frameLibrary.selectedFramesCount !== 1 ? 's' : ''}` : 
-                    'to Slide'}
-                </>
-              )}
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete Selected
             </Button>
-            <div className="text-xs text-muted-foreground mt-1">
-              Frames remain in your library after being added to slides
+            
+            {/* Add to Slide button */}
+            <div className="flex flex-col items-end">
+              <Button 
+                onClick={() => frameLibrary.handleApplyFrames(onFramesSelected)} 
+                className="gap-1"
+                disabled={frameLibrary.selectedFramesCount === 0 || frameLibrary.isUploadingFrames}
+              >
+                {frameLibrary.isUploadingFrames ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add {frameLibrary.selectedFramesCount > 0 ? 
+                      `${frameLibrary.selectedFramesCount} Frame${frameLibrary.selectedFramesCount !== 1 ? 's' : ''}` : 
+                      'to Slide'}
+                  </>
+                )}
+              </Button>
+              <div className="text-xs text-muted-foreground mt-1">
+                Frames remain in your library after being added to slides
+              </div>
             </div>
           </div>
         </div>

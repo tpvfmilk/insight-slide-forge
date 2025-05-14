@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { mergeAndSaveFrames } from "@/utils/frameUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 export function useFrameLibrary({
   projectId,
@@ -137,6 +138,97 @@ export function useFrameLibrary({
       delete updated[frameId];
       return updated;
     });
+    
+    // Remove from project database
+    removeFrameFromProject(frameId);
+  };
+  
+  // Remove frame from project database
+  const removeFrameFromProject = async (frameId: string) => {
+    try {
+      // Get current extracted frames from project
+      const { data: projectData, error: fetchError } = await supabase
+        .from('projects')
+        .select('extracted_frames')
+        .eq('id', projectId)
+        .single();
+      
+      if (fetchError) {
+        console.error("Error fetching project frames:", fetchError);
+        return;
+      }
+      
+      // Filter out the frame to remove
+      const currentFrames = (projectData?.extracted_frames || []) as ExtractedFrame[];
+      const updatedFrames = currentFrames.filter(frame => frame.id !== frameId);
+      
+      // Update the project
+      const { error } = await supabase
+        .from('projects')
+        .update({ extracted_frames: updatedFrames })
+        .eq('id', projectId);
+        
+      if (error) {
+        console.error("Error removing frame from project:", error);
+        return;
+      }
+      
+      console.log(`Removed frame ${frameId} from project database`);
+    } catch (error) {
+      console.error("Error in removeFrameFromProject:", error);
+    }
+  };
+  
+  // New function for bulk deletion of frames
+  const deleteMultipleFrames = async (frameIds: string[]) => {
+    if (!frameIds.length) return;
+    
+    try {
+      // Get current extracted frames from project
+      const { data: projectData, error: fetchError } = await supabase
+        .from('projects')
+        .select('extracted_frames')
+        .eq('id', projectId)
+        .single();
+      
+      if (fetchError) {
+        console.error("Error fetching project frames:", fetchError);
+        return;
+      }
+      
+      // Filter out the frames to remove
+      const currentFrames = (projectData?.extracted_frames || []) as ExtractedFrame[];
+      const updatedFrames = currentFrames.filter(frame => !frameIds.includes(frame.id || ''));
+      
+      // Update the project
+      const { error } = await supabase
+        .from('projects')
+        .update({ extracted_frames: updatedFrames })
+        .eq('id', projectId);
+        
+      if (error) {
+        console.error("Error removing frames from project:", error);
+        toast.error("Failed to delete selected frames");
+        return;
+      }
+      
+      // Update local state
+      setLibraryFrames(prev => prev.filter(frame => !frameIds.includes(frame.id || '')));
+      
+      // Clear selection state for deleted frames
+      setSelectedFrames(prev => {
+        const updated = {...prev};
+        frameIds.forEach(id => delete updated[id]);
+        return updated;
+      });
+      
+      // Show success message
+      toast.success(`Deleted ${frameIds.length} frames from library`);
+      console.log(`Removed ${frameIds.length} frames from project database`);
+    } catch (error) {
+      console.error("Error in deleteMultipleFrames:", error);
+      toast.error("Failed to delete selected frames");
+    }
   };
   
   // Apply selected frames to slide
@@ -199,6 +291,7 @@ export function useFrameLibrary({
     removeFrame,
     handleApplyFrames,
     addFrameToLibrary,
-    timeToSeconds
+    timeToSeconds,
+    deleteMultipleFrames
   };
 }

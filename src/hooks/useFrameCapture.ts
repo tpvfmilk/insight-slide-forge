@@ -1,17 +1,9 @@
-import { useState, useRef } from "react";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
-import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
-// Interface for frames with blobs that extends ExtractedFrame
-export interface CapturedFrameWithBlob {
-  timestamp: string;
-  imageUrl: string;
-  id?: string;
-  isPlaceholder?: boolean;
-  blob: Blob;
-}
+import { useState, useRef, useCallback } from "react";
+import { v4 as uuidv4 } from "uuid";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
 export function useFrameCapture({
   videoRef,
@@ -28,204 +20,136 @@ export function useFrameCapture({
   formatTime: (seconds: number) => string;
   onFrameCaptured: (frame: ExtractedFrame) => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
+  const [isCapturingFrame, setIsCapturingFrame] = useState<boolean>(false);
   const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pendingRef = useRef<boolean>(false);
   
-  // Helper function to upload a captured frame to Supabase storage
-  const uploadFrameToStorage = async (frame: Blob, timestamp: string): Promise<string | null> => {
-    try {
-      if (!projectId) {
-        throw new Error("Project ID is required to upload frames");
-      }
-      
-      // Create a File from the Blob
-      const fileName = `frame-${timestamp.replace(/:/g, "-")}-${Date.now()}.jpg`;
-      const file = new File([frame], fileName, {
-        type: 'image/jpeg'
-      });
-      
-      // Upload to Supabase Storage - ensure proper path and bucket
-      const filePath = `${projectId}/${timestamp.replace(/:/g, '_')}-${Date.now()}.jpg`;
-      const { data: uploadData, error: uploadError } = await supabase
-        .storage
-        .from('slide_stills')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true
-        });
-        
-      if (uploadError || !uploadData?.path) {
-        console.error("Error uploading frame:", uploadError);
-        return null;
-      }
-      
-      // Get public URL - CRUCIAL for persistence
-      const { data: urlData } = supabase
-        .storage
-        .from('slide_stills')
-        .getPublicUrl(uploadData.path);
-        
-      console.log(`Frame uploaded successfully, got permanent URL: ${urlData.publicUrl}`);
-      return urlData.publicUrl;
-    } catch (error) {
-      console.error("Error in uploadFrameToStorage:", error);
-      return null;
-    }
-  };
-  
-  // Capture current frame using the improved extraction service
-  const captureFrame = async () => {
+  const captureFrame = useCallback(async () => {
     const video = videoRef.current;
-    if (!video || !videoUrl || isCapturingFrame) return;
+    const canvas = canvasRef.current;
+    
+    // Safety checks
+    if (!video || !canvas || !videoUrl || isCapturingFrame || !projectId) {
+      console.error("Cannot capture frame: missing required elements or already capturing");
+      return;
+    }
     
     try {
       setIsCapturingFrame(true);
       
-      // Pause the video
-      video.pause();
+      // Extract current timestamp
+      const currentTime = video.currentTime;
+      const timestamp = formatTime(currentTime);
       
-      // Store current time
-      const currentTimePosition = video.currentTime;
-      const timestamp = formatTime(currentTimePosition);
+      // Check if this timestamp has already been captured
+      if (capturedTimemarks.some(time => Math.abs(time - currentTime) < 0.5)) {
+        toast.info(`Frame at ${timestamp} already exists`);
+        setIsCapturingFrame(false);
+        return;
+      }
       
-      const toastId = "capture-frame";
-      toast.loading(`Capturing frame at ${timestamp}...`, { id: toastId });
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
       
-      // Use our advanced frame extraction to get a good quality frame
-      const extractedFrames = await extractFramesFromVideoUrl(
-        videoUrl, 
-        [timestamp],
-        undefined,
-        duration,
-        {
-          captureAttempts: 5, // More attempts
-          captureOffsets: [-0.1, 0, 0.1, 0.2, -0.2, 0.5, -0.5, 0.8, -0.8], // More offsets
-          minContentThreshold: 0.02 // Slightly lower threshold
-        }
+      if (!ctx) {
+        throw new Error("Could not get canvas context");
+      }
+      
+      // Draw the current video frame on the canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Convert canvas to blob
+      const blob = await new Promise<Blob | null>((resolve) => 
+        canvas.toBlob(resolve, 'image/jpeg', 0.95)
       );
       
-      if (extractedFrames && extractedFrames.length > 0) {
-        const { frame, timestamp: extractedTimestamp } = extractedFrames[0];
-        
-        // Upload the frame to storage to get a permanent URL
-        const permanentUrl = await uploadFrameToStorage(frame, extractedTimestamp);
-        
-        if (!permanentUrl) {
-          toast.error(`Could not save frame at ${timestamp}`, { id: toastId });
-          createPlaceholderFrame(currentTimePosition);
-          return;
-        }
-        
-        // Create a new extracted frame with permanent URL
-        const frameId = `frame-${Date.now()}-${extractedTimestamp}`;
-        
-        const newFrame: ExtractedFrame = {
-          id: frameId,
-          imageUrl: permanentUrl, // Use permanent URL from storage
-          timestamp: extractedTimestamp,
-          isPlaceholder: false
-        };
-        
-        // Add to captured timemarks
-        setCapturedTimemarks(prev => [...prev, currentTimePosition]);
-        
-        // Call the callback
-        onFrameCaptured(newFrame);
-        
-        toast.success(`Frame at ${timestamp} has been saved`, { id: toastId });
-        
-        console.log(`Frame captured and stored with permanent URL: ${permanentUrl}`);
-      } else {
-        // Create placeholder if extraction failed
-        createPlaceholderFrame(currentTimePosition);
-        
-        toast.error(`Failed to extract frame at ${timestamp}`, { id: toastId });
+      if (!blob) {
+        throw new Error("Failed to create image blob");
       }
+      
+      // Create a unique ID and filename for this frame
+      const frameId = uuidv4();
+      const filename = `project_${projectId}/frame_${timestamp.replace(/:/g, '_')}_${frameId}.jpg`;
+      
+      // Upload blob to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('slide_stills')
+        .upload(filename, blob, {
+          contentType: 'image/jpeg',
+          cacheControl: '3600',
+        });
+      
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+      
+      // Get the public URL for the uploaded image
+      const { data: publicUrlData } = supabase.storage
+        .from('slide_stills')
+        .getPublicUrl(filename);
+      
+      if (!publicUrlData || !publicUrlData.publicUrl) {
+        throw new Error("Failed to get public URL");
+      }
+      
+      // Create frame object with image URL and timestamp
+      const newFrame: ExtractedFrame = {
+        id: frameId,
+        timestamp,
+        imageUrl: publicUrlData.publicUrl,
+      };
+      
+      // Mark this timestamp as captured
+      setCapturedTimemarks(prev => [...prev, currentTime].sort((a, b) => a - b));
+      
+      // Call the callback with the new frame
+      onFrameCaptured(newFrame);
     } catch (error) {
       console.error("Error capturing frame:", error);
-      toast.error(error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setIsCapturingFrame(false);
-    }
-  };
-  
-  // Create a placeholder frame when capture fails
-  const createPlaceholderFrame = async (timeInSeconds: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      toast.error("Failed to create placeholder frame");
-      return;
-    }
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      toast.error("Failed to create placeholder frame");
-      return;
-    }
-    
-    // Set canvas size if not already set
-    canvas.width = 640;
-    canvas.height = 360;
-    
-    // Format timestamp
-    const timestamp = formatTime(timeInSeconds);
-    
-    // Draw placeholder
-    ctx.fillStyle = "#2563eb"; // Blue background
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add text explanation
-    ctx.fillStyle = "white";
-    ctx.font = "bold 24px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(`Frame at ${timestamp}`, canvas.width / 2, canvas.height / 2 - 15);
-    ctx.font = "18px Arial";
-    ctx.fillText("Could not extract frame from video", canvas.width / 2, canvas.height / 2 + 20);
-    
-    // Convert to blob
-    canvas.toBlob(async (blob) => {
-      if (blob) {
-        // Upload placeholder to storage
-        const permanentUrl = await uploadFrameToStorage(blob, timestamp);
+      toast.error("Failed to capture frame");
+      
+      // If the frame capture fails and we need a placeholder for testing
+      if (process.env.NODE_ENV === 'development' && pendingRef.current === false) {
+        pendingRef.current = true;
         
-        if (!permanentUrl) {
-          toast.error("Failed to upload placeholder frame");
-          return;
-        }
+        // This is only for development testing - create a placeholder frame
+        const currentTime = videoRef.current?.currentTime || 0;
+        const timestamp = formatTime(currentTime);
         
-        // Generate unique ID for the frame
-        const frameId = `frame-${Date.now()}-placeholder`;
-        
-        // Create a new extracted frame with permanent URL
-        const newFrame: ExtractedFrame = {
-          id: frameId,
-          imageUrl: permanentUrl, // Use permanent URL from storage
+        // Create a placeholder frame
+        const placeholderFrame: ExtractedFrame = {
+          id: uuidv4(),
           timestamp,
-          isPlaceholder: true
+          imageUrl: `https://placehold.co/800x450/333/white?text=Frame+${timestamp}`,
         };
         
-        // Add to captured timemarks
-        setCapturedTimemarks(prev => [...prev, timeInSeconds]);
+        // Mark this timestamp as captured
+        setCapturedTimemarks(prev => [...prev, currentTime].sort((a, b) => a - b));
         
         // Call the callback
-        onFrameCaptured(newFrame);
+        onFrameCaptured(placeholderFrame);
         
         // Fix: Replace toast with title/description to use Sonner's format
         toast("Placeholder frame created", {
           description: `Placeholder created at ${timestamp}`,
         });
       } else {
-        toast.error("Failed to create placeholder frame");
+        throw error;
       }
-    }, "image/jpeg", 0.95);
-  };
+    } finally {
+      setIsCapturingFrame(false);
+      pendingRef.current = false;
+    }
+  }, [videoRef, canvasRef, videoUrl, projectId, isCapturingFrame, capturedTimemarks, formatTime, onFrameCaptured]);
   
   return {
-    canvasRef,
+    captureFrame,
     isCapturingFrame,
     capturedTimemarks,
     setCapturedTimemarks,
-    captureFrame
+    canvasRef
   };
 }

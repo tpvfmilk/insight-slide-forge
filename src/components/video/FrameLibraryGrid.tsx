@@ -31,7 +31,7 @@ export const FrameLibraryGrid: React.FC<FrameLibraryGridProps> = ({
   }
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="h-full w-full">
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2">
         {libraryFrames.map((frame) => (
           <div 
