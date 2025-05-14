@@ -151,37 +151,51 @@ const PresentationHeader: React.FC<{
 const PresentationSlide: React.FC<{
   slide: Slide;
 }> = ({ slide }) => {
-  const hasImages = Boolean(
-    (slide.imageUrl && slide.imageUrl.length > 0) || 
-    (slide.imageUrls && slide.imageUrls.length > 0)
-  );
-  
   // Collect all images from both imageUrl and imageUrls
   const allImages: string[] = [];
   if (slide.imageUrl) allImages.push(slide.imageUrl);
   if (slide.imageUrls) allImages.push(...slide.imageUrls);
   
+  const hasImages = allImages.length > 0;
+  const hasSingleImage = allImages.length === 1;
+  
   return (
     <div className="w-full max-w-5xl mx-auto">
       {hasImages ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
-          {/* Left side: Image grid */}
+          {/* Left side: Image(s) */}
           <div className="flex flex-col h-full justify-center">
-            <div className="grid grid-cols-2 gap-5 h-full">
-              {allImages.map((imageUrl, index) => (
-                <div key={index} className="relative h-full flex items-center">
-                  <div className="w-full rounded-md overflow-hidden border border-white/10">
-                    <AspectRatio ratio={16/9}>
-                      <img 
-                        src={imageUrl} 
-                        alt={`Slide image ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </AspectRatio>
-                  </div>
+            {hasSingleImage ? (
+              // Single image - take full width of the container
+              <div className="w-full h-full flex items-center">
+                <div className="w-full rounded-md overflow-hidden border border-white/10">
+                  <AspectRatio ratio={16/9}>
+                    <img 
+                      src={allImages[0]} 
+                      alt="Slide image"
+                      className="w-full h-full object-cover"
+                    />
+                  </AspectRatio>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              // Multiple images - use grid layout
+              <div className="grid grid-cols-2 gap-5 h-full">
+                {allImages.map((imageUrl, index) => (
+                  <div key={index} className="relative h-full flex items-center">
+                    <div className="w-full rounded-md overflow-hidden border border-white/10">
+                      <AspectRatio ratio={16/9}>
+                        <img 
+                          src={imageUrl} 
+                          alt={`Slide image ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </AspectRatio>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           
           {/* Right side: Slide content */}
