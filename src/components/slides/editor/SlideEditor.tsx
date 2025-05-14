@@ -33,7 +33,7 @@ export const SlideEditorContent: React.FC<SlideEditorProps> = ({ projectId }) =>
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col overflow-x-hidden">
       {/* Custom styles for dragging */}
       <SlideEditorStyles />
       

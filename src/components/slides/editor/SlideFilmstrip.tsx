@@ -136,7 +136,7 @@ export const SlideFilmstrip: React.FC = () => {
 
   return (
     <div className="h-40 border-t w-full flex-shrink-0 overflow-hidden relative">
-      <div className="w-full mx-auto px-4 h-full flex items-center relative">
+      <div className="w-full mx-auto px-4 h-full flex items-center relative overflow-hidden">
         {/* Left scroll button */}
         <Button
           variant="outline"
@@ -153,7 +153,7 @@ export const SlideFilmstrip: React.FC = () => {
         <div 
           ref={filmstripRef} 
           className="flex gap-3 p-3 h-full overflow-x-auto scroll-smooth hide-scrollbar w-full filmstrip-container"
-          style={{ maxWidth: "100%" }}
+          style={{ maxWidth: "100%", overflowX: "auto", overflowY: "hidden" }}
         >
           {slides.map((slide, index) => (
             <div 
@@ -163,6 +163,7 @@ export const SlideFilmstrip: React.FC = () => {
               className={`h-full w-48 flex-shrink-0 cursor-pointer flex flex-col items-center justify-center relative group ${
                 currentSlideIndex === index ? "border-2 border-primary" : "border border-border hover:border-muted-foreground/30"
               } rounded-md overflow-hidden shadow-sm bg-card p-3`}
+              style={{ minWidth: "12rem", maxWidth: "12rem" }}
             >
               {/* Delete button in the top-right corner */}
               <Button

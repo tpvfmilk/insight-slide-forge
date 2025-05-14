@@ -90,7 +90,7 @@ const ProjectPage = () => {
   
   return (
     <InsightLayout>
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col overflow-x-hidden">
         <div className="border-b p-4 flex items-center justify-between">
           <ProjectPageHeader 
             project={project} 

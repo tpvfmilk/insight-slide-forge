@@ -54,6 +54,13 @@ export const SlideEditorStyles: React.FC = () => {
           overflow-y: auto !important;
           flex-grow: 1;
         }
+
+        /* Prevent horizontal scroll on main containers */
+        .layout-container, 
+        .editor-container {
+          overflow-x: hidden !important;
+          max-width: 100vw;
+        }
       `}
     </style>
   );
