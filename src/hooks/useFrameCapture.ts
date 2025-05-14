@@ -40,11 +40,12 @@ export function useFrameCapture({
     try {
       setIsCapturingFrame(true);
       
-      // Pause the video before capturing if togglePlayPause is provided
-      if (togglePlayPause && !video.paused) {
+      // Always ensure the video is paused before capturing
+      const wasPlaying = !video.paused;
+      if (wasPlaying && togglePlayPause) {
         togglePlayPause();
-        // Short delay to ensure the frame is fully rendered before capturing
-        await new Promise(resolve => setTimeout(resolve, 50));
+        // Add a short delay to ensure the frame is fully rendered before capturing
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
       
       // Extract current timestamp
@@ -67,6 +68,12 @@ export function useFrameCapture({
         throw new Error("Could not get canvas context");
       }
       
+      // Ensure the canvas is visible for the drawing operation (but still hidden in DOM)
+      canvas.style.visibility = "hidden";
+      canvas.style.position = "absolute";
+      canvas.style.zIndex = "-1";
+      document.body.appendChild(canvas);
+      
       // Draw the current video frame on the canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
@@ -74,6 +81,14 @@ export function useFrameCapture({
       const blob = await new Promise<Blob | null>((resolve) => 
         canvas.toBlob(resolve, 'image/jpeg', 0.95)
       );
+      
+      // Return canvas to its original state
+      if (canvas.parentNode === document.body) {
+        document.body.removeChild(canvas);
+      }
+      canvas.style.visibility = "";
+      canvas.style.position = "";
+      canvas.style.zIndex = "";
       
       if (!blob) {
         throw new Error("Failed to create image blob");
@@ -116,6 +131,9 @@ export function useFrameCapture({
       
       // Call the callback with the new frame
       onFrameCaptured(newFrame);
+      
+      // Log confirmation of successful capture
+      console.log("Frame captured and saved to project library");
     } catch (error) {
       console.error("Error capturing frame:", error);
       toast.error("Failed to capture frame");
