@@ -28,6 +28,14 @@ export const FrameLibraryStyles: React.FC = () => {
         video, canvas {
           pointer-events: auto !important;
         }
+        
+        /* Additional styles for improved canvas rendering */
+        .hidden-canvas {
+          position: absolute !important;
+          left: -9999px !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
+        }
       `}
     </style>
   );

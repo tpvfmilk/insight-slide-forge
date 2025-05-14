@@ -1,24 +1,8 @@
 
-// This file is now just a compatibility layer that re-exports sonner
-// to maintain backward compatibility with any code still using it
-// Long-term we should transition all code to import directly from sonner
-import React from 'react';
-import { toast as sonnerToast, type ToastT, type ExternalToast } from "sonner";
+// Import from sonner instead of radix-ui
+import { toast as sonnerToast } from "sonner";
+import { useToast as useRadixToast } from "@/components/ui/toast";
 
-// Re-export toast from sonner with correct type definitions
+// Re-export with compatibility layer
 export const toast = sonnerToast;
-
-// For components still using useToast
-export const useToast = () => {
-  return {
-    toast: sonnerToast,
-    // Provide a dismiss function for compatibility
-    dismiss: (toastId?: string) => {
-      if (toastId) {
-        sonnerToast.dismiss(toastId);
-      } else {
-        sonnerToast.dismiss();
-      }
-    }
-  };
-};
+export const useToast = useRadixToast;

@@ -38,60 +38,91 @@ export function useFrameCapture({
     }
     
     try {
+      // Start the frame capture process
+      console.log("Starting frame capture...");
       setIsCapturingFrame(true);
+      const toastId = "frame-capture";
+      toast.loading("Capturing frame...", { id: toastId, duration: 5000 });
       
       // Always ensure the video is paused before capturing
       const wasPlaying = !video.paused;
       if (wasPlaying && togglePlayPause) {
         togglePlayPause();
-        // Add a short delay to ensure the frame is fully rendered before capturing
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Add a longer delay to ensure the frame is fully rendered before capturing
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
       
       // Extract current timestamp
       const currentTime = video.currentTime;
       const timestamp = formatTime(currentTime);
+      console.log(`Capturing frame at ${timestamp} (${currentTime}s)`);
       
       // Check if this timestamp has already been captured
       if (capturedTimemarks.some(time => Math.abs(time - currentTime) < 0.5)) {
-        toast.info(`Frame at ${timestamp} already exists`);
+        toast.info(`Frame at ${timestamp} already exists`, { id: toastId });
         setIsCapturingFrame(false);
         return;
       }
       
       // Set canvas dimensions to match video
+      console.log(`Setting canvas dimensions to ${video.videoWidth}x${video.videoHeight}`);
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
+      
+      // Create a new canvas that we'll add to the document body
+      // This ensures it's properly rendered even if the original canvas is hidden
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = video.videoWidth;
+      tempCanvas.height = video.videoHeight;
+      tempCanvas.style.position = "absolute";
+      tempCanvas.style.left = "-9999px";
+      tempCanvas.style.visibility = "hidden";
+      document.body.appendChild(tempCanvas);
+      
+      const ctx = tempCanvas.getContext('2d', { 
+        alpha: false,
+        desynchronized: true 
+      });
       
       if (!ctx) {
+        document.body.removeChild(tempCanvas);
         throw new Error("Could not get canvas context");
       }
       
-      // Ensure the canvas is visible for the drawing operation (but still hidden in DOM)
-      canvas.style.visibility = "hidden";
-      canvas.style.position = "absolute";
-      canvas.style.zIndex = "-1";
-      document.body.appendChild(canvas);
+      // Try multiple approaches to capture a good frame
+      console.log("Drawing video to canvas...");
       
-      // Draw the current video frame on the canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Approach 1: Basic drawing
+      ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
       
-      // Convert canvas to blob
+      // Approach 2: If needed, try with creating an intermediary bitmap
+      if (typeof createImageBitmap === 'function') {
+        try {
+          const bitmap = await createImageBitmap(video);
+          ctx.drawImage(bitmap, 0, 0, tempCanvas.width, tempCanvas.height);
+          bitmap.close();
+          console.log("Used ImageBitmap for improved capture");
+        } catch (e) {
+          console.warn("ImageBitmap approach failed, using direct canvas drawing", e);
+        }
+      }
+      
+      // Convert canvas to blob with higher quality
+      console.log("Converting canvas to blob...");
       const blob = await new Promise<Blob | null>((resolve) => 
-        canvas.toBlob(resolve, 'image/jpeg', 0.95)
+        tempCanvas.toBlob(resolve, 'image/jpeg', 0.95)
       );
       
-      // Return canvas to its original state
-      if (canvas.parentNode === document.body) {
-        document.body.removeChild(canvas);
-      }
-      canvas.style.visibility = "";
-      canvas.style.position = "";
-      canvas.style.zIndex = "";
+      // Clean up temp canvas
+      document.body.removeChild(tempCanvas);
       
       if (!blob) {
         throw new Error("Failed to create image blob");
+      }
+      
+      console.log(`Captured blob size: ${blob.size} bytes`);
+      if (blob.size < 1000) {
+        console.warn("Captured image is very small, might be black or empty");
       }
       
       // Create a unique ID and filename for this frame
@@ -99,11 +130,13 @@ export function useFrameCapture({
       const filename = `project_${projectId}/frame_${timestamp.replace(/:/g, '_')}_${frameId}.jpg`;
       
       // Upload blob to Supabase Storage
+      console.log(`Uploading frame to Supabase: ${filename}`);
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('slide_stills')
         .upload(filename, blob, {
           contentType: 'image/jpeg',
           cacheControl: '3600',
+          upsert: true
         });
       
       if (uploadError) {
@@ -129,7 +162,11 @@ export function useFrameCapture({
       // Mark this timestamp as captured
       setCapturedTimemarks(prev => [...prev, currentTime].sort((a, b) => a - b));
       
+      // Display success message
+      toast.success(`Frame captured at ${timestamp}`, { id: toastId });
+      
       // Call the callback with the new frame
+      console.log("Calling onFrameCaptured with frame:", newFrame);
       onFrameCaptured(newFrame);
       
       // Log confirmation of successful capture
@@ -159,7 +196,6 @@ export function useFrameCapture({
         // Call the callback
         onFrameCaptured(placeholderFrame);
         
-        // Fix: Replace toast with title/description to use Sonner's format
         toast("Placeholder frame created", {
           description: `Placeholder created at ${timestamp}`,
         });

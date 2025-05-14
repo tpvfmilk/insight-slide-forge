@@ -46,6 +46,23 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     allExtractedFrames
   });
   
+  // Handle successfully captured frames
+  const handleFrameCaptured = async (frame: ExtractedFrame) => {
+    console.log("Frame captured in FramePickerModal:", frame);
+    
+    try {
+      // Add to library frames
+      frameLibrary.addFrameToLibrary(frame);
+      
+      // Save the frame to the project database immediately
+      await mergeAndSaveFrames(projectId, [frame], frameLibrary.libraryFrames);
+      console.log("Frame saved to project database successfully");
+    } catch (error) {
+      console.error("Error saving captured frame:", error);
+      toast.error("Failed to save frame to project database");
+    }
+  };
+  
   // Initialize frame capture with callback to add frames to library
   const frameCapture = useFrameCapture({
     videoRef,
@@ -53,9 +70,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     videoUrl,
     duration,
     formatTime,
-    onFrameCaptured: (frame) => {
-      frameLibrary.addFrameToLibrary(frame);
-    },
+    onFrameCaptured: handleFrameCaptured,
     togglePlayPause // Pass the togglePlayPause function to useFrameCapture
   });
   
@@ -145,7 +160,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           </div>
           
           {/* Hidden canvas for frame capture */}
-          <canvas ref={frameCapture.canvasRef} className="hidden"></canvas>
+          <canvas ref={frameCapture.canvasRef} className="hidden-canvas"></canvas>
         </div>
         
         <div className="flex justify-between items-center pt-4 border-t mt-2">
