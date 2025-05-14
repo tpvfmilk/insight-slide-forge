@@ -11,7 +11,8 @@ export function useFrameCapture({
   videoUrl,
   duration,
   formatTime,
-  onFrameCaptured
+  onFrameCaptured,
+  togglePlayPause // Added parameter to control video playback
 }: {
   videoRef: React.RefObject<HTMLVideoElement>;
   projectId: string;
@@ -19,6 +20,7 @@ export function useFrameCapture({
   duration: number;
   formatTime: (seconds: number) => string;
   onFrameCaptured: (frame: ExtractedFrame) => void;
+  togglePlayPause?: () => void; // Optional function to control video playback
 }) {
   const [isCapturingFrame, setIsCapturingFrame] = useState<boolean>(false);
   const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
@@ -37,6 +39,13 @@ export function useFrameCapture({
     
     try {
       setIsCapturingFrame(true);
+      
+      // Pause the video before capturing if togglePlayPause is provided
+      if (togglePlayPause && !video.paused) {
+        togglePlayPause();
+        // Short delay to ensure the frame is fully rendered before capturing
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
       
       // Extract current timestamp
       const currentTime = video.currentTime;
@@ -143,7 +152,7 @@ export function useFrameCapture({
       setIsCapturingFrame(false);
       pendingRef.current = false;
     }
-  }, [videoRef, canvasRef, videoUrl, projectId, isCapturingFrame, capturedTimemarks, formatTime, onFrameCaptured]);
+  }, [videoRef, canvasRef, videoUrl, projectId, isCapturingFrame, capturedTimemarks, formatTime, onFrameCaptured, togglePlayPause]);
   
   return {
     captureFrame,

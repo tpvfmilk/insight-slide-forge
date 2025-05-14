@@ -84,6 +84,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     );
   };
 
+  // Handle capture frame click
+  const handleCaptureFrame = () => {
+    // This will call the provided onCaptureFrame function,
+    // which now handles pausing the video
+    onCaptureFrame();
+  };
+
   return (
     <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
       {/* Loading state */}
@@ -172,7 +179,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <Button 
             variant="secondary" 
             size="sm"
-            onClick={onCaptureFrame}
+            onClick={handleCaptureFrame}
             className="flex items-center space-x-1"
             disabled={!isVideoLoaded || isCapturingFrame}
           >

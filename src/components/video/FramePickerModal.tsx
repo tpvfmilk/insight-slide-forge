@@ -37,7 +37,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
 }) => {
   // Use our custom hooks
   const videoPlayer = useVideoPlayer({ videoPath, projectId });
-  const { videoRef, videoUrl, duration, isLoadingVideo, isVideoLoaded, formatTime } = videoPlayer;
+  const { videoRef, videoUrl, duration, isLoadingVideo, isVideoLoaded, formatTime, togglePlayPause } = videoPlayer;
   
   // Initialize the frame library
   const frameLibrary = useFrameLibrary({
@@ -55,7 +55,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     formatTime,
     onFrameCaptured: (frame) => {
       frameLibrary.addFrameToLibrary(frame);
-    }
+    },
+    togglePlayPause // Pass the togglePlayPause function to useFrameCapture
   });
   
   // Handle removing timemarks when frames are removed
