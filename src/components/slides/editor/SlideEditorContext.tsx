@@ -443,12 +443,9 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     // Update slides in database
     updateSlidesInDatabase(updatedSlides);
     
-    toast({
-      action: {
-        label: "Undo",
-        onClick: undoDeleteSlide
-      }
-    });
+    // Fix: Remove the incorrect toast usage with action property
+    // Instead, use regular toast with a descriptive message only
+    toast("Slide deleted");
   };
   
   // Delete current slide
