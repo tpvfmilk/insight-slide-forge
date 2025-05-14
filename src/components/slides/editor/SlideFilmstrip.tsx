@@ -136,7 +136,7 @@ export const SlideFilmstrip: React.FC = () => {
 
   return (
     <div className="h-40 border-t w-full flex-shrink-0 overflow-hidden relative">
-      <div className="max-w-screen-xl mx-auto px-4 h-full flex items-center relative">
+      <div className="w-full mx-auto px-4 h-full flex items-center relative">
         {/* Left scroll button */}
         <Button
           variant="outline"
