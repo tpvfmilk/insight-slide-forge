@@ -1,17 +1,20 @@
+
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Progress } from "@/components/ui/progress";
 import { fetchStorageInfo } from "@/services/usageService";
 import { formatFileSize } from "@/utils/formatUtils";
-import { Database, RefreshCw } from "lucide-react";
+import { Database, HardDrive, RefreshCw } from "lucide-react";
 import { syncStorageUsage } from "@/services/storageUsageService";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CleanupStorageButton } from "./CleanupStorageButton";
+
 export function StorageUsageBar() {
   const [percentage, setPercentage] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const queryClient = useQueryClient();
+  
   const {
     data: storageInfo,
     isLoading,
@@ -27,11 +30,13 @@ export function StorageUsageBar() {
   useEffect(() => {
     refetch();
   }, [refetch]);
+  
   useEffect(() => {
     if (storageInfo) {
       setPercentage(Math.min(100, storageInfo.percentageUsed));
     }
   }, [storageInfo]);
+  
   const handleSyncStorage = async () => {
     setIsSyncing(true);
     try {
@@ -52,14 +57,17 @@ export function StorageUsageBar() {
       setIsSyncing(false);
     }
   };
+  
   if (isLoading) {
     return <div className="px-4 py-2 text-sm text-muted-foreground">
         Loading storage info...
       </div>;
   }
+  
   if (!storageInfo) {
     return null;
   }
+  
   const usedFormatted = formatFileSize(storageInfo.storageUsed);
   const limitFormatted = formatFileSize(storageInfo.storageLimit);
 
@@ -70,9 +78,13 @@ export function StorageUsageBar() {
   } else if (percentage > 75) {
     progressColor = "bg-warning";
   }
+  
   return <div className="space-y-3 px-[25px] py-[16px]">
       <div className="flex justify-between text-xs text-muted-foreground">
-        
+        <div className="flex items-center gap-2">
+          <HardDrive className="h-3.5 w-3.5" />
+          <span>Total Storage</span>
+        </div>
         <div className="flex items-center gap-2 px-[11px]">
           <span className="px-0 mx-0">
             {usedFormatted} / {limitFormatted}

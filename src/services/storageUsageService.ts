@@ -33,19 +33,23 @@ export const syncStorageUsage = async (): Promise<{ success: boolean; message: s
     
     const data = response.data;
     
-    // Handle case where sync was successful but no size was updated
-    if (data.actualSize === data.previouslyTrackedSize) {
-      return { 
-        success: true, 
-        message: "Storage usage is already up to date" 
-      };
+    // Handle success response - data might have previous_size and new_size
+    if (data.success) {
+      let message = "Storage usage updated successfully";
+      
+      // If we have size information, provide more details
+      if (data.previousStorageSize !== undefined && data.newStorageSize !== undefined) {
+        const prevSize = Math.round(data.previousStorageSize / (1024 * 1024));
+        const newSize = Math.round(data.newStorageSize / (1024 * 1024));
+        message = `Storage usage updated: ${newSize} MB (was ${prevSize} MB)`;
+      }
+      
+      return { success: true, message };
     }
     
-    const sizeDiffMB = Math.abs((data.actualSize - data.previouslyTrackedSize) / (1024 * 1024)).toFixed(2);
-    
     return { 
-      success: true, 
-      message: `Storage usage updated (${sizeDiffMB} MB ${data.actualSize > data.previouslyTrackedSize ? 'added' : 'removed'})` 
+      success: false, 
+      message: data.message || "Unknown error updating storage usage" 
     };
   } catch (error) {
     console.error("Error syncing storage usage:", error);
