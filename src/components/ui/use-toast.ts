@@ -1,13 +1,13 @@
 
 // Correctly import from sonner
 import { toast as sonnerToast } from "sonner";
-import { type ToastProps, type ToastActionElement } from "@/components/ui/toast";
+import { type ToastProps } from "@/components/ui/toast";
 
 // Re-export toast from sonner for compatibility
 export { toast } from "sonner";
 
-// Define the toast action props using the imported type
-export type ToastActionProps = React.ComponentPropsWithoutRef<typeof ToastActionElement>;
+// Define the toast action props
+export type ToastActionProps = React.ComponentProps<"button">;
 
 // Custom hook that provides a compatibility layer between shadcn/ui toast API and sonner
 export const useToast = () => {
