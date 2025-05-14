@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useUIReset } from "@/context/UIResetContext";
 import { cleanupFrameSelectorDialog } from "@/utils/uiUtils";
 import { getFrameStatistics, purgeUnusedFrames } from "@/utils/frameUtils";
-import { toast } from "@/hooks/use-toast"; 
+import { toast } from "sonner"; 
 import { Separator } from "@/components/ui/separator";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Slide } from "@/utils/frameUtils";
@@ -85,8 +85,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
   const removeSelectedFrame = (e: React.MouseEvent, frame: ExtractedFrame) => {
     e.stopPropagation(); // Prevent triggering the toggle selection
     setLocalSelected(prev => prev.filter(f => f.id !== frame.id));
-    toast({
-      title: "Frame removed",
+    toast("Frame removed", {
       description: "Frame has been removed from selection",
       duration: 2000,
     });
@@ -115,8 +114,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
     setIsPurgingFrames(true);
     
     // Create a loading toast
-    toast({
-      title: "Purging unused frames",
+    toast("Purging unused frames", {
       description: "Please wait while we clean up unused frames...",
     });
     
@@ -133,8 +131,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
       }
       
       // Success toast
-      toast({
-        title: "Success",
+      toast("Success", {
         description: "Successfully purged unused frames",
       });
       
@@ -145,10 +142,9 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
     } catch (error) {
       console.error("Error purging frames:", error);
       // Show error toast
-      toast({
-        variant: "destructive",
-        title: "Error",
+      toast("Error", {
         description: "Failed to purge unused frames",
+        variant: "destructive",
       });
     } finally {
       setIsPurgingFrames(false);

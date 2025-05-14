@@ -27,6 +27,5 @@ const Toaster = ({ ...props }: ToasterProps) => {
   )
 }
 
-// Export the enhanced toast from our compatibility layer
 export { Toaster }
 export { toast } from "@/hooks/use-toast"

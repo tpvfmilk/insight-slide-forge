@@ -154,19 +154,13 @@ export function useFrameCapture({
   const createPlaceholderFrame = async (timeInSeconds: number) => {
     const canvas = canvasRef.current;
     if (!canvas) {
-      toast({
-        title: "Failed to create placeholder frame",
-        variant: "destructive",
-      });
+      toast.error("Failed to create placeholder frame");
       return;
     }
     
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      toast({
-        title: "Failed to create placeholder frame",
-        variant: "destructive",
-      });
+      toast.error("Failed to create placeholder frame");
       return;
     }
     
@@ -196,10 +190,7 @@ export function useFrameCapture({
         const permanentUrl = await uploadFrameToStorage(blob, timestamp);
         
         if (!permanentUrl) {
-          toast({
-            title: "Failed to upload placeholder frame",
-            variant: "destructive",
-          });
+          toast.error("Failed to upload placeholder frame");
           return;
         }
         
@@ -225,10 +216,7 @@ export function useFrameCapture({
           description: `Placeholder created at ${timestamp}`,
         });
       } else {
-        toast({
-          title: "Failed to create placeholder frame",
-          variant: "destructive",
-        });
+        toast.error("Failed to create placeholder frame");
       }
     }, "image/jpeg", 0.95);
   };
