@@ -1,8 +1,7 @@
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { X } from "lucide-react";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useSlideEditor } from "./SlideEditorContext";
 
 export const SlideFilmstrip: React.FC = () => {
@@ -17,6 +16,38 @@ export const SlideFilmstrip: React.FC = () => {
 
   // Reference for the filmstrip container
   const filmstripRef = useRef<HTMLDivElement>(null);
+  
+  // States for scroll navigation controls
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  
+  // Function to check scroll possibilities
+  const updateScrollButtons = () => {
+    if (!filmstripRef.current) return;
+    
+    const container = filmstripRef.current;
+    setCanScrollLeft(container.scrollLeft > 0);
+    setCanScrollRight(
+      container.scrollLeft < container.scrollWidth - container.clientWidth - 2 // Adding a small buffer
+    );
+  };
+  
+  // Function to manually scroll the filmstrip
+  const scrollFilmstrip = (direction: 'left' | 'right') => {
+    if (!filmstripRef.current) return;
+    
+    const container = filmstripRef.current;
+    const scrollAmount = container.clientWidth * 0.5; // Scroll half the container width
+    
+    const targetScrollLeft = direction === 'left' 
+      ? container.scrollLeft - scrollAmount 
+      : container.scrollLeft + scrollAmount;
+    
+    container.scrollTo({
+      left: targetScrollLeft,
+      behavior: 'smooth'
+    });
+  };
   
   // Center the current slide whenever it changes
   useEffect(() => {
@@ -52,12 +83,31 @@ export const SlideFilmstrip: React.FC = () => {
           left: scrollPosition,
           behavior: 'smooth'
         });
+        
+        // Update scroll buttons after centering
+        setTimeout(updateScrollButtons, 300);
       } catch (error) {
         console.error("Error centering slide:", error);
       }
     }, 150); // Increased delay to ensure DOM updates are complete
     
   }, [currentSlideIndex]);
+  
+  // Update scroll buttons on scroll
+  useEffect(() => {
+    const container = filmstripRef.current;
+    if (!container) return;
+    
+    const handleScroll = () => updateScrollButtons();
+    
+    container.addEventListener('scroll', handleScroll);
+    // Initial check
+    updateScrollButtons();
+    
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
   
   // Handle keyboard navigation for previous/next slide
   useEffect(() => {
@@ -85,45 +135,68 @@ export const SlideFilmstrip: React.FC = () => {
   }, [goToPrevSlide, goToNextSlide]);
 
   return (
-    <div className="h-40 border-t w-full flex-shrink-0 overflow-hidden">
-      <div className="max-w-screen-xl mx-auto px-4 h-full">
-        <ScrollArea orientation="horizontal" className="h-full w-full">
-          <div 
-            ref={filmstripRef} 
-            className="flex gap-3 p-3 h-full"
-            style={{ scrollbarWidth: 'none' }}
-          >
-            {slides.map((slide, index) => (
-              <div 
-                key={slide.id}
-                data-slide-index={index}
-                onClick={() => goToSlide(index)}
-                className={`h-full w-48 flex-shrink-0 cursor-pointer flex flex-col items-center justify-center relative ${
-                  currentSlideIndex === index ? "border-2 border-primary" : "border border-border hover:border-muted-foreground/30"
-                } rounded-md overflow-hidden shadow-sm bg-card p-3`}
+    <div className="h-40 border-t w-full flex-shrink-0 overflow-hidden relative">
+      <div className="max-w-screen-xl mx-auto px-4 h-full flex items-center relative">
+        {/* Left scroll button */}
+        <Button
+          variant="outline"
+          size="icon"
+          className="absolute left-2 z-10 rounded-full opacity-80 hover:opacity-100 bg-background/80 backdrop-blur-sm"
+          onClick={() => scrollFilmstrip('left')}
+          disabled={!canScrollLeft}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          <span className="sr-only">Scroll left</span>
+        </Button>
+        
+        {/* Custom scroll container */}
+        <div 
+          ref={filmstripRef} 
+          className="flex gap-3 p-3 h-full overflow-x-auto scroll-smooth hide-scrollbar w-full"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {slides.map((slide, index) => (
+            <div 
+              key={slide.id}
+              data-slide-index={index}
+              onClick={() => goToSlide(index)}
+              className={`h-full w-48 flex-shrink-0 cursor-pointer flex flex-col items-center justify-center relative group ${
+                currentSlideIndex === index ? "border-2 border-primary" : "border border-border hover:border-muted-foreground/30"
+              } rounded-md overflow-hidden shadow-sm bg-card p-3`}
+            >
+              {/* Delete button in the top-right corner */}
+              <Button
+                variant="ghost" 
+                size="icon"
+                className="absolute top-1 right-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground transition-opacity"
+                onClick={(e) => deleteSlideFromFilmstrip(e, index)}
+                disabled={slides.length <= 1}
               >
-                {/* Delete button in the top-right corner */}
-                <Button
-                  variant="ghost" 
-                  size="icon"
-                  className="absolute top-1 right-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground transition-opacity"
-                  onClick={(e) => deleteSlideFromFilmstrip(e, index)}
-                  disabled={slides.length <= 1}
-                >
-                  <X className="h-3 w-3" />
-                  <span className="sr-only">Delete slide</span>
-                </Button>
+                <X className="h-3 w-3" />
+                <span className="sr-only">Delete slide</span>
+              </Button>
 
-                {/* Slide title centered with text wrap */}
-                <div className="text-xs text-center overflow-hidden">
-                  <span className="font-medium">
-                    {index + 1}. {slide.title}
-                  </span>
-                </div>
+              {/* Slide title centered with text wrap */}
+              <div className="text-xs text-center overflow-hidden">
+                <span className="font-medium">
+                  {index + 1}. {slide.title}
+                </span>
               </div>
-            ))}
-          </div>
-        </ScrollArea>
+            </div>
+          ))}
+        </div>
+        
+        {/* Right scroll button */}
+        <Button
+          variant="outline"
+          size="icon"
+          className="absolute right-2 z-10 rounded-full opacity-80 hover:opacity-100 bg-background/80 backdrop-blur-sm"
+          onClick={() => scrollFilmstrip('right')}
+          disabled={!canScrollRight}
+        >
+          <ChevronRight className="h-4 w-4" />
+          <span className="sr-only">Scroll right</span>
+        </Button>
       </div>
     </div>
   );

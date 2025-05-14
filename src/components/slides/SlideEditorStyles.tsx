@@ -5,6 +5,16 @@ export const SlideEditorStyles: React.FC = () => {
   return (
     <style>
       {`
+        /* Hide scrollbar but maintain functionality */
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        
+        .hide-scrollbar {
+          -ms-overflow-style: none;  /* IE and Edge */
+          scrollbar-width: none;  /* Firefox */
+        }
+        
         /* Improve slider scrollability */
         .filmstrip-container {
           overflow-x: auto;
