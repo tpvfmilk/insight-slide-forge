@@ -85,7 +85,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   return (
-    <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
+    <div className="relative w-full bg-black rounded-md overflow-hidden" style={{ height: "360px", maxWidth: "640px", margin: "0 auto" }}>
       {/* Loading state */}
       {isLoadingVideo ? (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
@@ -115,7 +115,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       <video
         ref={videoRef}
         src={videoUrl || undefined}
-        className="w-full h-full"
+        className="w-full h-full object-contain"
         crossOrigin="anonymous"
         onLoadedData={handleVideoLoaded}
         onLoadedMetadata={handleVideoLoaded}

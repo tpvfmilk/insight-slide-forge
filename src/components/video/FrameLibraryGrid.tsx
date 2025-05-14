@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Trash2 } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 interface FrameLibraryGridProps {
   libraryFrames: ExtractedFrame[];
@@ -32,20 +33,23 @@ export const FrameLibraryGrid: React.FC<FrameLibraryGridProps> = ({
 
   return (
     <ScrollArea className="h-full w-full">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2 pb-6">
+      <div className="grid grid-cols-3 gap-3 p-2 pb-6" style={{ maxHeight: "360px", overflowY: "auto" }}>
         {libraryFrames.map((frame) => (
           <div 
             key={frame.id} 
-            className={`relative aspect-video cursor-pointer rounded-md overflow-hidden border-2 ${
+            className={`relative cursor-pointer rounded-md overflow-hidden border-2 ${
               selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
             }`}
+            style={{ width: "100%" }}
             onClick={() => toggleFrameSelection(frame)}
           >
-            <img
-              src={frame.imageUrl}
-              alt={`Frame at ${frame.timestamp}`}
-              className="h-full w-full object-cover"
-            />
+            <AspectRatio ratio={16/9}>
+              <img
+                src={frame.imageUrl}
+                alt={`Frame at ${frame.timestamp}`}
+                className="h-full w-full object-cover"
+              />
+            </AspectRatio>
             <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
             {selectedFrames[frame.id!] && (
               <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">

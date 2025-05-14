@@ -110,12 +110,14 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         {/* Main content area */}
         <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
           {/* Video player section */}
-          <VideoPlayer
-            {...videoPlayer}
-            capturedTimemarks={frameCapture.capturedTimemarks}
-            isCapturingFrame={frameCapture.isCapturingFrame}
-            onCaptureFrame={frameCapture.captureFrame}
-          />
+          <div className="flex justify-center">
+            <VideoPlayer
+              {...videoPlayer}
+              capturedTimemarks={frameCapture.capturedTimemarks}
+              isCapturingFrame={frameCapture.isCapturingFrame}
+              onCaptureFrame={frameCapture.captureFrame}
+            />
+          </div>
           
           <Separator />
           
@@ -128,7 +130,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               </div>
             </div>
             
-            <div className="flex-1 min-h-0 bg-muted/30 rounded-md overflow-hidden">
+            <div className="flex-1 min-h-0 bg-muted/30 rounded-md overflow-hidden" style={{ height: "360px" }}>
               <FrameLibraryGrid 
                 libraryFrames={frameLibrary.libraryFrames}
                 selectedFrames={frameLibrary.selectedFrames}
