@@ -11,7 +11,7 @@ import { toast } from "sonner";
 // Import our components and hooks
 import { VideoPlayer } from "./VideoPlayer";
 import { FrameLibraryFilmstrip } from "./FrameLibraryFilmstrip";
-import { FrameLibraryStyles } from "./FrameLibraryStyles"; // Add this import
+import { FrameLibraryStyles } from "./FrameLibraryStyles"; 
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { useFrameCapture } from "@/hooks/useFrameCapture";
 import { useFrameLibrary } from "@/hooks/useFrameLibrary";
@@ -133,7 +133,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               </div>
             </div>
             
-            <div className="bg-muted/30 rounded-md overflow-hidden" style={{ height: '120px' }}>
+            <div className="bg-muted/30 rounded-md overflow-hidden" style={{ height: '150px' }}>
               <FrameLibraryFilmstrip 
                 libraryFrames={frameLibrary.libraryFrames}
                 selectedFrames={frameLibrary.selectedFrames}

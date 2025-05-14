@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Check, Trash2 } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface FrameLibraryFilmstripProps {
   libraryFrames: ExtractedFrame[];
@@ -140,37 +141,46 @@ export const FrameLibraryFilmstrip: React.FC<FrameLibraryFilmstripProps> = ({
       style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
     >
       {libraryFrames.map((frame) => (
-        <div 
+        <Card 
           key={frame.id} 
-          className={`relative flex-shrink-0 cursor-pointer rounded-md overflow-hidden border-2 ${
-            selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
-          }`}
-          style={{ width: '160px', height: '100px' }} // Fixed dimensions
-          onClick={() => toggleFrameSelection(frame)}
+          className={`flex-shrink-0 ${
+            selectedFrames[frame.id!] ? 'ring-2 ring-primary' : ''
+          } hover:shadow-md transition-all`}
+          style={{ width: '160px' }}
         >
-          <img
-            src={frame.imageUrl}
-            alt={`Frame at ${frame.timestamp}`}
-            className="h-full w-full object-cover"
-          />
-          <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
-          {selectedFrames[frame.id!] && (
-            <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
-              <Check className="h-3 w-3 text-primary-foreground" />
+          <CardContent className="p-0 relative">
+            <div 
+              className="relative cursor-pointer"
+              onClick={() => toggleFrameSelection(frame)}
+            >
+              <img
+                src={frame.imageUrl}
+                alt={`Frame at ${frame.timestamp}`}
+                className="object-cover w-full"
+                style={{ height: '100px' }}
+              />
+              <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
+              
+              {selectedFrames[frame.id!] && (
+                <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
+                  <Check className="h-3 w-3 text-primary-foreground" />
+                </div>
+              )}
+              
+              <Button
+                variant="destructive"
+                size="icon"
+                className="h-6 w-6 absolute bottom-1 right-1 opacity-0 hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFrame(frame.id as string);
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
             </div>
-          )}
-          <Button
-            variant="destructive"
-            size="icon"
-            className="h-6 w-6 absolute bottom-1 right-1 opacity-0 hover:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.stopPropagation();
-              removeFrame(frame.id as string);
-            }}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        </div>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );
