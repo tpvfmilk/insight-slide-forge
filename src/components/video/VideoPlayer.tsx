@@ -84,114 +84,110 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     );
   };
 
-  // Handle appearance during loading/error states
-  const renderVideoContent = () => {
-    if (videoError) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full">
-          <AlertCircle className="h-10 w-10 mb-2 text-destructive" />
-          <p className="text-center text-muted-foreground mb-2">Failed to load video</p>
-          <Button variant="outline" size="sm" onClick={retryLoadVideo}>
-            Try Again
-          </Button>
-        </div>
-      );
-    }
-
-    if (isLoadingVideo) {
-      return (
-        <div className="flex items-center justify-center h-full">
-          <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      );
-    }
-
-    return (
-      <video
-        ref={videoRef}
-        className="w-full h-full bg-black"
-        onLoadedData={handleVideoLoaded}
-        onError={handleVideoError}
-        crossOrigin="anonymous"
-      >
-        <source src={videoUrl || ''} />
-        Your browser does not support the video tag.
-      </video>
-    );
-  };
-
   return (
-    <div className="space-y-2 w-full">
-      <div className="relative rounded-md overflow-hidden bg-black/10 border" style={{ height: "230px" }}>
-        {renderVideoContent()}
-      </div>
-      
-      <div className="space-y-2 px-1">
-        {/* Time and controls */}
-        <div className="flex justify-between items-center text-xs text-muted-foreground">
-          <span>{formatTime(currentTime)}</span>
-          <span>{formatTime(duration)}</span>
+    <div className="relative w-full bg-black aspect-video rounded-md overflow-hidden">
+      {/* Loading state */}
+      {isLoadingVideo ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
+          <RefreshCw className="h-8 w-8 animate-spin mr-2" />
+          <span>Loading video...</span>
         </div>
-        
-        {/* Progress slider with markers */}
-        {renderSliderWithMarkers()}
-        
-        {/* Control buttons */}
-        <div className="flex items-center justify-between">
-          <div className="flex space-x-1">
+      ) : null}
+      
+      {/* Error state */}
+      {videoError ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
+          <div>
+            <AlertCircle className="h-10 w-10 mb-2 mx-auto text-destructive" />
+            <p className="mb-4">{videoError}</p>
             <Button 
-              variant="outline" 
-              size="icon" 
-              className="h-8 w-8"
-              onClick={seekBack}
-              disabled={!isVideoLoaded}
+              variant="secondary" 
+              onClick={retryLoadVideo}
             >
-              <Rewind className="h-4 w-4" />
-              <span className="sr-only">Rewind</span>
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              size="icon"
-              className="h-8 w-8"
-              onClick={togglePlayPause}
-              disabled={!isVideoLoaded}
-            >
-              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              <span className="sr-only">{isPlaying ? 'Pause' : 'Play'}</span>
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              size="icon"
-              className="h-8 w-8"
-              onClick={seekForward}
-              disabled={!isVideoLoaded}
-            >
-              <FastForward className="h-4 w-4" />
-              <span className="sr-only">Fast Forward</span>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry Loading Video
             </Button>
           </div>
-          
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onCaptureFrame}
-            disabled={!isVideoLoaded || isCapturingFrame}
-            className="h-8"
+        </div>
+      ) : null}
+      
+      {/* Video element */}
+      <video
+        ref={videoRef}
+        src={videoUrl || undefined}
+        className="w-full h-full"
+        crossOrigin="anonymous"
+        onLoadedData={handleVideoLoaded}
+        onLoadedMetadata={handleVideoLoaded}
+        onError={handleVideoError}
+        playsInline
+        preload="auto"
+      >
+        Your browser does not support the video tag.
+      </video>
+      
+      {/* Video controls overlay */}
+      <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
+        <div className="flex items-center space-x-4 w-full">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={seekBack}
+            className="text-white hover:bg-white/20"
+            disabled={!isVideoLoaded}
           >
-            {isCapturingFrame ? (
-              <>
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                Capturing...
-              </>
+            <Rewind className="h-5 w-5" />
+          </Button>
+
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={togglePlayPause}
+            className="text-white hover:bg-white/20"
+            disabled={!isVideoLoaded}
+          >
+            {isPlaying ? (
+              <Pause className="h-5 w-5" />
             ) : (
-              <>
-                <Camera className="h-3.5 w-3.5 mr-1.5" />
-                Capture Frame
-              </>
+              <Play className="h-5 w-5" />
             )}
           </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={seekForward}
+            className="text-white hover:bg-white/20"
+            disabled={!isVideoLoaded}
+          >
+            <FastForward className="h-5 w-5" />
+          </Button>
+          
+          <div className="text-white text-sm">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </div>
+          
+          <div className="flex-1"></div>
+          
+          <Button 
+            variant="secondary" 
+            size="sm"
+            onClick={onCaptureFrame}
+            className="flex items-center space-x-1"
+            disabled={!isVideoLoaded || isCapturingFrame}
+          >
+            {isCapturingFrame ? (
+              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Camera className="h-4 w-4 mr-1" />
+            )}
+            {isCapturingFrame ? 'Capturing...' : 'Capture Frame'}
+          </Button>
+        </div>
+        
+        {/* Video seek slider with markers */}
+        <div className="px-1">
+          {renderSliderWithMarkers()}
         </div>
       </div>
     </div>

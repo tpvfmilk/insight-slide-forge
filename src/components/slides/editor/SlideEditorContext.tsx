@@ -197,7 +197,9 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
           setEditedContent(result.slides[0].content);
         }
         
-        toast.dismiss("generate-slides");
+        toast.success(`${result.slides.length} slides generated successfully!`, {
+          id: "generate-slides"
+        });
         
         // Update project size after generation
         fetchProjectSize();
@@ -255,6 +257,13 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
 
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
+    
+    // Give feedback based on selection count
+    if (selectedFrames.length === 1) {
+      toast.success(`Applied 1 frame to slide`);
+    } else {
+      toast.success(`Applied ${selectedFrames.length} frames to slide`);
+    }
     
     // Update project size
     fetchProjectSize();
@@ -368,7 +377,9 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
       }
       setSlides(updatedSlides);
       updateSlidesInDatabase(updatedSlides);
-      toast.dismiss("upload-image");
+      toast.success("Image uploaded successfully!", {
+        id: "upload-image"
+      });
       
       // Update project size
       fetchProjectSize();
@@ -403,6 +414,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     
     setSlides(updatedSlides);
     updateSlidesInDatabase(updatedSlides);
+    toast.success("Image removed from slide");
   };
   
   // Delete slide from filmstrip
@@ -440,6 +452,13 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     
     // Update slides in database
     updateSlidesInDatabase(updatedSlides);
+    
+    toast.success("Slide deleted", {
+      action: {
+        label: "Undo",
+        onClick: undoDeleteSlide
+      }
+    });
   };
   
   // Delete current slide
@@ -473,6 +492,8 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     
     // Update slides in database
     updateSlidesInDatabase(updatedSlides);
+    
+    toast.success("New slide added");
   };
   
   // Undo delete slide

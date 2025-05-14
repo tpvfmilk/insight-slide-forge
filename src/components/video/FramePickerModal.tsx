@@ -2,16 +2,15 @@
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Separator } from "@/components/ui/separator";
 import { mergeAndSaveFrames } from "@/utils/frameUtils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
-// Import our components and hooks
+// Import our new components and hooks
 import { VideoPlayer } from "./VideoPlayer";
-import { FrameLibraryFilmstrip } from "./FrameLibraryFilmstrip";
-import { FrameLibraryStyles } from "./FrameLibraryStyles"; 
+import { FrameLibraryGrid } from "./FrameLibraryGrid";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { useFrameCapture } from "@/hooks/useFrameCapture";
 import { useFrameLibrary } from "@/hooks/useFrameLibrary";
@@ -37,7 +36,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
 }) => {
   // Use our custom hooks
   const videoPlayer = useVideoPlayer({ videoPath, projectId });
-  const { videoRef, videoUrl, duration, isLoadingVideo, isVideoLoaded, formatTime, togglePlayPause } = videoPlayer;
+  const { videoRef, videoUrl, duration, isLoadingVideo, isVideoLoaded, formatTime } = videoPlayer;
   
   // Initialize the frame library
   const frameLibrary = useFrameLibrary({
@@ -46,23 +45,6 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     allExtractedFrames
   });
   
-  // Handle successfully captured frames
-  const handleFrameCaptured = async (frame: ExtractedFrame) => {
-    console.log("Frame captured in FramePickerModal:", frame);
-    
-    try {
-      // Add to library frames
-      frameLibrary.addFrameToLibrary(frame);
-      
-      // Save the frame to the project database immediately
-      await mergeAndSaveFrames(projectId, [frame], frameLibrary.libraryFrames);
-      console.log("Frame saved to project database successfully");
-    } catch (error) {
-      console.error("Error saving captured frame:", error);
-      toast("Failed to save frame to project database");
-    }
-  };
-  
   // Initialize frame capture with callback to add frames to library
   const frameCapture = useFrameCapture({
     videoRef,
@@ -70,8 +52,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     videoUrl,
     duration,
     formatTime,
-    onFrameCaptured: handleFrameCaptured,
-    togglePlayPause
+    onFrameCaptured: (frame) => {
+      frameLibrary.addFrameToLibrary(frame);
+    }
   });
   
   // Handle removing timemarks when frames are removed
@@ -89,7 +72,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   // Handle bulk deletion of selected frames
   const handleDeleteSelected = async () => {
     if (frameLibrary.selectedFramesCount === 0) {
-      toast("No frames selected to delete");
+      toast.info("No frames selected to delete");
       return;
     }
     
@@ -115,15 +98,14 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   
   // Handle dialog clean up on close
   const handleClose = () => {
+    // Make sure to properly clean up and dismiss any toasts
+    toast.dismiss();
     onClose();
   };
   
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Include the styles component for drag functionality */}
-        <FrameLibraryStyles />
-        
         <DialogTitle>Frame Library</DialogTitle>
         
         {/* Main content area */}
@@ -147,8 +129,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               </div>
             </div>
             
-            <div className="bg-muted/30 rounded-md overflow-hidden" style={{ height: '150px' }}>
-              <FrameLibraryFilmstrip 
+            <div className="h-[300px] bg-muted/30 rounded-md overflow-hidden">
+              <FrameLibraryGrid 
                 libraryFrames={frameLibrary.libraryFrames}
                 selectedFrames={frameLibrary.selectedFrames}
                 toggleFrameSelection={frameLibrary.toggleFrameSelection}
@@ -158,7 +140,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           </div>
           
           {/* Hidden canvas for frame capture */}
-          <canvas ref={frameCapture.canvasRef} className="hidden-canvas"></canvas>
+          <canvas ref={frameCapture.canvasRef} className="hidden"></canvas>
         </div>
         
         <div className="flex justify-between items-center pt-4 border-t mt-2">

@@ -2,7 +2,7 @@
 import { useState, useRef, useCallback } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
 export function useFrameCapture({
@@ -11,8 +11,7 @@ export function useFrameCapture({
   videoUrl,
   duration,
   formatTime,
-  onFrameCaptured,
-  togglePlayPause
+  onFrameCaptured
 }: {
   videoRef: React.RefObject<HTMLVideoElement>;
   projectId: string;
@@ -20,7 +19,6 @@ export function useFrameCapture({
   duration: number;
   formatTime: (seconds: number) => string;
   onFrameCaptured: (frame: ExtractedFrame) => void;
-  togglePlayPause?: () => void;
 }) {
   const [isCapturingFrame, setIsCapturingFrame] = useState<boolean>(false);
   const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
@@ -38,92 +36,38 @@ export function useFrameCapture({
     }
     
     try {
-      // Start the frame capture process
-      console.log("Starting frame capture...");
       setIsCapturingFrame(true);
-      
-      // Always ensure the video is paused before capturing
-      const wasPlaying = !video.paused;
-      if (wasPlaying && togglePlayPause) {
-        togglePlayPause();
-        // Add a longer delay to ensure the frame is fully rendered before capturing
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
       
       // Extract current timestamp
       const currentTime = video.currentTime;
       const timestamp = formatTime(currentTime);
-      console.log(`Capturing frame at ${timestamp} (${currentTime}s)`);
       
       // Check if this timestamp has already been captured
       if (capturedTimemarks.some(time => Math.abs(time - currentTime) < 0.5)) {
-        toast(`Frame at ${timestamp} already exists`);
+        toast.info(`Frame at ${timestamp} already exists`);
         setIsCapturingFrame(false);
         return;
       }
       
-      // IMPORTANT: Create a new canvas in the document body
-      // This ensures it's properly rendered even if the original canvas is hidden
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = video.videoWidth || 640;
-      tempCanvas.height = video.videoHeight || 360;
-      
-      // Set the canvas to be hidden but still rendered
-      tempCanvas.style.position = "fixed";
-      tempCanvas.style.top = "0";
-      tempCanvas.style.left = "-9999px";
-      tempCanvas.style.visibility = "hidden";
-      document.body.appendChild(tempCanvas);
-      
-      const ctx = tempCanvas.getContext('2d', { 
-        alpha: false,
-        desynchronized: true 
-      });
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
       
       if (!ctx) {
-        document.body.removeChild(tempCanvas);
         throw new Error("Could not get canvas context");
       }
       
-      // Try multiple approaches to capture a good frame
-      console.log("Drawing video to canvas...");
+      // Draw the current video frame on the canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Force the video dimensions to be set correctly
-      if (!video.videoWidth) {
-        console.warn("Video dimensions not available, using defaults");
-      }
-      
-      // Approach 1: Basic drawing
-      ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-      
-      // Approach 2: If needed, try with creating an intermediary bitmap
-      if (typeof createImageBitmap === 'function') {
-        try {
-          const bitmap = await createImageBitmap(video);
-          ctx.drawImage(bitmap, 0, 0, tempCanvas.width, tempCanvas.height);
-          bitmap.close();
-          console.log("Used ImageBitmap for improved capture");
-        } catch (e) {
-          console.warn("ImageBitmap approach failed, using direct canvas drawing", e);
-        }
-      }
-      
-      // Convert canvas to blob with higher quality
-      console.log("Converting canvas to blob...");
+      // Convert canvas to blob
       const blob = await new Promise<Blob | null>((resolve) => 
-        tempCanvas.toBlob(resolve, 'image/jpeg', 0.95)
+        canvas.toBlob(resolve, 'image/jpeg', 0.95)
       );
-      
-      // Clean up temp canvas
-      document.body.removeChild(tempCanvas);
       
       if (!blob) {
         throw new Error("Failed to create image blob");
-      }
-      
-      console.log(`Captured blob size: ${blob.size} bytes`);
-      if (blob.size < 1000) {
-        console.warn("Captured image is very small, might be black or empty");
       }
       
       // Create a unique ID and filename for this frame
@@ -131,13 +75,11 @@ export function useFrameCapture({
       const filename = `project_${projectId}/frame_${timestamp.replace(/:/g, '_')}_${frameId}.jpg`;
       
       // Upload blob to Supabase Storage
-      console.log(`Uploading frame to Supabase: ${filename}`);
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('slide_stills')
         .upload(filename, blob, {
           contentType: 'image/jpeg',
           cacheControl: '3600',
-          upsert: true
         });
       
       if (uploadError) {
@@ -164,14 +106,10 @@ export function useFrameCapture({
       setCapturedTimemarks(prev => [...prev, currentTime].sort((a, b) => a - b));
       
       // Call the callback with the new frame
-      console.log("Calling onFrameCaptured with frame:", newFrame);
       onFrameCaptured(newFrame);
-      
-      // Log confirmation of successful capture
-      console.log("Frame captured and saved to project library");
     } catch (error) {
       console.error("Error capturing frame:", error);
-      toast(`Failed to capture frame: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error("Failed to capture frame");
       
       // If the frame capture fails and we need a placeholder for testing
       if (process.env.NODE_ENV === 'development' && pendingRef.current === false) {
@@ -194,7 +132,10 @@ export function useFrameCapture({
         // Call the callback
         onFrameCaptured(placeholderFrame);
         
-        toast("Placeholder frame created for development testing");
+        // Fix: Replace toast with title/description to use Sonner's format
+        toast("Placeholder frame created", {
+          description: `Placeholder created at ${timestamp}`,
+        });
       } else {
         throw error;
       }
@@ -202,7 +143,7 @@ export function useFrameCapture({
       setIsCapturingFrame(false);
       pendingRef.current = false;
     }
-  }, [videoRef, canvasRef, videoUrl, projectId, isCapturingFrame, capturedTimemarks, formatTime, onFrameCaptured, togglePlayPause]);
+  }, [videoRef, canvasRef, videoUrl, projectId, isCapturingFrame, capturedTimemarks, formatTime, onFrameCaptured]);
   
   return {
     captureFrame,
