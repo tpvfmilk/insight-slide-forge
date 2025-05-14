@@ -4,7 +4,7 @@ import { Slide } from "../slides/editor/SlideEditorTypes";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 interface SlidePreviewProps {
-  slides: Slide[];
+  slides?: Slide[];
   currentSlide: Slide;
 }
 

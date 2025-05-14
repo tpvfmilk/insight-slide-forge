@@ -60,7 +60,8 @@ const PresentationPage = () => {
         if (!project.slides || !Array.isArray(project.slides) || project.slides.length === 0) {
           toast.error("No slides available for this project");
         } else {
-          setSlides(project.slides);
+          // Type assertion to convert the JSON data to Slide[] type
+          setSlides(project.slides as Slide[]);
         }
       } catch (error) {
         console.error("Error loading project data:", error);
