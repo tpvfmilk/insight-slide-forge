@@ -1,5 +1,4 @@
 
-// This file is now a direct implementation instead of a re-export
 import React from "react";
 import { useParams } from "react-router-dom";
 import { SlideEditorProvider } from "./editor/SlideEditorContext";

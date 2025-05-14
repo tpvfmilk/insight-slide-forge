@@ -76,8 +76,6 @@ const ProjectPage = () => {
       }
       
       // Pass the selected frames to be handled in the project state
-      // Note: we're now only applying these frames to the current slide,
-      // not removing them from the global library
       const success = await handleManualFrameSelectionComplete(selectedFrames);
       
       if (success) {
@@ -86,7 +84,6 @@ const ProjectPage = () => {
         toast.success(`Successfully applied ${selectedFrames.length} frames to slide`, { id: toastId });
         
         // After frames are processed, reload the project to reflect changes
-        // This is crucial for keeping the frame library in sync
         await loadProject();
       } else {
         toast.error("Failed to apply frames to slide", { id: toastId });
@@ -118,7 +115,7 @@ const ProjectPage = () => {
               setContextPrompt={setContextPrompt}
             />
             
-            {/* Action buttons - passing hideSelectFrames=true to hide the Select Frames button */}
+            {/* Action buttons */}
             <ActionButtons 
               project={project}
               needsFrameExtraction={needsFrameExtraction}
@@ -134,7 +131,7 @@ const ProjectPage = () => {
               isTranscriptOnlyProject={isTranscriptOnlyProject}
               refreshProject={loadProject}
               totalDuration={totalVideoDuration}
-              hideSelectFrames={true} // Add this prop to hide the Select Frames button
+              hideSelectFrames={true}
             />
           </div>
         </div>
@@ -155,7 +152,7 @@ const ProjectPage = () => {
               openTranscriptDialog={() => modals.openTranscriptDialog()}
             />
           ) : (
-            <SlideEditor />
+            <SlideEditor projectId={projectId} />
           )}
         </div>
       </div>
