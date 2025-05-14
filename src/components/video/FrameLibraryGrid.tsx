@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Check, Trash2 } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 interface FrameLibraryGridProps {
@@ -32,45 +31,43 @@ export const FrameLibraryGrid: React.FC<FrameLibraryGridProps> = ({
   }
 
   return (
-    <div className="h-full overflow-hidden flex flex-col">
-      <ScrollArea className="flex-1 w-full">
-        <div className="grid grid-cols-3 gap-3 p-2 pb-16">
-          {libraryFrames.map((frame) => (
-            <div 
-              key={frame.id} 
-              className={`relative cursor-pointer rounded-md overflow-hidden border-2 group ${
-                selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
-              }`}
-              onClick={() => toggleFrameSelection(frame)}
+    <div className="h-full overflow-y-auto">
+      <div className="grid grid-cols-3 gap-3 p-2 pb-4">
+        {libraryFrames.map((frame) => (
+          <div 
+            key={frame.id} 
+            className={`relative cursor-pointer rounded-md overflow-hidden border-2 group ${
+              selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
+            }`}
+            onClick={() => toggleFrameSelection(frame)}
+          >
+            <AspectRatio ratio={16/9}>
+              <img
+                src={frame.imageUrl}
+                alt={`Frame at ${frame.timestamp}`}
+                className="h-full w-full object-cover"
+              />
+            </AspectRatio>
+            <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
+            {selectedFrames[frame.id!] && (
+              <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
+                <Check className="h-3 w-3 text-primary-foreground" />
+              </div>
+            )}
+            <Button
+              variant="destructive"
+              size="icon"
+              className="h-6 w-6 absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeFrame(frame.id as string);
+              }}
             >
-              <AspectRatio ratio={16/9}>
-                <img
-                  src={frame.imageUrl}
-                  alt={`Frame at ${frame.timestamp}`}
-                  className="h-full w-full object-cover"
-                />
-              </AspectRatio>
-              <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
-              {selectedFrames[frame.id!] && (
-                <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
-                  <Check className="h-3 w-3 text-primary-foreground" />
-                </div>
-              )}
-              <Button
-                variant="destructive"
-                size="icon"
-                className="h-6 w-6 absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeFrame(frame.id as string);
-                }}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

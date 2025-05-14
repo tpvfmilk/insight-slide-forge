@@ -35,6 +35,20 @@ export const SlideEditorStyles: React.FC = () => {
           position: relative;
           z-index: 10;
         }
+        
+        /* Ensure modal content can scroll properly */
+        .modal-content-scrollable {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          overflow: hidden;
+        }
+        
+        /* Force library containers to scroll */
+        .frame-library-scrollable {
+          overflow-y: auto !important;
+          flex-grow: 1;
+        }
       `}
     </style>
   );

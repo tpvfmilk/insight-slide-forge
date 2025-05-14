@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -104,13 +105,13 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogTitle>Frame Library</DialogTitle>
+      <DialogContent className="max-w-4xl max-h-[90vh] h-[90vh] flex flex-col p-6 gap-0">
+        <DialogTitle className="mb-4">Frame Library</DialogTitle>
         
-        {/* Main content area */}
+        {/* Main content container - fixed distribution with flex */}
         <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Video player section - fixed height to keep it static */}
-          <div className="flex justify-center mb-4" style={{ height: "360px", minHeight: "360px" }}>
+          {/* Video player section - increased fixed height */}
+          <div className="flex justify-center mb-4" style={{ height: "400px", minHeight: "400px" }}>
             <VideoPlayer
               {...videoPlayer}
               capturedTimemarks={frameCapture.capturedTimemarks}
@@ -121,17 +122,17 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           
           <Separator className="mb-4" />
           
-          {/* Frame library section - flexible height to allow scrolling */}
-          <div className="space-y-2 flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="flex items-center justify-between">
+          {/* Frame library section - flexible but with minimum height */}
+          <div className="flex flex-col flex-grow overflow-hidden min-h-[200px]">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-medium">Frame Library</h3>
               <div className="text-sm text-muted-foreground">
                 {frameLibrary.selectedFramesCount} frame{frameLibrary.selectedFramesCount !== 1 ? 's' : ''} selected
               </div>
             </div>
             
-            {/* This container needs to flex-grow and maintain scrollability */}
-            <div className="flex-1 bg-muted/30 rounded-md overflow-hidden">
+            {/* This is the scrollable container */}
+            <div className="flex-grow bg-muted/30 rounded-md overflow-hidden">
               <FrameLibraryGrid 
                 libraryFrames={frameLibrary.libraryFrames}
                 selectedFrames={frameLibrary.selectedFrames}
@@ -150,7 +151,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           />
         </div>
         
-        <div className="flex justify-between items-center pt-4 border-t mt-2">
+        <div className="flex justify-between items-center pt-4 border-t mt-4">
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>
