@@ -23,17 +23,15 @@ export type ProjectVideo = Database["public"]["Tables"]["project_videos"]["Row"]
 export const fetchProjectVideos = async (projectId: string): Promise<ProjectVideo[]> => {
   console.log(`Fetching videos for project ${projectId}`);
   
-  // FIX: Use explicit table name to avoid ambiguous column references
   const { data, error } = await supabase
     .from('project_videos')
     .select('*')
-    .eq('project_videos.project_id', projectId)
+    .eq('project_id', projectId)
     .order('display_order', { ascending: true });
 
   if (error) {
     console.error(`Error fetching videos for project ${projectId}:`, error);
-    // Return empty array instead of throwing so the app can continue
-    return [];
+    throw error;
   }
 
   console.log(`Found ${data?.length || 0} videos for project ${projectId}`, data);

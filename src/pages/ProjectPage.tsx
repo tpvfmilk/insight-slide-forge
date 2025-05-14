@@ -11,7 +11,6 @@ import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
-import { useEffect } from "react";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -41,14 +40,6 @@ const ProjectPage = () => {
     handleManualFrameSelectionComplete,
     totalVideoDuration
   } = useProjectState(projectId);
-
-  // Force reload frames when modal state changes
-  useEffect(() => {
-    if (!modals.isFramePickerModalOpen) {
-      // When modal closes, reload the project data to ensure we have latest frames
-      loadProject();
-    }
-  }, [modals.isFramePickerModalOpen, loadProject]);
   
   const handleOpenManualFramePicker = () => {
     if (!project?.source_file_path) {
@@ -76,6 +67,8 @@ const ProjectPage = () => {
       }
       
       // Pass the selected frames to be handled in the project state
+      // Note: we're now only applying these frames to the current slide,
+      // not removing them from the global library
       const success = await handleManualFrameSelectionComplete(selectedFrames);
       
       if (success) {
@@ -84,6 +77,7 @@ const ProjectPage = () => {
         toast.success(`Successfully applied ${selectedFrames.length} frames to slide`, { id: toastId });
         
         // After frames are processed, reload the project to reflect changes
+        // This is crucial for keeping the frame library in sync
         await loadProject();
       } else {
         toast.error("Failed to apply frames to slide", { id: toastId });
@@ -115,7 +109,7 @@ const ProjectPage = () => {
               setContextPrompt={setContextPrompt}
             />
             
-            {/* Action buttons */}
+            {/* Action buttons - passing hideSelectFrames=true to hide the Select Frames button */}
             <ActionButtons 
               project={project}
               needsFrameExtraction={needsFrameExtraction}
@@ -131,7 +125,7 @@ const ProjectPage = () => {
               isTranscriptOnlyProject={isTranscriptOnlyProject}
               refreshProject={loadProject}
               totalDuration={totalVideoDuration}
-              hideSelectFrames={true}
+              hideSelectFrames={true} // Add this prop to hide the Select Frames button
             />
           </div>
         </div>
@@ -152,7 +146,7 @@ const ProjectPage = () => {
               openTranscriptDialog={() => modals.openTranscriptDialog()}
             />
           ) : (
-            <SlideEditor projectId={projectId} />
+            <SlideEditor />
           )}
         </div>
       </div>
@@ -163,6 +157,8 @@ const ProjectPage = () => {
           open={modals.isFramePickerModalOpen}
           onClose={() => {
             modals.closeFramePickerModal();
+            // Force reload project after closing modal to ensure we have the latest frames
+            loadProject();
           }} 
           videoPath={project.source_file_path}
           projectId={projectId || ""}

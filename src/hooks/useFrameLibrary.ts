@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -118,7 +119,7 @@ export function useFrameLibrary({
   };
   
   // Remove a frame from the library
-  const removeFrame = async (frameId: string, onRemoveTimemark?: (timestamp: string) => void) => {
+  const removeFrame = (frameId: string, onRemoveTimemark?: (timestamp: string) => void) => {
     // Find the frame to remove
     const frameToRemove = libraryFrames.find(frame => frame.id === frameId);
     if (frameToRemove) {
@@ -139,27 +140,12 @@ export function useFrameLibrary({
     });
     
     // Remove from project database
-    try {
-      const success = await removeFrameFromProject(frameId);
-      if (success) {
-        toast.success("Frame removed from library");
-      }
-    } catch (error) {
-      console.error("Error removing frame:", error);
-      toast.error("Failed to remove frame");
-      
-      // Re-fetch the frames to ensure UI is in sync with database
-      await refreshFramesFromDatabase();
-    }
+    removeFrameFromProject(frameId);
   };
   
   // Remove frame from project database
-  const removeFrameFromProject = async (frameId: string): Promise<boolean> => {
+  const removeFrameFromProject = async (frameId: string) => {
     try {
-      // Show loading toast
-      const toastId = "removing-frame";
-      toast.loading("Removing frame...", { id: toastId });
-      
       // Get current extracted frames from project
       const { data: projectData, error: fetchError } = await supabase
         .from('projects')
@@ -169,8 +155,7 @@ export function useFrameLibrary({
       
       if (fetchError) {
         console.error("Error fetching project frames:", fetchError);
-        toast.error("Failed to remove frame", { id: toastId });
-        return false;
+        return;
       }
       
       // Filter out the frame to remove
@@ -185,62 +170,12 @@ export function useFrameLibrary({
         
       if (error) {
         console.error("Error removing frame from project:", error);
-        toast.error("Failed to remove frame", { id: toastId });
-        return false;
-      }
-      
-      console.log(`Removed frame ${frameId} from project database`);
-      toast.success("Frame removed", { id: toastId });
-      return true;
-    } catch (error) {
-      console.error("Error in removeFrameFromProject:", error);
-      return false;
-    }
-  };
-  
-  // Refresh frames from database to ensure UI is in sync
-  const refreshFramesFromDatabase = async () => {
-    try {
-      const { data: projectData, error: fetchError } = await supabase
-        .from('projects')
-        .select('extracted_frames')
-        .eq('id', projectId)
-        .single();
-      
-      if (fetchError) {
-        console.error("Error fetching project frames:", fetchError);
         return;
       }
       
-      // Update local state with database frames
-      const currentFrames = (projectData?.extracted_frames || []) as ExtractedFrame[];
-      const validFrames = currentFrames.filter(frame => 
-        frame && frame.imageUrl && !frame.imageUrl.startsWith('blob:')
-      );
-      
-      // Sort frames by timestamp
-      const sortedLibraryFrames = [...validFrames].sort((a, b) => {
-        return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
-      });
-      
-      setLibraryFrames(sortedLibraryFrames);
-      
-      // Update selected state to match existing selections
-      // but only for frames that still exist
-      setSelectedFrames(prev => {
-        const updated = {...prev};
-        // Filter to only keep selections for frames that still exist
-        Object.keys(updated).forEach(frameId => {
-          if (!sortedLibraryFrames.some(frame => frame.id === frameId)) {
-            delete updated[frameId];
-          }
-        });
-        return updated;
-      });
-      
-      console.log("Successfully refreshed frames from database");
+      console.log(`Removed frame ${frameId} from project database`);
     } catch (error) {
-      console.error("Error refreshing frames:", error);
+      console.error("Error in removeFrameFromProject:", error);
     }
   };
   
@@ -249,10 +184,6 @@ export function useFrameLibrary({
     if (!frameIds.length) return;
     
     try {
-      // Show loading toast
-      const toastId = "deleting-frames";
-      toast.loading(`Deleting ${frameIds.length} frames...`, { id: toastId });
-      
       // Get current extracted frames from project
       const { data: projectData, error: fetchError } = await supabase
         .from('projects')
@@ -262,7 +193,6 @@ export function useFrameLibrary({
       
       if (fetchError) {
         console.error("Error fetching project frames:", fetchError);
-        toast.error("Failed to delete selected frames", { id: toastId });
         return;
       }
       
@@ -278,10 +208,7 @@ export function useFrameLibrary({
         
       if (error) {
         console.error("Error removing frames from project:", error);
-        toast.error("Failed to delete selected frames", { id: toastId });
-        
-        // Re-fetch the frames to ensure UI is in sync with database
-        await refreshFramesFromDatabase();
+        toast.error("Failed to delete selected frames");
         return;
       }
       
@@ -296,14 +223,11 @@ export function useFrameLibrary({
       });
       
       // Show success message
-      toast.success(`Deleted ${frameIds.length} frames from library`, { id: toastId });
+      toast.success(`Deleted ${frameIds.length} frames from library`);
       console.log(`Removed ${frameIds.length} frames from project database`);
     } catch (error) {
       console.error("Error in deleteMultipleFrames:", error);
       toast.error("Failed to delete selected frames");
-      
-      // Re-fetch the frames to ensure UI is in sync with database
-      await refreshFramesFromDatabase();
     }
   };
   
@@ -368,7 +292,6 @@ export function useFrameLibrary({
     handleApplyFrames,
     addFrameToLibrary,
     timeToSeconds,
-    deleteMultipleFrames,
-    refreshFramesFromDatabase
+    deleteMultipleFrames
   };
 }

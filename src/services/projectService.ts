@@ -175,16 +175,14 @@ const enhanceProjectsWithVideos = async (projects: Project[]): Promise<Project[]
     const projectIds = projects.map(project => project.id);
 
     // Fetch videos for all projects in one query to avoid N+1 problem
-    // FIX: Use table aliases to prevent ambiguous column references
     const { data: videoData, error } = await supabase
       .from('project_videos')
       .select('id, title, source_file_path, display_order, video_metadata, project_id')
-      .in('project_videos.project_id', projectIds)  // FIX: Explicitly specify the table name
+      .in('project_id', projectIds)
       .order('display_order', { ascending: true });
 
     if (error) {
       console.error("Error fetching project videos:", error);
-      // Return the projects without videos instead of failing completely
       return projects;
     }
 
@@ -212,7 +210,6 @@ const enhanceProjectsWithVideos = async (projects: Project[]): Promise<Project[]
     });
   } catch (e) {
     console.error("Error enhancing projects with videos:", e);
-    // Return the projects without videos instead of failing completely
     return projects;
   }
 };

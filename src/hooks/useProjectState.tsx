@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -36,32 +35,17 @@ export const useProjectState = (projectId: string | undefined) => {
   const [extractedFrames, setExtractedFrames] = useState<ExtractedFrame[]>([]);
   const [projectVideos, setProjectVideos] = useState<ProjectVideo[]>([]);
   const [totalVideoDuration, setTotalVideoDuration] = useState<number>(0);
-  // Add a flag to track loading errors
-  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadProject = async () => {
     if (!projectId) return;
     
     try {
       setIsLoading(true);
-      setLoadError(null); // Clear any previous errors
       
       // Ensure storage buckets are initialized when viewing a project
       await initializeStorage();
       
-      // Fetch the project data with error handling
-      let projectData: Project | null = null;
-      
-      try {
-        projectData = await fetchProjectById(projectId);
-      } catch (error) {
-        console.error("Error fetching project:", error);
-        setLoadError("Failed to load project data");
-        toast.error("Failed to load project");
-        // Don't navigate away, just show the error and allow retry
-        setIsLoading(false);
-        return;
-      }
+      const projectData = await fetchProjectById(projectId);
       
       if (!projectData) {
         toast.error("Project not found");
@@ -122,26 +106,19 @@ export const useProjectState = (projectId: string | undefined) => {
         setExtractedFrames([]);
       }
       
-      // Load all project videos with improved error handling
-      try {
-        const videos = await fetchProjectVideos(projectId);
-        setProjectVideos(videos);
-        console.log(`Loaded ${videos.length} videos for project`);
-        
-        // Calculate total video duration
-        if (videos.length > 0) {
-          const totalDuration = videos.reduce((total, video) => {
-            const duration = video.video_metadata?.duration || 0;
-            return total + duration;
-          }, 0);
-          setTotalVideoDuration(totalDuration);
-          console.log(`Total duration of all videos: ${totalDuration}s`);
-        }
-      } catch (error) {
-        console.error("Error loading project videos:", error);
-        // Don't block the UI due to video loading error, just show a toast
-        toast.error("Failed to load project videos");
-        // Still continue with the rest of the project
+      // Load all project videos
+      const videos = await fetchProjectVideos(projectId);
+      setProjectVideos(videos);
+      console.log(`Loaded ${videos.length} videos for project`);
+      
+      // Calculate total video duration
+      if (videos.length > 0) {
+        const totalDuration = videos.reduce((total, video) => {
+          const duration = video.video_metadata?.duration || 0;
+          return total + duration;
+        }, 0);
+        setTotalVideoDuration(totalDuration);
+        console.log(`Total duration of all videos: ${totalDuration}s`);
       }
       
       // Check if frames are needed for UI indication
@@ -186,7 +163,6 @@ export const useProjectState = (projectId: string | undefined) => {
       }
     } catch (error) {
       console.error("Error loading project:", error);
-      setLoadError("An unexpected error occurred while loading the project");
       toast.error("Failed to load project");
     } finally {
       setIsLoading(false);
@@ -378,7 +354,6 @@ export const useProjectState = (projectId: string | undefined) => {
     isTranscriptOnlyProject,
     projectVideos,
     totalVideoDuration,
-    loadError, // Expose the error state
     
     // Actions
     loadProject,
