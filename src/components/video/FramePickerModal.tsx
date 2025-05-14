@@ -11,6 +11,7 @@ import { toast } from "sonner";
 // Import our components and hooks
 import { VideoPlayer } from "./VideoPlayer";
 import { FrameLibraryFilmstrip } from "./FrameLibraryFilmstrip";
+import { FrameLibraryStyles } from "./FrameLibraryStyles"; // Add this import
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { useFrameCapture } from "@/hooks/useFrameCapture";
 import { useFrameLibrary } from "@/hooks/useFrameLibrary";
@@ -106,6 +107,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Include the styles component for drag functionality */}
+        <FrameLibraryStyles />
+        
         <DialogTitle>Frame Library</DialogTitle>
         
         {/* Main content area */}
@@ -129,7 +133,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               </div>
             </div>
             
-            <div className="h-[300px] bg-muted/30 rounded-md overflow-hidden">
+            <div className="bg-muted/30 rounded-md overflow-hidden" style={{ height: '120px' }}>
               <FrameLibraryFilmstrip 
                 libraryFrames={frameLibrary.libraryFrames}
                 selectedFrames={frameLibrary.selectedFrames}

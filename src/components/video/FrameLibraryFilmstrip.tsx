@@ -142,9 +142,10 @@ export const FrameLibraryFilmstrip: React.FC<FrameLibraryFilmstripProps> = ({
       {libraryFrames.map((frame) => (
         <div 
           key={frame.id} 
-          className={`relative h-full aspect-video flex-shrink-0 cursor-pointer rounded-md overflow-hidden border-2 ${
+          className={`relative flex-shrink-0 cursor-pointer rounded-md overflow-hidden border-2 ${
             selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
           }`}
+          style={{ width: '160px', height: '100px' }} // Fixed dimensions
           onClick={() => toggleFrameSelection(frame)}
         >
           <img
