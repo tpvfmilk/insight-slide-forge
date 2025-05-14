@@ -60,8 +60,8 @@ const PresentationPage = () => {
         if (!project.slides || !Array.isArray(project.slides) || project.slides.length === 0) {
           toast.error("No slides available for this project");
         } else {
-          // Type assertion to convert the JSON data to Slide[] type
-          setSlides(project.slides as Slide[]);
+          // Type assertion with unknown first to fix the type error
+          setSlides((project.slides as unknown) as Slide[]);
         }
       } catch (error) {
         console.error("Error loading project data:", error);
@@ -164,19 +164,21 @@ const PresentationSlide: React.FC<{
   return (
     <div className="w-full max-w-5xl mx-auto">
       {hasImages ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
           {/* Left side: Image grid */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col h-full justify-center">
+            <div className="grid grid-cols-2 gap-5 h-full">
               {allImages.map((imageUrl, index) => (
-                <div key={index} className="rounded-md overflow-hidden border border-white/10">
-                  <AspectRatio ratio={16/9}>
-                    <img 
-                      src={imageUrl} 
-                      alt={`Slide image ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </AspectRatio>
+                <div key={index} className="relative h-full flex items-center">
+                  <div className="w-full rounded-md overflow-hidden border border-white/10">
+                    <AspectRatio ratio={16/9}>
+                      <img 
+                        src={imageUrl} 
+                        alt={`Slide image ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </AspectRatio>
+                  </div>
                 </div>
               ))}
             </div>
