@@ -10,9 +10,10 @@ import { ProjectTitleEditor } from "@/components/projects/ProjectTitleEditor";
 import { Button } from "@/components/ui/button";
 import { FolderList } from "@/components/folders/FolderList";
 import { FolderDialog } from "@/components/folders/FolderDialog";
-import { Folder as FolderIcon } from "lucide-react";
+import { Folder as FolderIcon, AlertCircle } from "lucide-react";
 import { Folder as FolderType, createFolder, deleteFolder, fetchFolders } from "@/services/folderService";
 import { syncStorageUsage } from "@/services/storageService";
+import { EmptyProjectsMessage } from "@/components/projects/EmptyProjectsMessage";
 
 const ProjectsPage = () => {
   const queryClient = useQueryClient();
@@ -24,16 +25,19 @@ const ProjectsPage = () => {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editingFolder, setEditingFolder] = useState<FolderType | null>(null);
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const loadProjects = async () => {
     try {
       setLoading(true);
+      setError(null);
       // Get all projects, not just the limited number
       const data = await fetchRecentProjects(100);
       setProjects(data);
     } catch (error) {
       console.error("Failed to load projects:", error);
       toast.error("Failed to load projects");
+      setError("Could not load projects. Please try refreshing the page.");
     } finally {
       setLoading(false);
     }
@@ -47,14 +51,24 @@ const ProjectsPage = () => {
     } catch (error) {
       console.error("Failed to load folders:", error);
       toast.error("Failed to load folders");
+      // We don't set the error state here as we can still show projects without folders
     } finally {
       setLoadingFolders(false);
     }
   };
   
   useEffect(() => {
-    loadProjects();
-    loadFolders();
+    // Using Promise.allSettled to ensure that even if one promise fails, we still get results from the other
+    Promise.allSettled([loadProjects(), loadFolders()])
+      .then((results) => {
+        // Handle any specific error cases if needed
+        if (results[0].status === 'rejected') {
+          console.error("Projects loading failed:", results[0].reason);
+        }
+        if (results[1].status === 'rejected') {
+          console.error("Folders loading failed:", results[1].reason);
+        }
+      });
   }, []);
   
   const handleDeleteProject = async (projectId: string) => {
@@ -159,6 +173,19 @@ const ProjectsPage = () => {
           <div className="border rounded-lg p-8 text-center">
             <div className="text-muted-foreground">Loading projects and folders...</div>
           </div>
+        ) : error ? (
+          <div className="border border-destructive rounded-lg p-8 text-center">
+            <div className="flex flex-col items-center justify-center gap-2">
+              <AlertCircle className="h-8 w-8 text-destructive" />
+              <div className="text-destructive font-medium">{error}</div>
+              <Button variant="outline" onClick={() => {
+                setLoading(true);
+                loadProjects();
+              }} className="mt-2">
+                Try Again
+              </Button>
+            </div>
+          </div>
         ) : (
           <FolderList
             folders={folders}
@@ -169,6 +196,7 @@ const ProjectsPage = () => {
             handleEditTitle={handleEditTitle}
             handleExport={handleExport}
             loading={loading}
+            error={error}
           />
         )}
       </div>

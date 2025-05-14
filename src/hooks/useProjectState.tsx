@@ -35,19 +35,26 @@ export const useProjectState = (projectId: string | undefined) => {
   const [extractedFrames, setExtractedFrames] = useState<ExtractedFrame[]>([]);
   const [projectVideos, setProjectVideos] = useState<ProjectVideo[]>([]);
   const [totalVideoDuration, setTotalVideoDuration] = useState<number>(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState<number>(0);
 
   const loadProject = async () => {
     if (!projectId) return;
     
     try {
       setIsLoading(true);
+      setLoadError(null);
       
       // Ensure storage buckets are initialized when viewing a project
-      await initializeStorage();
+      await initializeStorage().catch(err => {
+        console.warn("Storage initialization warning:", err);
+        // Continue even if storage init fails, as it might still work
+      });
       
       const projectData = await fetchProjectById(projectId);
       
       if (!projectData) {
+        setLoadError("Project not found");
         toast.error("Project not found");
         navigate("/projects");
         return;
@@ -106,19 +113,25 @@ export const useProjectState = (projectId: string | undefined) => {
         setExtractedFrames([]);
       }
       
-      // Load all project videos
-      const videos = await fetchProjectVideos(projectId);
-      setProjectVideos(videos);
-      console.log(`Loaded ${videos.length} videos for project`);
-      
-      // Calculate total video duration
-      if (videos.length > 0) {
-        const totalDuration = videos.reduce((total, video) => {
-          const duration = video.video_metadata?.duration || 0;
-          return total + duration;
-        }, 0);
-        setTotalVideoDuration(totalDuration);
-        console.log(`Total duration of all videos: ${totalDuration}s`);
+      try {
+        // Load all project videos with error handling
+        const videos = await fetchProjectVideos(projectId);
+        setProjectVideos(videos);
+        console.log(`Loaded ${videos.length} videos for project`);
+        
+        // Calculate total video duration
+        if (videos.length > 0) {
+          const totalDuration = videos.reduce((total, video) => {
+            const duration = video.video_metadata?.duration || 0;
+            return total + duration;
+          }, 0);
+          setTotalVideoDuration(totalDuration);
+          console.log(`Total duration of all videos: ${totalDuration}s`);
+        }
+      } catch (videoError) {
+        console.error("Error loading project videos:", videoError);
+        // Don't fail the entire project load if videos can't be loaded
+        toast.error("Some project videos could not be loaded");
       }
       
       // Check if frames are needed for UI indication
@@ -163,7 +176,10 @@ export const useProjectState = (projectId: string | undefined) => {
       }
     } catch (error) {
       console.error("Error loading project:", error);
+      setLoadError("Failed to load project data");
       toast.error("Failed to load project");
+      
+      // Don't automatically navigate away on error, let the user decide what to do
     } finally {
       setIsLoading(false);
     }
@@ -325,8 +341,15 @@ export const useProjectState = (projectId: string | undefined) => {
 
   // Load project on mount or when projectId changes
   useEffect(() => {
-    loadProject();
-  }, [projectId]);
+    if (projectId) {
+      loadProject();
+    }
+  }, [projectId, retryCount]);
+
+  // Function to retry loading the project
+  const retryLoadProject = () => {
+    setRetryCount(prev => prev + 1);
+  };
 
   // Calculate additional states
   const needsTranscription = project?.source_type === 'video' && !project?.transcript;
@@ -354,6 +377,8 @@ export const useProjectState = (projectId: string | undefined) => {
     isTranscriptOnlyProject,
     projectVideos,
     totalVideoDuration,
+    loadError,
+    retryLoadProject,
     
     // Actions
     loadProject,
