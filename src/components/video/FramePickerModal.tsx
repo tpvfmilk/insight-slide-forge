@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Separator } from "@/components/ui/separator";
-import { mergeAndSaveFrames } from "@/utils/frameUtils";
 import { toast } from "sonner";
 
 // Import our new components and hooks
@@ -121,7 +120,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           <Separator />
           
           {/* Frame library section */}
-          <div className="space-y-2 flex-1 overflow-hidden">
+          <div className="space-y-2 flex-1 flex flex-col min-h-0">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium">Frame Library</h3>
               <div className="text-sm text-muted-foreground">
@@ -129,7 +128,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               </div>
             </div>
             
-            <div className="h-[300px] bg-muted/30 rounded-md overflow-hidden">
+            <div className="flex-1 min-h-0 bg-muted/30 rounded-md overflow-hidden">
               <FrameLibraryGrid 
                 libraryFrames={frameLibrary.libraryFrames}
                 selectedFrames={frameLibrary.selectedFrames}
@@ -140,7 +139,12 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           </div>
           
           {/* Hidden canvas for frame capture */}
-          <canvas ref={frameCapture.canvasRef} className="hidden"></canvas>
+          <canvas 
+            ref={frameCapture.canvasRef} 
+            className="hidden"
+            width="1280"
+            height="720"
+          />
         </div>
         
         <div className="flex justify-between items-center pt-4 border-t mt-2">
