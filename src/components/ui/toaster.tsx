@@ -28,4 +28,5 @@ const Toaster = ({ ...props }: ToasterProps) => {
 }
 
 export { Toaster }
-export { toast } from "@/hooks/use-toast"
+// Import from sonner directly to avoid circular dependencies
+export { toast } from "sonner"
