@@ -152,8 +152,8 @@ export const SlideFilmstrip: React.FC = () => {
         {/* Custom scroll container */}
         <div 
           ref={filmstripRef} 
-          className="flex gap-3 p-3 h-full overflow-x-auto scroll-smooth hide-scrollbar w-full"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          className="flex gap-3 p-3 h-full overflow-x-auto scroll-smooth hide-scrollbar w-full filmstrip-container"
+          style={{ maxWidth: "100%" }}
         >
           {slides.map((slide, index) => (
             <div 

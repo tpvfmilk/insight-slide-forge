@@ -20,6 +20,11 @@ export const SlideEditorStyles: React.FC = () => {
           overflow-x: auto;
           overflow-y: hidden;
           scrollbar-width: thin;
+          max-width: 100%;
+          flex-shrink: 1;
+          flex-grow: 1;
+          width: 100%;
+          overscroll-behavior-x: contain;
         }
         
         /* Fix frame scrolling */
