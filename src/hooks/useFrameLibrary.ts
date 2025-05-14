@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -171,9 +172,9 @@ export function useFrameLibrary({
           setIsUploadingFrames(false);
           return;
         } else {
+          // Fix: Use Sonner's format instead of variant which isn't supported
           toast("Some frames will be skipped", {
             description: `${invalidFrames} frames have invalid URLs`,
-            variant: "destructive"
           });
         }
       }

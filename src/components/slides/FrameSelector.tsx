@@ -130,7 +130,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
         await onRefresh();
       }
       
-      // Success toast
+      // Success toast - Fix: Remove variant property which doesn't exist in Sonner
       toast("Success", {
         description: "Successfully purged unused frames",
       });
@@ -141,11 +141,8 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
       }
     } catch (error) {
       console.error("Error purging frames:", error);
-      // Show error toast
-      toast("Error", {
-        description: "Failed to purge unused frames",
-        variant: "destructive",
-      });
+      // Show error toast - Fix: Use the Sonner error style
+      toast.error("Failed to purge unused frames");
     } finally {
       setIsPurgingFrames(false);
     }

@@ -211,8 +211,8 @@ export function useFrameCapture({
         // Call the callback
         onFrameCaptured(newFrame);
         
-        toast({
-          title: "Placeholder frame created",
+        // Fix: Replace toast with title/description to use Sonner's format
+        toast("Placeholder frame created", {
           description: `Placeholder created at ${timestamp}`,
         });
       } else {
