@@ -1,174 +1,59 @@
-import { useState, useEffect } from "react";
-import { X, Image as ImageIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { Badge } from "@/components/ui/badge";
 
-export interface SlideData {
-  id?: string;
-  title: string;
-  content: string;
-  timestamp?: string;
-  imageUrl?: string;
-  imageUrls?: string[];
-  transcript?: string;
-  transcriptTimestamps?: string[];
-  [key: string]: any;
-}
+import React from "react";
+import { Slide } from "../slides/editor/SlideEditorTypes";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 interface SlidePreviewProps {
-  slides: SlideData[];
-  currentSlide: number;
-  onSlideClick?: (index: number) => void;
-  onRemoveSlide?: (index: number) => void;
-  isEditable?: boolean;
-  className?: string;
+  slides: Slide[];
+  currentSlide: Slide;
 }
 
-export function SlidePreview({ 
-  slides, 
-  currentSlide, 
-  onSlideClick, 
-  onRemoveSlide,
-  isEditable = true,
-  className = "",
-}: SlidePreviewProps) {
-  const isMobile = useIsMobile();
+export const SlidePreview: React.FC<SlidePreviewProps> = ({ currentSlide }) => {
+  if (!currentSlide) return null;
   
-  const [activeIndex, setActiveIndex] = useState(currentSlide);
+  // Collect all images from both imageUrl and imageUrls
+  const allImages: string[] = [];
+  if (currentSlide.imageUrl) allImages.push(currentSlide.imageUrl);
+  if (currentSlide.imageUrls) allImages.push(...currentSlide.imageUrls);
   
-  // Update active state when currentSlide changes in parent
-  useEffect(() => {
-    setActiveIndex(currentSlide);
-  }, [currentSlide]);
-
-  const handleSlideClick = (index: number) => {
-    setActiveIndex(index);
-    if (onSlideClick) {
-      onSlideClick(index);
-    }
-  };
+  const hasImages = allImages.length > 0;
   
   return (
-    <div className={cn("flex flex-col h-full p-2", className)}>
-      <ScrollArea className="h-full w-full p-1">
-        <div className="space-y-2">
-          {slides.map((slide, index) => (
-            <div
-              key={slide.id || index}
-              className={cn(
-                "group relative p-3 border rounded-md cursor-pointer transition-all duration-200",
-                index === activeIndex 
-                  ? "border-primary bg-primary/5" 
-                  : "border-border hover:border-muted-foreground"
-              )}
-              onClick={() => handleSlideClick(index)}
-            >
-              {/* Slide Number Badge */}
-              <Badge 
-                variant="outline" 
-                className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 bg-background"
-              >
-                {index + 1}
-              </Badge>
-
-              {/* Slide Content */}
-              <div className="space-y-1 text-sm">
-                {/* Title */}
-                <h3 
-                  className={cn(
-                    "font-medium line-clamp-1", 
-                    index === activeIndex ? "text-primary" : "text-foreground"
-                  )}
-                >
-                  {slide.title || "Untitled Slide"}
-                </h3>
-                
-                {/* Text Content */}
-                <p className="line-clamp-2 text-xs text-muted-foreground">
-                  {slide.content || "No content"}
-                </p>
-                
-                {/* Image Preview */}
-                {(slide.imageUrl || (slide.imageUrls && slide.imageUrls.length > 0)) && (
-                  <div className="w-full flex justify-center">
-                    <div className="relative h-16 aspect-video bg-muted/50 rounded overflow-hidden">
-                      {slide.imageUrl ? (
-                        <img 
-                          src={slide.imageUrl} 
-                          alt={`Slide ${index + 1}`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : slide.imageUrls && slide.imageUrls.length > 0 ? (
-                        <img 
-                          src={slide.imageUrls[0]} 
-                          alt={`Slide ${index + 1}`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-muted-foreground">
-                          <ImageIcon size={24} />
-                        </div>
-                      )}
-                      
-                      {/* Show indicator for multiple images */}
-                      {slide.imageUrls && slide.imageUrls.length > 1 && (
-                        <Badge 
-                          variant="secondary"
-                          className="absolute bottom-1 right-1 text-xs"
-                        >
-                          {slide.imageUrls.length}
-                        </Badge>
-                      )}
-                    </div>
+    <div className="w-full h-full flex items-center justify-center p-4 bg-black text-white">
+      <div className="w-full max-w-5xl mx-auto">
+        {hasImages ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Left side: Image grid */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {allImages.map((imageUrl, index) => (
+                  <div key={index} className="rounded-md overflow-hidden border border-white/10">
+                    <AspectRatio ratio={16/9}>
+                      <img 
+                        src={imageUrl} 
+                        alt={`Slide image ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </AspectRatio>
                   </div>
-                )}
-              </div>
-
-              {/* Timestamp if available */}
-              {slide.timestamp && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  {slide.timestamp}
-                </div>
-              )}
-              
-              {/* Remove button */}
-              {isEditable && onRemoveSlide && !isMobile && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "absolute top-1 right-1 h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity",
-                    index === activeIndex && "text-primary"
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveSlide(index);
-                  }}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
-          ))}
-          
-          {/* Empty state */}
-          {slides.length === 0 && (
-            <div className="flex items-center justify-center py-8 text-center text-muted-foreground flex-col space-y-2">
-              <div className="border border-dashed rounded-md p-6 w-full">
-                <p>No slides yet</p>
+                ))}
               </div>
             </div>
-          )}
-        </div>
-      </ScrollArea>
-      
-      {/* Total slide count indicator */}
-      <div className="pt-2 text-xs text-muted-foreground text-center border-t mt-2">
-        {slides.length} {slides.length === 1 ? 'slide' : 'slides'}
+            
+            {/* Right side: Slide content */}
+            <div className="flex flex-col p-4 space-y-4">
+              <h2 className="text-2xl font-semibold">{currentSlide.title}</h2>
+              <div className="mt-2 whitespace-pre-wrap">{currentSlide.content}</div>
+            </div>
+          </div>
+        ) : (
+          // No images - center the content
+          <div className="text-center p-8 max-w-2xl mx-auto">
+            <h2 className="text-2xl font-semibold mb-4">{currentSlide.title}</h2>
+            <div className="mt-2 whitespace-pre-wrap">{currentSlide.content}</div>
+          </div>
+        )}
       </div>
     </div>
   );
-}
+};
