@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -109,9 +108,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         <DialogTitle>Frame Library</DialogTitle>
         
         {/* Main content area */}
-        <div className="flex flex-col space-y-4 flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 overflow-hidden">
           {/* Video player section - fixed height to keep it static */}
-          <div className="flex justify-center" style={{ height: "360px", minHeight: "360px" }}>
+          <div className="flex justify-center mb-4" style={{ height: "360px", minHeight: "360px" }}>
             <VideoPlayer
               {...videoPlayer}
               capturedTimemarks={frameCapture.capturedTimemarks}
@@ -120,10 +119,10 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
             />
           </div>
           
-          <Separator />
+          <Separator className="mb-4" />
           
-          {/* Frame library section */}
-          <div className="space-y-2 flex-1 flex flex-col min-h-0">
+          {/* Frame library section - flexible height to allow scrolling */}
+          <div className="space-y-2 flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium">Frame Library</h3>
               <div className="text-sm text-muted-foreground">
@@ -131,7 +130,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               </div>
             </div>
             
-            {/* Make container flexible with min-height but no fixed height */}
+            {/* This container needs to flex-grow and maintain scrollability */}
             <div className="flex-1 bg-muted/30 rounded-md overflow-hidden">
               <FrameLibraryGrid 
                 libraryFrames={frameLibrary.libraryFrames}

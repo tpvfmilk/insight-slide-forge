@@ -32,13 +32,13 @@ export const FrameLibraryGrid: React.FC<FrameLibraryGridProps> = ({
   }
 
   return (
-    <div className="h-full w-full relative">
-      <ScrollArea className="h-full">
-        <div className="grid grid-cols-3 gap-3 p-2 pb-8">
+    <div className="h-full overflow-hidden flex flex-col">
+      <ScrollArea className="flex-1 w-full">
+        <div className="grid grid-cols-3 gap-3 p-2 pb-16">
           {libraryFrames.map((frame) => (
             <div 
               key={frame.id} 
-              className={`relative cursor-pointer rounded-md overflow-hidden border-2 ${
+              className={`relative cursor-pointer rounded-md overflow-hidden border-2 group ${
                 selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
               }`}
               onClick={() => toggleFrameSelection(frame)}
