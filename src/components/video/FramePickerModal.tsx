@@ -168,30 +168,25 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
             </Button>
             
             {/* Add to Slide button */}
-            <div className="flex flex-col items-end">
-              <Button 
-                onClick={() => frameLibrary.handleApplyFrames(onFramesSelected)} 
-                className="gap-1"
-                disabled={frameLibrary.selectedFramesCount === 0 || frameLibrary.isUploadingFrames}
-              >
-                {frameLibrary.isUploadingFrames ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add {frameLibrary.selectedFramesCount > 0 ? 
-                      `${frameLibrary.selectedFramesCount} Frame${frameLibrary.selectedFramesCount !== 1 ? 's' : ''}` : 
-                      'to Slide'}
-                  </>
-                )}
-              </Button>
-              <div className="text-xs text-muted-foreground mt-1">
-                Frames remain in your library after being added to slides
-              </div>
-            </div>
+            <Button 
+              onClick={() => frameLibrary.handleApplyFrames(onFramesSelected)} 
+              className="gap-1"
+              disabled={frameLibrary.selectedFramesCount === 0 || frameLibrary.isUploadingFrames}
+            >
+              {frameLibrary.isUploadingFrames ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add {frameLibrary.selectedFramesCount > 0 ? 
+                    `${frameLibrary.selectedFramesCount} Frame${frameLibrary.selectedFramesCount !== 1 ? 's' : ''}` : 
+                    'to Slide'}
+                </>
+              )}
+            </Button>
           </div>
         </div>
       </DialogContent>

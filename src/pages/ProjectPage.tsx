@@ -11,6 +11,7 @@ import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
+import { useEffect } from "react";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -40,6 +41,14 @@ const ProjectPage = () => {
     handleManualFrameSelectionComplete,
     totalVideoDuration
   } = useProjectState(projectId);
+
+  // Force reload frames when modal state changes
+  useEffect(() => {
+    if (!modals.isFramePickerModalOpen) {
+      // When modal closes, reload the project data to ensure we have latest frames
+      loadProject();
+    }
+  }, [modals.isFramePickerModalOpen, loadProject]);
   
   const handleOpenManualFramePicker = () => {
     if (!project?.source_file_path) {
@@ -157,8 +166,6 @@ const ProjectPage = () => {
           open={modals.isFramePickerModalOpen}
           onClose={() => {
             modals.closeFramePickerModal();
-            // Force reload project after closing modal to ensure we have the latest frames
-            loadProject();
           }} 
           videoPath={project.source_file_path}
           projectId={projectId || ""}
