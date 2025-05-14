@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -130,8 +131,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               </div>
             </div>
             
-            {/* Fixed height container for the scrollable frame library */}
-            <div className="flex-1 min-h-0 bg-muted/30 rounded-md overflow-hidden" style={{ height: "300px" }}>
+            {/* Make container flexible with min-height but no fixed height */}
+            <div className="flex-1 bg-muted/30 rounded-md overflow-hidden">
               <FrameLibraryGrid 
                 libraryFrames={frameLibrary.libraryFrames}
                 selectedFrames={frameLibrary.selectedFrames}

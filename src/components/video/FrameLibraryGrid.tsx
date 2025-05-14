@@ -32,43 +32,45 @@ export const FrameLibraryGrid: React.FC<FrameLibraryGridProps> = ({
   }
 
   return (
-    <ScrollArea className="h-full w-full">
-      <div className="grid grid-cols-3 gap-3 p-2 pb-24">
-        {libraryFrames.map((frame) => (
-          <div 
-            key={frame.id} 
-            className={`relative cursor-pointer rounded-md overflow-hidden border-2 ${
-              selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
-            }`}
-            onClick={() => toggleFrameSelection(frame)}
-          >
-            <AspectRatio ratio={16/9}>
-              <img
-                src={frame.imageUrl}
-                alt={`Frame at ${frame.timestamp}`}
-                className="h-full w-full object-cover"
-              />
-            </AspectRatio>
-            <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
-            {selectedFrames[frame.id!] && (
-              <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
-                <Check className="h-3 w-3 text-primary-foreground" />
-              </div>
-            )}
-            <Button
-              variant="destructive"
-              size="icon"
-              className="h-6 w-6 absolute bottom-1 right-1 opacity-0 hover:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeFrame(frame.id as string);
-              }}
+    <div className="h-full w-full relative">
+      <ScrollArea className="h-full">
+        <div className="grid grid-cols-3 gap-3 p-2 pb-8">
+          {libraryFrames.map((frame) => (
+            <div 
+              key={frame.id} 
+              className={`relative cursor-pointer rounded-md overflow-hidden border-2 ${
+                selectedFrames[frame.id!] ? 'border-primary' : 'border-transparent'
+              }`}
+              onClick={() => toggleFrameSelection(frame)}
             >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        ))}
-      </div>
-    </ScrollArea>
+              <AspectRatio ratio={16/9}>
+                <img
+                  src={frame.imageUrl}
+                  alt={`Frame at ${frame.timestamp}`}
+                  className="h-full w-full object-cover"
+                />
+              </AspectRatio>
+              <Badge className="absolute top-1 left-1 text-xs">{frame.timestamp}</Badge>
+              {selectedFrames[frame.id!] && (
+                <div className="absolute top-1 right-1 bg-primary rounded-full p-0.5">
+                  <Check className="h-3 w-3 text-primary-foreground" />
+                </div>
+              )}
+              <Button
+                variant="destructive"
+                size="icon"
+                className="h-6 w-6 absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFrame(frame.id as string);
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
   );
 };
