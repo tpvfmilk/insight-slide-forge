@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
 
 // Import our new components and hooks
 import { VideoPlayer } from "./VideoPlayer";
@@ -72,7 +71,6 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   // Handle bulk deletion of selected frames
   const handleDeleteSelected = async () => {
     if (frameLibrary.selectedFramesCount === 0) {
-      toast.info("No frames selected to delete");
       return;
     }
     
@@ -96,15 +94,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     await frameLibrary.deleteMultipleFrames(frameIds);
   };
   
-  // Handle dialog clean up on close
-  const handleClose = () => {
-    // Make sure to properly clean up and dismiss any toasts
-    toast.dismiss();
-    onClose();
-  };
-  
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] h-[90vh] flex flex-col p-6 gap-0">
         <DialogTitle className="mb-4">Frame Library</DialogTitle>
         
@@ -152,7 +143,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         </div>
         
         <div className="flex justify-between items-center pt-4 border-t mt-4">
-          <Button variant="outline" onClick={handleClose}>
+          <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <div className="flex gap-2">
