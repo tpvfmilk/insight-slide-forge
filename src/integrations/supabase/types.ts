@@ -329,7 +329,7 @@ export type Database = {
     }
     Functions: {
       calculate_project_storage_size: {
-        Args: { project_id: string }
+        Args: Record<PropertyKey, never> | { project_id: string }
         Returns: number
       }
       get_current_user_id: {
