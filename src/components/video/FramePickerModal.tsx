@@ -51,6 +51,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     videoUrl,
     duration,
     formatTime,
+    allExtractedFrames,
     onFrameCaptured: (frame) => {
       frameLibrary.addFrameToLibrary(frame);
     }

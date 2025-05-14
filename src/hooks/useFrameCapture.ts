@@ -1,8 +1,7 @@
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 
 export function useFrameCapture({
@@ -11,7 +10,8 @@ export function useFrameCapture({
   videoUrl,
   duration,
   formatTime,
-  onFrameCaptured
+  onFrameCaptured,
+  allExtractedFrames = []
 }: {
   videoRef: React.RefObject<HTMLVideoElement>;
   projectId: string;
@@ -19,235 +19,125 @@ export function useFrameCapture({
   duration: number;
   formatTime: (seconds: number) => string;
   onFrameCaptured: (frame: ExtractedFrame) => void;
+  allExtractedFrames?: ExtractedFrame[];
 }) {
-  const [isCapturingFrame, setIsCapturingFrame] = useState<boolean>(false);
-  const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pendingRef = useRef<boolean>(false);
+  const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
   
-  // Improved function to capture frames with better error handling and logging
-  const captureFrame = useCallback(async () => {
-    console.log("Frame capture started");
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    // Safety checks
-    if (!video || !canvas || !videoUrl || isCapturingFrame || !projectId) {
-      console.error("Cannot capture frame:", {
-        videoExists: !!video,
-        canvasExists: !!canvas,
-        videoUrl: videoUrl,
-        isCapturingFrame: isCapturingFrame,
-        projectId: projectId
-      });
+  // Function to convert timestamp string to seconds
+  const timeToSeconds = (timestamp: string): number => {
+    const parts = timestamp.split(':').map(Number);
+    if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    } else if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    return 0;
+  };
+  
+  // Initialize timemarks from existing frames
+  useEffect(() => {
+    if (allExtractedFrames && allExtractedFrames.length > 0) {
+      const existingTimemarks = allExtractedFrames
+        .filter(frame => frame.timestamp)
+        .map(frame => timeToSeconds(frame.timestamp));
+      
+      if (existingTimemarks.length > 0) {
+        console.log(`Initializing ${existingTimemarks.length} timemarks from existing frames`);
+        setCapturedTimemarks(existingTimemarks);
+      }
+    }
+  }, [allExtractedFrames]);
+
+  // Capture frame function
+  const captureFrame = async () => {
+    if (!videoRef.current || !videoRef.current.videoWidth || !canvasRef.current || !projectId || !videoUrl || isCapturingFrame) {
       return;
     }
-    
+
     try {
       setIsCapturingFrame(true);
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
       
-      // Extract current timestamp
-      const currentTime = video.currentTime;
-      const timestamp = formatTime(currentTime);
-      console.log(`Attempting to capture frame at ${timestamp} (${currentTime}s)`);
-      
-      // Check if this timestamp has already been captured
-      if (capturedTimemarks.some(time => Math.abs(time - currentTime) < 0.5)) {
-        toast.info(`Frame at ${timestamp} already exists`);
-        setIsCapturingFrame(false);
-        return;
-      }
-      
-      // Important: First pause the video to ensure a stable frame
-      const wasPlaying = !video.paused;
-      if (wasPlaying) {
-        video.pause();
-        // Wait a moment for the pause to take effect
-        await new Promise(resolve => setTimeout(resolve, 100));
-        console.log("Video paused for stable frame");
-      }
-      
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
-      console.log(`Canvas dimensions set to ${canvas.width}x${canvas.height}`);
-      
-      // Make sure we have a valid context
-      const ctx = canvas.getContext('2d', { alpha: false });
       if (!ctx) {
         throw new Error("Could not get canvas context");
       }
       
-      // Apply slight adjustments to enhance frame clarity
-      ctx.filter = "contrast(1.05) brightness(1.05)";
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       
-      // Clear canvas before drawing to prevent artifacts
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw the current video frame on the canvas
-      console.log("Drawing video frame to canvas");
+      // Draw current video frame to canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Check if the frame is mostly black or empty
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      let totalBrightness = 0;
-      // Sample pixels for performance
-      const sampleSize = 10000; 
-      const step = Math.floor(data.length / 4 / sampleSize);
-      
-      for (let i = 0; i < data.length; i += 4 * step) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        // Simple brightness calculation
-        totalBrightness += (r + g + b) / 3;
-      }
-      
-      const avgBrightness = totalBrightness / sampleSize;
-      console.log(`Frame brightness: ${avgBrightness}`);
-      
-      // If the frame is too dark, try an alternative approach
-      if (avgBrightness < 20) {
-        console.log("Frame too dark, trying alternative capture method");
-        
-        // Try to adjust contrast/brightness to improve visibility
-        ctx.filter = "contrast(1.5) brightness(1.5)";
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Check brightness again
-        const newImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const newData = newImageData.data;
-        let newTotalBrightness = 0;
-        
-        for (let i = 0; i < newData.length; i += 4 * step) {
-          const r = newData[i];
-          const g = newData[i + 1];
-          const b = newData[i + 2];
-          newTotalBrightness += (r + g + b) / 3;
-        }
-        
-        const newAvgBrightness = newTotalBrightness / sampleSize;
-        console.log(`Adjusted frame brightness: ${newAvgBrightness}`);
-        
-        // If still too dark, notify user
-        if (newAvgBrightness < 20) {
-          console.warn("Frame still too dark after adjustment");
-          toast.warning("The captured frame appears to be dark or blank. You may want to try at a different timestamp.");
-        }
-      }
+      // Get timestamp
+      const timestamp = formatTime(video.currentTime);
       
       // Convert canvas to blob
-      console.log("Converting canvas to blob");
-      const blob = await new Promise<Blob | null>((resolve) => 
-        canvas.toBlob(resolve, 'image/jpeg', 0.92)
-      );
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.95);
+      });
       
       if (!blob) {
         throw new Error("Failed to create image blob");
       }
       
-      console.log(`Blob created with size: ${Math.round(blob.size / 1024)} KB`);
-      
-      // Create a unique ID and filename for this frame
+      // Create unique filename
       const frameId = uuidv4();
-      const filename = `project_${projectId}/frame_${timestamp.replace(/:/g, '_')}_${frameId}.jpg`;
+      const filename = `project_${projectId}/${frameId}.jpg`;
       
-      console.log(`Uploading frame to storage: ${filename}`);
-      
-      // Upload blob to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
         .from('slide_stills')
         .upload(filename, blob, {
           contentType: 'image/jpeg',
           cacheControl: '3600',
+          upsert: false
         });
-      
+        
       if (uploadError) {
-        console.error("Upload error:", uploadError);
-        throw new Error(`Upload failed: ${uploadError.message}`);
+        throw new Error(`Error uploading frame: ${uploadError.message}`);
       }
       
-      console.log("Frame uploaded successfully:", uploadData);
-      
-      // Get the public URL for the uploaded image
-      const { data: publicUrlData } = supabase.storage
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
         .from('slide_stills')
         .getPublicUrl(filename);
-      
-      if (!publicUrlData || !publicUrlData.publicUrl) {
-        throw new Error("Failed to get public URL");
+        
+      if (!publicUrl) {
+        throw new Error("Failed to get public URL for uploaded frame");
       }
       
-      // Create frame object with image URL and timestamp
-      const newFrame: ExtractedFrame = {
+      // Create frame object
+      const extractedFrame: ExtractedFrame = {
         id: frameId,
         timestamp,
-        imageUrl: publicUrlData.publicUrl,
+        imageUrl: publicUrl,
+        sourceVideoTime: video.currentTime,
+        capturedAt: new Date().toISOString(),
       };
       
-      console.log("Frame object created:", newFrame);
+      // Add timestamp to captured timemarks
+      setCapturedTimemarks(prev => [...prev, video.currentTime]);
       
-      // Mark this timestamp as captured
-      setCapturedTimemarks(prev => [...prev, currentTime].sort((a, b) => a - b));
+      // Call the callback
+      onFrameCaptured(extractedFrame);
       
-      // Call the callback with the new frame
-      onFrameCaptured(newFrame);
-      
-      // Resume playback if the video was playing
-      if (wasPlaying) {
-        try {
-          await video.play();
-        } catch (playError) {
-          console.warn("Could not resume playback:", playError);
-        }
-      }
-      
-      toast.success(`Frame captured at ${timestamp}`);
     } catch (error) {
       console.error("Error capturing frame:", error);
-      toast.error("Failed to capture frame: " + (error instanceof Error ? error.message : "Unknown error"));
-      
-      // If the frame capture fails and we need a placeholder for testing
-      if (process.env.NODE_ENV === 'development' && pendingRef.current === false) {
-        pendingRef.current = true;
-        
-        // This is only for development testing - create a placeholder frame
-        const currentTime = videoRef.current?.currentTime || 0;
-        const timestamp = formatTime(currentTime);
-        
-        // Create a placeholder frame
-        const placeholderFrame: ExtractedFrame = {
-          id: uuidv4(),
-          timestamp,
-          imageUrl: `https://placehold.co/800x450/333/white?text=Frame+${timestamp}`,
-        };
-        
-        // Mark this timestamp as captured
-        setCapturedTimemarks(prev => [...prev, currentTime].sort((a, b) => a - b));
-        
-        // Call the callback
-        onFrameCaptured(placeholderFrame);
-        
-        // Use Sonner's format
-        toast("Placeholder frame created", {
-          description: `Placeholder created at ${timestamp}`,
-        });
-      } else {
-        throw error;
-      }
     } finally {
       setIsCapturingFrame(false);
-      pendingRef.current = false;
     }
-  }, [videoRef, canvasRef, videoUrl, projectId, isCapturingFrame, capturedTimemarks, formatTime, onFrameCaptured]);
-  
+  };
+
   return {
     captureFrame,
     isCapturingFrame,
+    canvasRef,
     capturedTimemarks,
-    setCapturedTimemarks,
-    canvasRef
+    setCapturedTimemarks
   };
 }

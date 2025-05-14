@@ -33,7 +33,7 @@ export const FrameLibraryGrid: React.FC<FrameLibraryGridProps> = ({
 
   return (
     <ScrollArea className="h-full w-full">
-      <div className="grid grid-cols-3 gap-3 p-2 pb-6" style={{ maxHeight: "360px", overflowY: "auto" }}>
+      <div className="grid grid-cols-3 gap-3 p-2 pb-20" style={{ overflowY: "auto" }}>
         {libraryFrames.map((frame) => (
           <div 
             key={frame.id} 
