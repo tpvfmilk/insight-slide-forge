@@ -3,7 +3,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Film, ImageIcon, RefreshCw, Trash2, Upload } from "lucide-react";
 import { useSlideEditor } from "./SlideEditorContext";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 
 export const SlideImageGallery: React.FC = () => {
   const {

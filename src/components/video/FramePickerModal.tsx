@@ -2,11 +2,11 @@
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Separator } from "@/components/ui/separator";
 import { mergeAndSaveFrames } from "@/utils/frameUtils";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 
 // Import our components and hooks
 import { VideoPlayer } from "./VideoPlayer";
@@ -59,7 +59,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       console.log("Frame saved to project database successfully");
     } catch (error) {
       console.error("Error saving captured frame:", error);
-      toast.error("Failed to save frame to project database");
+      toast("Failed to save frame to project database");
     }
   };
   
@@ -89,7 +89,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   // Handle bulk deletion of selected frames
   const handleDeleteSelected = async () => {
     if (frameLibrary.selectedFramesCount === 0) {
-      toast.info("No frames selected to delete");
+      toast("No frames selected to delete");
       return;
     }
     
@@ -115,8 +115,6 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   
   // Handle dialog clean up on close
   const handleClose = () => {
-    // Make sure to properly clean up and dismiss any toasts
-    toast.dismiss();
     onClose();
   };
   
