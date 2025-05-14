@@ -13,110 +13,9 @@ export const SlideFilmstrip: React.FC = () => {
     deleteSlideFromFilmstrip
   } = useSlideEditor();
 
-  // References for drag-to-scroll functionality
+  // Reference for the filmstrip container
   const filmstripRef = useRef<HTMLDivElement>(null);
   
-  // Set up enhanced drag-to-scroll functionality for the filmstrip
-  useEffect(() => {
-    const filmstrip = filmstripRef.current;
-    if (!filmstrip) return;
-    
-    let isDown = false;
-    let startX: number;
-    let scrollLeft: number;
-    
-    // Helper function to apply cursor styling
-    const setCursorGrabbing = (grabbing = true) => {
-      filmstrip.style.cursor = grabbing ? 'grabbing' : 'grab';
-      filmstrip.style.userSelect = grabbing ? 'none' : '';
-    };
-    
-    // Mouse event handlers
-    const handleMouseDown = (e: MouseEvent) => {
-      isDown = true;
-      filmstrip.classList.add('active-drag');
-      startX = e.pageX - filmstrip.offsetLeft;
-      scrollLeft = filmstrip.scrollLeft;
-      setCursorGrabbing(true);
-    };
-    
-    const handleMouseUp = () => {
-      isDown = false;
-      filmstrip.classList.remove('active-drag');
-      setCursorGrabbing(false);
-    };
-    
-    const handleMouseLeave = () => {
-      isDown = false;
-      filmstrip.classList.remove('active-drag');
-      setCursorGrabbing(false);
-    };
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDown) return;
-      e.preventDefault();
-      const x = e.pageX - filmstrip.offsetLeft;
-      const walk = (x - startX) * 1.5; // Adjusted scroll speed
-      
-      // Use requestAnimationFrame for smoother scrolling
-      requestAnimationFrame(() => {
-        filmstrip.scrollLeft = scrollLeft - walk;
-      });
-    };
-    
-    // Touch event handlers for mobile devices
-    const handleTouchStart = (e: TouchEvent) => {
-      isDown = true;
-      filmstrip.classList.add('active-drag');
-      startX = e.touches[0].pageX - filmstrip.offsetLeft;
-      scrollLeft = filmstrip.scrollLeft;
-    };
-    
-    const handleTouchEnd = () => {
-      isDown = false;
-      filmstrip.classList.remove('active-drag');
-    };
-    
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isDown) return;
-      e.preventDefault();
-      const x = e.touches[0].pageX - filmstrip.offsetLeft;
-      const walk = (x - startX) * 1.5; // Adjusted scroll speed
-      
-      // Use requestAnimationFrame for smoother scrolling
-      requestAnimationFrame(() => {
-        filmstrip.scrollLeft = scrollLeft - walk;
-      });
-    };
-    
-    // Add event listeners with passive option for better performance
-    filmstrip.addEventListener('mousedown', handleMouseDown);
-    filmstrip.addEventListener('mouseleave', handleMouseLeave, { passive: true });
-    document.addEventListener('mouseup', handleMouseUp, { passive: true });
-    document.addEventListener('mousemove', handleMouseMove);
-    
-    // Add touch event listeners for mobile
-    filmstrip.addEventListener('touchstart', handleTouchStart, { passive: true });
-    filmstrip.addEventListener('touchend', handleTouchEnd, { passive: true });
-    filmstrip.addEventListener('touchmove', handleTouchMove, { passive: false });
-    
-    // Initialize cursor style
-    setCursorGrabbing(false);
-    
-    return () => {
-      // Clean up event listeners
-      filmstrip.removeEventListener('mousedown', handleMouseDown);
-      filmstrip.removeEventListener('mouseleave', handleMouseLeave);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('mousemove', handleMouseMove);
-      
-      // Clean up touch event listeners
-      filmstrip.removeEventListener('touchstart', handleTouchStart);
-      filmstrip.removeEventListener('touchend', handleTouchEnd);
-      filmstrip.removeEventListener('touchmove', handleTouchMove);
-    };
-  }, []);
-
   // Center the current slide whenever it changes
   useEffect(() => {
     if (!filmstripRef.current) return;
@@ -134,12 +33,6 @@ export const SlideFilmstrip: React.FC = () => {
       const filmstripWidth = filmstripRef.current.offsetWidth;
       const slideWidth = currentSlideElement.offsetWidth;
       const slideOffset = currentSlideElement.offsetLeft;
-      
-      console.log(`Centering slide ${currentSlideIndex}:`, {
-        filmstripWidth,
-        slideWidth,
-        slideOffset
-      });
       
       // Calculate the scroll position that will center the slide
       const scrollPosition = slideOffset - (filmstripWidth / 2) + (slideWidth / 2);
@@ -159,8 +52,8 @@ export const SlideFilmstrip: React.FC = () => {
         <ScrollArea orientation="horizontal" className="h-full w-full">
           <div 
             ref={filmstripRef} 
-            className="flex gap-3 p-3 h-full cursor-grab"
-            style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
+            className="flex gap-3 p-3 h-full"
+            style={{ scrollbarWidth: 'none' }}
           >
             {slides.map((slide, index) => (
               <div 
