@@ -8,9 +8,9 @@ import { Separator } from "@/components/ui/separator";
 import { mergeAndSaveFrames } from "@/utils/frameUtils";
 import { toast } from "sonner";
 
-// Import our new components and hooks
+// Import our components and hooks
 import { VideoPlayer } from "./VideoPlayer";
-import { FrameLibraryGrid } from "./FrameLibraryGrid";
+import { FrameLibraryFilmstrip } from "./FrameLibraryFilmstrip";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { useFrameCapture } from "@/hooks/useFrameCapture";
 import { useFrameLibrary } from "@/hooks/useFrameLibrary";
@@ -130,7 +130,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
             </div>
             
             <div className="h-[300px] bg-muted/30 rounded-md overflow-hidden">
-              <FrameLibraryGrid 
+              <FrameLibraryFilmstrip 
                 libraryFrames={frameLibrary.libraryFrames}
                 selectedFrames={frameLibrary.selectedFrames}
                 toggleFrameSelection={frameLibrary.toggleFrameSelection}

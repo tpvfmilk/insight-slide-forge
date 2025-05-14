@@ -3,7 +3,13 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { mergeAndSaveFrames } from "@/utils/frameUtils";
-import { supabase } from "@/integrations/supabase/client";
+import { useFrameSelection } from "./useFrameSelection";
+import { 
+  timeToSeconds, 
+  removeFrameFromProject, 
+  deleteMultipleFrames as deleteMultipleFramesUtil,
+  sortFramesByTimestamp
+} from "@/utils/frameLibraryUtils";
 
 export function useFrameLibrary({
   projectId,
@@ -16,37 +22,16 @@ export function useFrameLibrary({
   allExtractedFrames?: ExtractedFrame[];
   onCapturedFrame?: (frame: ExtractedFrame) => void;
 }) {
-  const [selectedFrames, setSelectedFrames] = useState<{[key: string]: boolean}>({});
   const [libraryFrames, setLibraryFrames] = useState<ExtractedFrame[]>([]);
   const [isUploadingFrames, setIsUploadingFrames] = useState(false);
   
-  // Utility function to convert timestamp string to seconds
-  const timeToSeconds = (timestamp: string): number => {
-    const parts = timestamp.split(':').map(Number);
-    if (parts.length === 2) {
-      return parts[0] * 60 + parts[1];
-    } else if (parts.length === 3) {
-      return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    }
-    return 0;
-  };
+  // Use our new frame selection hook
+  const frameSelection = useFrameSelection({
+    initialFrames: existingFrames
+  });
   
-  // Initialize selected frames and library frames
+  // Initialize library frames
   useEffect(() => {
-    // Initialize with existing frames selected
-    const initialSelectedState: {[key: string]: boolean} = {};
-    
-    // Select all existing frames by default
-    if (existingFrames && existingFrames.length > 0) {
-      existingFrames.forEach(frame => {
-        if (frame.id) {
-          initialSelectedState[frame.id] = true;
-        }
-      });
-    }
-    
-    setSelectedFrames(initialSelectedState);
-    
     // Load all project frames from allExtractedFrames
     if (allExtractedFrames && allExtractedFrames.length > 0) {
       console.log(`Loading ${allExtractedFrames.length} frames from project's extracted frames`);
@@ -61,9 +46,7 @@ export function useFrameLibrary({
       }
       
       // Sort frames by timestamp
-      const sortedLibraryFrames = [...validFrames].sort((a, b) => {
-        return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
-      });
+      const sortedLibraryFrames = sortFramesByTimestamp(validFrames);
       
       setLibraryFrames(sortedLibraryFrames);
     } else {
@@ -78,17 +61,16 @@ export function useFrameLibrary({
     setLibraryFrames(prev => {
       const newFrames = [...prev, frame];
       // Sort frames by timestamp
-      return newFrames.sort((a, b) => timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp));
+      return sortFramesByTimestamp(newFrames);
     });
     
     // Automatically select the newly captured frame
-    setSelectedFrames(prev => ({
+    frameSelection.setSelectedFrames(prev => ({
       ...prev,
       [frame.id!]: true
     }));
     
-    // Most importantly: Save the new frame to the project's frame library immediately
-    // This ensures it persists even if the user doesn't apply it to a slide
+    // Save the new frame to the project's frame library
     const updatedFrames = await mergeAndSaveFrames(projectId, [frame], libraryFrames);
     if (updatedFrames) {
       console.log(`Frame captured and saved to project library`);
@@ -98,24 +80,6 @@ export function useFrameLibrary({
     if (onCapturedFrame) {
       onCapturedFrame(frame);
     }
-  };
-  
-  // Toggle selection of a frame in library
-  const toggleFrameSelection = (frame: ExtractedFrame) => {
-    if (!frame.id) return;
-    
-    setSelectedFrames(prev => {
-      const updated = {...prev};
-      
-      // Toggle selection
-      if (updated[frame.id!]) {
-        delete updated[frame.id!];
-      } else {
-        updated[frame.id!] = true;
-      }
-      
-      return updated;
-    });
   };
   
   // Remove a frame from the library
@@ -133,115 +97,44 @@ export function useFrameLibrary({
     setLibraryFrames(prev => prev.filter(frame => frame.id !== frameId));
     
     // Remove from selected frames
-    setSelectedFrames(prev => {
+    frameSelection.setSelectedFrames(prev => {
       const updated = {...prev};
       delete updated[frameId];
       return updated;
     });
     
     // Remove from project database
-    removeFrameFromProject(frameId);
+    removeFrameFromProject(projectId, frameId);
   };
   
-  // Remove frame from project database
-  const removeFrameFromProject = async (frameId: string) => {
-    try {
-      // Get current extracted frames from project
-      const { data: projectData, error: fetchError } = await supabase
-        .from('projects')
-        .select('extracted_frames')
-        .eq('id', projectId)
-        .single();
-      
-      if (fetchError) {
-        console.error("Error fetching project frames:", fetchError);
-        return;
-      }
-      
-      // Filter out the frame to remove
-      const currentFrames = (projectData?.extracted_frames || []) as ExtractedFrame[];
-      const updatedFrames = currentFrames.filter(frame => frame.id !== frameId);
-      
-      // Update the project
-      const { error } = await supabase
-        .from('projects')
-        .update({ extracted_frames: updatedFrames })
-        .eq('id', projectId);
-        
-      if (error) {
-        console.error("Error removing frame from project:", error);
-        return;
-      }
-      
-      console.log(`Removed frame ${frameId} from project database`);
-    } catch (error) {
-      console.error("Error in removeFrameFromProject:", error);
-    }
-  };
-  
-  // New function for bulk deletion of frames
+  // Delete multiple frames
   const deleteMultipleFrames = async (frameIds: string[]) => {
     if (!frameIds.length) return;
     
-    try {
-      // Get current extracted frames from project
-      const { data: projectData, error: fetchError } = await supabase
-        .from('projects')
-        .select('extracted_frames')
-        .eq('id', projectId)
-        .single();
-      
-      if (fetchError) {
-        console.error("Error fetching project frames:", fetchError);
-        return;
-      }
-      
-      // Filter out the frames to remove
-      const currentFrames = (projectData?.extracted_frames || []) as ExtractedFrame[];
-      const updatedFrames = currentFrames.filter(frame => !frameIds.includes(frame.id || ''));
-      
-      // Update the project
-      const { error } = await supabase
-        .from('projects')
-        .update({ extracted_frames: updatedFrames })
-        .eq('id', projectId);
-        
-      if (error) {
-        console.error("Error removing frames from project:", error);
-        toast.error("Failed to delete selected frames");
-        return;
-      }
-      
+    const onSuccess = () => {
       // Update local state
       setLibraryFrames(prev => prev.filter(frame => !frameIds.includes(frame.id || '')));
       
       // Clear selection state for deleted frames
-      setSelectedFrames(prev => {
+      frameSelection.setSelectedFrames(prev => {
         const updated = {...prev};
         frameIds.forEach(id => delete updated[id]);
         return updated;
       });
-      
-      // Show success message
-      toast.success(`Deleted ${frameIds.length} frames from library`);
-      console.log(`Removed ${frameIds.length} frames from project database`);
-    } catch (error) {
-      console.error("Error in deleteMultipleFrames:", error);
-      toast.error("Failed to delete selected frames");
-    }
+    };
+    
+    await deleteMultipleFramesUtil(projectId, frameIds, onSuccess);
   };
   
   // Apply selected frames to slide
   const handleApplyFrames = async (onFramesSelected: (frames: ExtractedFrame[]) => void) => {
     // Get selected frames from library
     const selectedFramesList = libraryFrames.filter(frame => 
-      frame.id && selectedFrames[frame.id]
+      frame.id && frameSelection.selectedFrames[frame.id]
     );
     
     // Sort frames by timestamp before applying
-    const sortedFrames = [...selectedFramesList].sort((a, b) => {
-      return timeToSeconds(a.timestamp) - timeToSeconds(b.timestamp);
-    });
+    const sortedFrames = sortFramesByTimestamp(selectedFramesList);
     
     if (sortedFrames.length === 0) {
       toast.error("Please select at least one frame to add to the slide");
@@ -251,7 +144,7 @@ export function useFrameLibrary({
     setIsUploadingFrames(true);
     
     try {
-      // Double check: ensure all frames have valid permanent URLs (not blob URLs)
+      // Ensure all frames have valid permanent URLs (not blob URLs)
       const validFrames = sortedFrames.filter(frame => 
         frame.imageUrl && !frame.imageUrl.startsWith('blob:')
       );
@@ -264,7 +157,6 @@ export function useFrameLibrary({
           setIsUploadingFrames(false);
           return;
         } else {
-          // Fix: Use Sonner's format instead of variant which isn't supported
           toast("Some frames will be skipped", {
             description: `${invalidFrames} frames have invalid URLs`,
           });
@@ -272,7 +164,6 @@ export function useFrameLibrary({
       }
       
       // Call the onFramesSelected callback with the selected frames
-      // This will apply the selected frames to the current slide
       await onFramesSelected(validFrames);
     } catch (error) {
       console.error("Error in handleApplyFrames:", error);
@@ -283,11 +174,10 @@ export function useFrameLibrary({
   };
   
   return {
-    selectedFrames,
+    ...frameSelection,
     libraryFrames,
     isUploadingFrames,
-    selectedFramesCount: Object.keys(selectedFrames).length,
-    toggleFrameSelection,
+    toggleFrameSelection: frameSelection.toggleFrameSelection,
     removeFrame,
     handleApplyFrames,
     addFrameToLibrary,
