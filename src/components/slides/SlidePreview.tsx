@@ -6,9 +6,10 @@ import { AspectRatio } from "@/components/ui/aspect-ratio";
 interface SlidePreviewProps {
   slides?: Slide[];
   currentSlide: Slide;
+  isFullscreen?: boolean;
 }
 
-export const SlidePreview: React.FC<SlidePreviewProps> = ({ currentSlide }) => {
+export const SlidePreview: React.FC<SlidePreviewProps> = ({ currentSlide, isFullscreen = false }) => {
   if (!currentSlide) return null;
   
   // Collect all images from both imageUrl and imageUrls
@@ -21,9 +22,9 @@ export const SlidePreview: React.FC<SlidePreviewProps> = ({ currentSlide }) => {
   
   return (
     <div className="w-full h-full flex items-center justify-center p-4 bg-black text-white">
-      <div className="w-full max-w-5xl mx-auto">
+      <div className={`w-full ${isFullscreen ? 'max-w-[96%]' : 'max-w-7xl'} mx-auto`}>
         {hasImages ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Left side: Image grid */}
             <div className="space-y-4">
               {hasSingleImage ? (
@@ -63,7 +64,7 @@ export const SlidePreview: React.FC<SlidePreviewProps> = ({ currentSlide }) => {
           </div>
         ) : (
           // No images - center the content
-          <div className="text-center p-8 max-w-2xl mx-auto">
+          <div className="text-center p-6 max-w-2xl mx-auto">
             <h2 className="text-2xl font-semibold mb-4">{currentSlide.title}</h2>
             <div className="mt-2 whitespace-pre-wrap">{currentSlide.content}</div>
           </div>
