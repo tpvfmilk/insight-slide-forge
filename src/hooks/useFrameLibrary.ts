@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from "react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { mergeAndSaveFrames } from "@/utils/frameUtils";
 
@@ -152,10 +151,7 @@ export function useFrameLibrary({
     });
     
     if (sortedFrames.length === 0) {
-      toast({
-        title: "No frames selected",
-        description: "Please select at least one frame to add to the slide",
-      });
+      toast.error("Please select at least one frame to add to the slide");
       return;
     }
     
@@ -171,18 +167,13 @@ export function useFrameLibrary({
         const invalidFrames = sortedFrames.length - validFrames.length;
         console.warn(`${invalidFrames} frames have temporary URLs and will be skipped`);
         if (validFrames.length === 0) {
-          toast({
-            title: "No valid frames available",
-            description: "All frames must have permanent URLs",
-            variant: "destructive",
-          });
+          toast.error("All frames must have permanent URLs");
           setIsUploadingFrames(false);
           return;
         } else {
-          toast({
-            title: "Some frames will be skipped",
+          toast("Some frames will be skipped", {
             description: `${invalidFrames} frames have invalid URLs`,
-            variant: "warning",
+            variant: "destructive"
           });
         }
       }
@@ -192,11 +183,7 @@ export function useFrameLibrary({
       await onFramesSelected(validFrames);
     } catch (error) {
       console.error("Error in handleApplyFrames:", error);
-      toast({
-        title: "Failed to process selected frames",
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive",
-      });
+      toast.error(error instanceof Error ? error.message : "Unknown error");
     } finally {
       setIsUploadingFrames(false);
     }

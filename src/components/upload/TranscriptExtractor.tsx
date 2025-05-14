@@ -8,7 +8,7 @@ import { FileUploader } from "@/components/ui/file-uploader";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "sonner"; // Updated import
 import { extractAudioFromVideo } from "@/services/audioExtractionService";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Mic, AlertTriangle } from "lucide-react";

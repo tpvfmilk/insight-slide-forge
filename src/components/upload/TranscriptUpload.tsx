@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowRight, Image, Loader2 } from "lucide-react";
 import { createProjectFromTranscript } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "sonner"; // Updated import
 import { ContextPromptInput } from "./ContextPromptInput";
 
 export const TranscriptUpload = () => {

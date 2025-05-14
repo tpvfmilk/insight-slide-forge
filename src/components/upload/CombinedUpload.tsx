@@ -6,7 +6,7 @@ import { FileVideo, Upload, RefreshCw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "sonner"; // Updated import
 import { ContextPromptInput } from "./ContextPromptInput";
 
 export const CombinedUpload = () => {

@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Plus, RefreshCw, X } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
-import { toast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { mergeAndSaveFrames } from "@/utils/frameUtils";
+import { toast } from "sonner";
 
 // Import our new components and hooks
 import { VideoPlayer } from "./VideoPlayer";

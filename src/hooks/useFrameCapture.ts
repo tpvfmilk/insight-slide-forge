@@ -1,6 +1,5 @@
-
 import { useState, useRef } from "react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { extractFramesFromVideoUrl } from "@/utils/videoFrameExtractor";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -91,10 +90,7 @@ export function useFrameCapture({
       const timestamp = formatTime(currentTimePosition);
       
       const toastId = "capture-frame";
-      toast({
-        title: `Capturing frame at ${timestamp}...`,
-        description: "Please wait while the frame is being processed",
-      });
+      toast.loading(`Capturing frame at ${timestamp}...`, { id: toastId });
       
       // Use our advanced frame extraction to get a good quality frame
       const extractedFrames = await extractFramesFromVideoUrl(
@@ -116,11 +112,7 @@ export function useFrameCapture({
         const permanentUrl = await uploadFrameToStorage(frame, extractedTimestamp);
         
         if (!permanentUrl) {
-          toast({
-            title: "Failed to upload frame",
-            description: `Could not save frame at ${timestamp}`,
-            variant: "destructive",
-          });
+          toast.error(`Could not save frame at ${timestamp}`, { id: toastId });
           createPlaceholderFrame(currentTimePosition);
           return;
         }
@@ -141,29 +133,18 @@ export function useFrameCapture({
         // Call the callback
         onFrameCaptured(newFrame);
         
-        toast({
-          title: "Frame captured",
-          description: `Frame at ${timestamp} has been saved`,
-        });
+        toast.success(`Frame at ${timestamp} has been saved`, { id: toastId });
         
         console.log(`Frame captured and stored with permanent URL: ${permanentUrl}`);
       } else {
         // Create placeholder if extraction failed
         createPlaceholderFrame(currentTimePosition);
         
-        toast({
-          title: "Could not capture frame",
-          description: `Failed to extract frame at ${timestamp}`,
-          variant: "destructive",
-        });
+        toast.error(`Failed to extract frame at ${timestamp}`, { id: toastId });
       }
     } catch (error) {
       console.error("Error capturing frame:", error);
-      toast({
-        title: "Failed to capture frame",
-        description: error instanceof Error ? error.message : 'Unknown error',
-        variant: "destructive",
-      });
+      toast.error(error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsCapturingFrame(false);
     }
