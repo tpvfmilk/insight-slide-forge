@@ -121,26 +121,35 @@ export const SlideFilmstrip: React.FC = () => {
   useEffect(() => {
     if (!filmstripRef.current) return;
     
-    // Get the current slide element using the index
-    const slideElements = filmstripRef.current.children;
-    if (!slideElements || slideElements.length === 0) return;
-    
-    const currentSlideElement = slideElements[currentSlideIndex] as HTMLElement;
-    if (!currentSlideElement) return;
-    
-    // Calculate the position to center the slide in the viewport
-    const filmstripWidth = filmstripRef.current.offsetWidth;
-    const slideWidth = currentSlideElement.offsetWidth;
-    const slideOffset = currentSlideElement.offsetLeft;
-    
-    // Calculate the scroll position that will center the slide
-    const scrollPosition = slideOffset - (filmstripWidth / 2) + (slideWidth / 2);
-    
-    // Use smooth scrolling to center the current slide
-    filmstripRef.current.scrollTo({
-      left: scrollPosition,
-      behavior: 'smooth'
-    });
+    // Small delay to ensure DOM is updated
+    setTimeout(() => {
+      // Find the current slide element using data attribute
+      const currentSlideElement = filmstripRef.current?.querySelector(`[data-slide-index="${currentSlideIndex}"]`) as HTMLElement;
+      if (!currentSlideElement) {
+        console.log(`Could not find slide element with index ${currentSlideIndex}`);
+        return;
+      }
+      
+      // Calculate the position to center the slide in the viewport
+      const filmstripWidth = filmstripRef.current.offsetWidth;
+      const slideWidth = currentSlideElement.offsetWidth;
+      const slideOffset = currentSlideElement.offsetLeft;
+      
+      console.log(`Centering slide ${currentSlideIndex}:`, {
+        filmstripWidth,
+        slideWidth,
+        slideOffset
+      });
+      
+      // Calculate the scroll position that will center the slide
+      const scrollPosition = slideOffset - (filmstripWidth / 2) + (slideWidth / 2);
+      
+      // Use smooth scrolling to center the current slide
+      filmstripRef.current.scrollTo({
+        left: scrollPosition,
+        behavior: 'smooth'
+      });
+    }, 100); // Small delay to ensure DOM updates are complete
     
   }, [currentSlideIndex]);
 
@@ -156,6 +165,7 @@ export const SlideFilmstrip: React.FC = () => {
             {slides.map((slide, index) => (
               <div 
                 key={slide.id}
+                data-slide-index={index}
                 onClick={() => goToSlide(index)}
                 className={`h-full w-48 flex-shrink-0 cursor-pointer flex flex-col items-center justify-center relative ${
                   currentSlideIndex === index ? "border-2 border-primary" : "border border-border hover:border-muted-foreground/30"
