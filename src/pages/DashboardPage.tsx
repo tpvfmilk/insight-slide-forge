@@ -2,8 +2,10 @@
 import { ApiKeyCard } from "@/components/dashboard/ApiKeyCard";
 import { RecentProjects } from "@/components/dashboard/RecentProjects";
 import { UsageStats } from "@/components/dashboard/UsageStats";
+import { StorageUsageBar } from "@/components/dashboard/StorageUsageBar";
 import { InsightLayout } from "@/components/layout/InsightLayout";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Upload } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -26,11 +28,24 @@ const DashboardPage = () => {
           </Button>
         </div>
         
-        <div className="flex flex-col gap-6">
-          <ApiKeyCard />
-          <UsageStats />
-          <RecentProjects />
-        </div>
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="storage">Storage</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="overview" className="space-y-6">
+            <ApiKeyCard />
+            <UsageStats />
+            <RecentProjects />
+          </TabsContent>
+          
+          <TabsContent value="storage" className="space-y-6">
+            <div className="border rounded-lg shadow-sm">
+              <StorageUsageBar hidden={false} />
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </InsightLayout>
   );

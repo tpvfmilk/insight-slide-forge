@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CleanupStorageButton } from "./CleanupStorageButton";
 
-export function StorageUsageBar() {
+export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
   const [percentage, setPercentage] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const queryClient = useQueryClient();
@@ -57,6 +57,10 @@ export function StorageUsageBar() {
       setIsSyncing(false);
     }
   };
+  
+  if (hidden) {
+    return null;
+  }
   
   if (isLoading) {
     return <div className="px-4 py-2 text-sm text-muted-foreground">

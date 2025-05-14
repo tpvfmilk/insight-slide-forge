@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Droplet, Home, UsersRound, FilePlus, Folder as FolderIcon, ChevronRight } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
@@ -63,9 +64,7 @@ export function InsightSidebar({
         <Separator className="my-4" />
       </div>
 
-      <div className="border-t my-0 py-0">
-        <StorageUsageBar />
-      </div>
+      {/* Removed StorageUsageBar from here */}
 
       <div className="p-4 border-t flex justify-between items-center">
         <Button variant="outline" size="sm" asChild>
