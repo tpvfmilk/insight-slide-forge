@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -20,6 +19,7 @@ interface FolderListProps {
   handleEditTitle: (project: Project) => void;
   handleExport: (projectId: string, format: string) => void;
   loading: boolean;
+  error: string | null; // Add the error prop to match what's being passed from ProjectsPage
 }
 
 // Key for localStorage
@@ -33,7 +33,8 @@ export function FolderList({
   handleDeleteProject,
   handleEditTitle,
   handleExport,
-  loading
+  loading,
+  error  // Add error to the props destructuring
 }: FolderListProps) {
   // Initialize state from localStorage if available
   const [expandedFolders, setExpandedFolders] = useState<string[]>(() => {

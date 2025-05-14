@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { InsightLayout } from "@/components/layout/InsightLayout";
@@ -196,7 +195,7 @@ const ProjectsPage = () => {
             handleEditTitle={handleEditTitle}
             handleExport={handleExport}
             loading={loading}
-            error={error}
+            error={error}  // Correctly passing the error prop
           />
         )}
       </div>
