@@ -1,11 +1,13 @@
 
 // Import from sonner directly
-import { toast } from "sonner";
+import { toast as sonnerToast } from "sonner";
 
-// Export for use throughout the app
-export { toast };
-
-// Re-export the useToast function for backward compatibility
+// Create a useToast hook that returns toast function
 export function useToast() {
-  return { toast };
+  return {
+    toast: sonnerToast
+  };
 }
+
+// Export toast for direct usage
+export const toast = sonnerToast;

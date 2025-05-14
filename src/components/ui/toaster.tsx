@@ -28,4 +28,5 @@ const Toaster = ({ ...props }: ToasterProps) => {
 }
 
 export { Toaster }
+// Import toast from our hooks
 export { toast } from "@/hooks/use-toast"
