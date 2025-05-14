@@ -10,7 +10,9 @@ export const SlideFilmstrip: React.FC = () => {
     slides,
     currentSlideIndex,
     goToSlide,
-    deleteSlideFromFilmstrip
+    deleteSlideFromFilmstrip,
+    goToNextSlide,
+    goToPrevSlide
   } = useSlideEditor();
 
   // Reference for the filmstrip container
@@ -20,31 +22,67 @@ export const SlideFilmstrip: React.FC = () => {
   useEffect(() => {
     if (!filmstripRef.current) return;
     
-    // Small delay to ensure DOM is updated
+    // Longer delay to ensure DOM is fully updated
     setTimeout(() => {
-      // Find the current slide element using data attribute
-      const currentSlideElement = filmstripRef.current?.querySelector(`[data-slide-index="${currentSlideIndex}"]`) as HTMLElement;
-      if (!currentSlideElement) {
-        console.log(`Could not find slide element with index ${currentSlideIndex}`);
+      try {
+        // Find the current slide element using data attribute
+        const currentSlideElement = filmstripRef.current?.querySelector(`[data-slide-index="${currentSlideIndex}"]`) as HTMLElement;
+        if (!currentSlideElement) {
+          console.warn(`Could not find slide element with index ${currentSlideIndex}`);
+          return;
+        }
+        
+        // Calculate the position to center the slide in the viewport
+        const filmstripWidth = filmstripRef.current.offsetWidth;
+        const slideWidth = currentSlideElement.offsetWidth;
+        const slideOffset = currentSlideElement.offsetLeft;
+        
+        // Calculate the scroll position that will center the slide
+        const scrollPosition = slideOffset - (filmstripWidth / 2) + (slideWidth / 2);
+        
+        console.log(`Centering slide ${currentSlideIndex}:`, {
+          filmstripWidth,
+          slideWidth,
+          slideOffset,
+          scrollPosition
+        });
+        
+        // Use smooth scrolling to center the current slide
+        filmstripRef.current.scrollTo({
+          left: scrollPosition,
+          behavior: 'smooth'
+        });
+      } catch (error) {
+        console.error("Error centering slide:", error);
+      }
+    }, 150); // Increased delay to ensure DOM updates are complete
+    
+  }, [currentSlideIndex]);
+  
+  // Handle keyboard navigation for previous/next slide
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || 
+          document.activeElement?.tagName === 'TEXTAREA') {
+        // Don't capture arrow keys when in text fields
         return;
       }
       
-      // Calculate the position to center the slide in the viewport
-      const filmstripWidth = filmstripRef.current.offsetWidth;
-      const slideWidth = currentSlideElement.offsetWidth;
-      const slideOffset = currentSlideElement.offsetLeft;
-      
-      // Calculate the scroll position that will center the slide
-      const scrollPosition = slideOffset - (filmstripWidth / 2) + (slideWidth / 2);
-      
-      // Use smooth scrolling to center the current slide
-      filmstripRef.current.scrollTo({
-        left: scrollPosition,
-        behavior: 'smooth'
-      });
-    }, 100); // Small delay to ensure DOM updates are complete
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goToPrevSlide();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        goToNextSlide();
+      }
+    };
     
-  }, [currentSlideIndex]);
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [goToPrevSlide, goToNextSlide]);
 
   return (
     <div className="h-40 border-t w-full flex-shrink-0 overflow-hidden">
