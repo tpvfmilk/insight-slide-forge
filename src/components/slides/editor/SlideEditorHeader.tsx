@@ -2,23 +2,21 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
-import { Clock, Presentation } from "lucide-react";
+import { Presentation } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useSlideEditor } from "./SlideEditorContext";
 import { SlideExportDialog } from "./SlideExportDialog";
 
 export const SlideEditorHeader: React.FC = () => {
   const { 
-    currentSlideIndex, 
-    slides, 
-    projectId 
+    projectId,
+    slides
   } = useSlideEditor();
 
   return (
     <div className="flex justify-between items-center p-4 border-b w-full">
-      <div className="text-sm text-muted-foreground flex items-center">
-        <Clock className="h-4 w-4 mr-1" />
-        <span>Slide {currentSlideIndex + 1} of {slides.length}</span>
+      <div className="flex-1">
+        {/* Slide count information was here, now moved to navigation bar */}
       </div>
       <div className="flex gap-2">
         <Button 

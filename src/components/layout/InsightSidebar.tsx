@@ -1,29 +1,49 @@
 
 import { Button } from "@/components/ui/button";
-import { Droplet, Home, UsersRound, FilePlus, Folder as FolderIcon, ChevronRight } from "lucide-react";
+import { Droplet, Home, UsersRound, FilePlus, Folder as FolderIcon, ChevronRight, Clock } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useEffect } from "react";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { cn } from "@/lib/utils";
+import { useSlideEditor } from "@/components/slides/editor/SlideEditorContext";
 import { StorageUsageBar } from "@/components/dashboard/StorageUsageBar";
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
 export function InsightSidebar({
   isOpen,
   onClose
 }: SidebarProps) {
   const location = useLocation();
   const isMobile = useIsMobile();
+  
+  // Get slide information if we're in the slide editor
+  const isProjectPage = location.pathname.includes('/projects/') && !location.pathname.includes('/present');
+  let slideInfo = null;
+  
+  try {
+    // Only attempt to use the slide editor context if we're on a project page
+    if (isProjectPage) {
+      const { currentSlideIndex, slides } = useSlideEditor();
+      slideInfo = { currentSlideIndex, slides };
+    }
+  } catch (error) {
+    // Silently fail if context isn't available
+    console.log("Slide editor context not available");
+  }
+  
   useEffect(() => {
     if (isMobile && isOpen) {
       // Close sidebar on mobile after navigation
       onClose();
     }
   }, [location.pathname, isMobile, isOpen, onClose]);
+  
   const navItems = [{
     title: "Dashboard",
     href: "/dashboard",
@@ -37,6 +57,7 @@ export function InsightSidebar({
     href: "/projects",
     icon: <FolderIcon className="h-4 w-4" />
   }];
+  
   return <div className={cn("fixed top-0 left-0 flex flex-col w-64 h-full bg-background border-r z-40 transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static", isOpen ? "translate-x-0" : "-translate-x-full", isMobile ? "bg-background/95 backdrop-blur-sm" : "")}>
       <div className="flex items-center justify-between h-14 border-b px-[10px]">
         <Link to="/" className="flex items-center gap-2">
@@ -61,12 +82,18 @@ export function InsightSidebar({
             </Button>)}
         </div>
 
-        <Separator className="my-4" />
+        <Separator className="my-4 bg-border/80 h-[1.5px]" />
+        
+        {/* Slide count information relocated from header */}
+        {isProjectPage && slideInfo && (
+          <div className="px-3 py-2 text-sm text-muted-foreground flex items-center">
+            <Clock className="h-4 w-4 mr-2" />
+            <span>Slide {slideInfo.currentSlideIndex + 1} of {slideInfo.slides.length}</span>
+          </div>
+        )}
       </div>
 
-      {/* Removed StorageUsageBar from here */}
-
-      <div className="p-4 border-t flex justify-between items-center">
+      <div className="p-4 border-t border-border/80 flex justify-between items-center">
         <Button variant="outline" size="sm" asChild>
           <Link to="/settings">
             <UsersRound className="h-4 w-4 mr-2" />
