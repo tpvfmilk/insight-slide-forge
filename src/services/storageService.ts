@@ -13,7 +13,7 @@ let storageInitialized = false;
  */
 export const initializeStorage = async (): Promise<boolean> => {
   try {
-    // If we've already initialized storage in this session, don't do it again
+    // If we've already successfully initialized storage in this session, don't do it again
     if (storageInitialized) {
       console.log("Storage already initialized in this session, skipping");
       return true;
@@ -29,42 +29,61 @@ export const initializeStorage = async (): Promise<boolean> => {
     }
     
     // Call our edge function to init the buckets with proper permissions
-    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/init-storage-buckets', {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.session.access_token}`
+    try {
+      const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/init-storage-buckets', {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.session.access_token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Storage initialization failed:", errorData);
+        toast.error("Failed to initialize storage buckets. Some features may not work correctly.");
+        return false;
       }
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Storage initialization failed:", errorData);
-      toast.error("Failed to initialize storage buckets. Some features may not work correctly.");
+      
+      const data = await response.json();
+      console.log("Storage initialization result:", data);
+      
+      // Verify the results to make sure all required buckets were created/updated
+      if (data.success) {
+        // Check specifically if the required buckets are properly configured
+        const videoUploadsResult = data.results.find(r => r.bucket === 'video_uploads');
+        const chunksResult = data.results.find(r => r.bucket === 'chunks');
+        const slidesResult = data.results.find(r => r.bucket === 'slide_stills');
+        
+        const allBucketsOk = videoUploadsResult && videoUploadsResult.status !== 'error' && 
+                            chunksResult && chunksResult.status !== 'error' &&
+                            slidesResult && slidesResult.status !== 'error';
+        
+        if (allBucketsOk) {
+          console.log("All required buckets are properly configured");
+          storageInitialized = true;
+        } else {
+          console.warn("One or more buckets might not be properly configured");
+          console.log("Bucket results:", data.results);
+          
+          // Check specifically for issues with the chunks bucket
+          if (!chunksResult || chunksResult.status === 'error') {
+            console.error("The 'chunks' bucket was not created correctly");
+            toast.error("Storage 'chunks' bucket could not be created. Video chunking will not work properly.");
+          } else {
+            toast.warning("Storage might not be configured correctly. Video processing may not work properly.");
+          }
+          
+          return false;
+        }
+      }
+      
+      return data.success === true;
+    } catch (fetchError) {
+      console.error("Error calling init-storage-buckets function:", fetchError);
+      toast.error("Storage initialization service error. Please try again.");
       return false;
     }
-    
-    const data = await response.json();
-    console.log("Storage initialization result:", data);
-    
-    // Mark as initialized to avoid unnecessary repeat calls
-    if (data.success) {
-      storageInitialized = true;
-      
-      // Check specifically if the required buckets are properly configured
-      const videoUploadsResult = data.results.find(r => r.bucket === 'video_uploads');
-      const chunksResult = data.results.find(r => r.bucket === 'chunks');
-      
-      if (videoUploadsResult && videoUploadsResult.status !== 'error' && 
-          chunksResult && chunksResult.status !== 'error') {
-        console.log("All required buckets are properly configured");
-      } else {
-        console.warn("One or more buckets might not be properly configured");
-        toast.warning("Storage might not be configured correctly. Video processing may not work properly.");
-      }
-    }
-    
-    return data.success === true;
   } catch (error) {
     console.error("Error initializing storage:", error);
     toast.error("Storage initialization error. Please try refreshing the page.");

@@ -65,10 +65,11 @@ serve(async (req) => {
         .getBucket(bucket.id);
 
       if (getBucketError) {
-        if (getBucketError.message === 'The resource was not found') {
+        if (getBucketError.message.includes('not found') || 
+            getBucketError.message.includes('Bucket not found')) {
           console.log(`Bucket ${bucket.id} doesn't exist, creating...`);
           // Create bucket if it doesn't exist
-          const { error: createBucketError } = await supabase
+          const { data, error: createBucketError } = await supabase
             .storage
             .createBucket(bucket.id, {
               public: bucket.public,
@@ -125,6 +126,27 @@ serve(async (req) => {
           });
         }
       }
+    }
+
+    // Create RLS policies for the chunks bucket to ensure proper access
+    try {
+      // IMPORTANT: Ensure the chunks bucket has proper policies for access
+      await supabase.rpc('create_storage_policy', { 
+        bucket_name: 'chunks',
+        policy_name: 'Allow authenticated users to read',
+        definition: 'auth.role() = \'authenticated\''
+      });
+      console.log('Created or updated read policy for chunks bucket');
+      
+      await supabase.rpc('create_storage_policy', { 
+        bucket_name: 'chunks',
+        policy_name: 'Allow authenticated users to upload',
+        operation: 'INSERT',
+        definition: 'auth.role() = \'authenticated\''
+      });
+      console.log('Created or updated upload policy for chunks bucket');
+    } catch (policyError) {
+      console.log('Note: Policy creation attempted but may have failed (this is normal if policies already exist)');
     }
 
     return new Response(

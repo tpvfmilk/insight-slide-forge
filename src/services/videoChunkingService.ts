@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ExtendedVideoMetadata, ChunkMetadata, ChunkingInfo } from "@/types/videoChunking";
@@ -266,131 +265,105 @@ export const initiateServerSideChunking = async (
       return { success: false, error: "Missing video metadata" };
     }
     
+    // Create chunking metadata if it doesn't exist
+    let chunkingMetadata = videoMetadata.chunking;
     if (!videoMetadata.chunking) {
-      console.error("[DEBUG] Project doesn't have chunking metadata");
+      console.log("[DEBUG] Adding chunking metadata to large video");
       
-      // If the video is large but doesn't have chunking metadata, let's create it
-      if (videoMetadata.file_size && videoNeedsChunking(videoMetadata.file_size)) {
-        console.log("[DEBUG] Adding chunking metadata to large video");
-        
-        // Calculate chunks based on file size and duration
-        const chunks = calculateOptimalChunks(
-          videoMetadata.duration || 300, 
-          videoMetadata.file_size
-        );
-        
-        // Convert the chunks to a plain objects to be compatible with JSON
-        const jsonSafeChunks = chunks.map(chunk => ({
-          index: chunk.index,
-          startTime: chunk.startTime,
-          endTime: chunk.endTime,
-          duration: chunk.duration,
-          videoPath: chunk.videoPath,
-          title: chunk.title,
-          status: chunk.status
-        }));
-        
-        // Update the project with chunking metadata
-        const { error: updateError } = await supabase
-          .from('projects')
-          .update({
-            video_metadata: {
-              ...videoMetadata,
-              chunking: {
-                isChunked: true,
-                totalDuration: videoMetadata.duration,
-                chunks: jsonSafeChunks,
-                status: "prepared"
-              }
-            }
-          })
-          .eq('id', projectId);
-          
-        if (updateError) {
-          console.error("[DEBUG] Error updating project with chunking metadata:", updateError);
-          return { success: false, error: "Failed to update chunking metadata" };
-        }
-        
-        // Now proceed with chunking using the newly created metadata
-        console.log("[DEBUG] Created chunking metadata with", chunks.length, "chunks");
-        
-        videoMetadata.chunking = {
-          isChunked: true,
-          totalDuration: videoMetadata.duration,
-          chunks: chunks,
-          status: "prepared"
-        };
-      } else {
-        return { success: false, error: "Missing chunking metadata" };
-      }
-    }
-    
-    console.log(`[DEBUG] Checking chunking status:`, {
-      isChunked: videoMetadata.chunking.isChunked,
-      chunks: videoMetadata.chunking.chunks?.length || 0,
-      status: videoMetadata.chunking.status,
-      originalFilePath: sourceFilePath
-    });
-    
-    // Skip video-chunker function call in debug mode (it doesn't exist in the current setup)
-    console.log("[DEBUG] In a full implementation, would call the video-chunker function");
-    console.log("[DEBUG] For now, we'll simulate success and proceed with transcription");
-    
-    // Update chunks with simulated paths
-    if (videoMetadata.chunking.chunks) {
-      const updatedChunks = videoMetadata.chunking.chunks.map((chunk, index) => {
-        if (!chunk.videoPath) {
-          const sourceParts = sourceFilePath.split('/');
-          const filename = sourceParts[sourceParts.length - 1];
-          const fileNameWithoutExt = filename.replace(/\.[^/.]+$/, "");
-          const extension = filename.split('.').pop();
-          const chunkFileName = `${fileNameWithoutExt}_chunk_${index + 1}.${extension || 'mp4'}`;
-          const chunkPath = `chunks/${projectId}/${chunkFileName}`;
-          
-          return {
-            ...chunk,
-            videoPath: chunkPath
-          };
-        }
-        return chunk;
-      });
+      // Calculate chunks based on file size and duration
+      const chunks = calculateOptimalChunks(
+        videoMetadata.duration || 300, 
+        videoMetadata.file_size || 30 * 1024 * 1024 // Default to 30MB if size unknown
+      );
       
-      // Convert to JSON-safe objects for Supabase
-      const jsonSafeChunks = updatedChunks.map(chunk => ({
+      // Convert the chunks to plain objects to be compatible with JSON
+      const jsonSafeChunks = chunks.map(chunk => ({
         index: chunk.index,
         startTime: chunk.startTime,
         endTime: chunk.endTime,
         duration: chunk.duration,
         videoPath: chunk.videoPath,
-        title: chunk.title,
-        status: chunk.status
+        title: chunk.title || `Chunk ${chunk.index + 1}`,
+        status: chunk.status || 'pending'
       }));
       
-      // Update project with the simulated chunk paths
+      // Create the chunking metadata
+      chunkingMetadata = {
+        isChunked: true,
+        totalDuration: videoMetadata.duration,
+        chunks: jsonSafeChunks,
+        status: "prepared"
+      };
+      
+      // Update the project with chunking metadata
       const { error: updateError } = await supabase
         .from('projects')
         .update({
           video_metadata: {
             ...videoMetadata,
-            chunking: {
-              ...videoMetadata.chunking,
-              chunks: jsonSafeChunks,
-              status: "complete" // Simulate successful chunking
-            }
+            chunking: chunkingMetadata
           }
         })
         .eq('id', projectId);
-        
+          
       if (updateError) {
-        console.error("[DEBUG] Error updating project with simulated chunks:", updateError);
-      } else {
-        console.log("[DEBUG] Updated project with simulated chunk paths");
+        console.error("[DEBUG] Error updating project with chunking metadata:", updateError);
+        return { success: false, error: "Failed to update chunking metadata" };
       }
+      
+      console.log("[DEBUG] Created chunking metadata with", jsonSafeChunks.length, "chunks");
     }
     
-    return { success: true };
-  } catch (error) {
-    console.error("[DEBUG] Error initiating server-side chunking:", error);
+    console.log(`[DEBUG] Calling video-chunker edge function with:`, {
+      projectId: projectId,
+      originalVideoPath: sourceFilePath,
+      chunkingMetadata: chunkingMetadata
+    });
+    
+    // Call the video-chunker edge function to process the chunks
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session?.access_token) {
+      console.log("[DEBUG] User not authenticated, can't call edge function");
+      return { success: false, error: "Authentication required" };
+    }
+
+    // Call the video-chunker edge function
+    try {
+      const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/video-chunker', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`
+        },
+        body: JSON.stringify({
+          projectId: projectId,
+          originalVideoPath: sourceFilePath,
+          chunkingMetadata: chunkingMetadata
+        })
+      });
+      
+      const responseData = await response.json();
+      
+      if (!response.ok) {
+        console.error("[DEBUG] Edge function error:", responseData);
+        return { 
+          success: false, 
+          error: responseData.error || "Error processing video chunks" 
+        };
+      }
+      
+      console.log("[DEBUG] Edge function response:", responseData);
+      return { success: true };
+      
+    } catch (apiError: any) {
+      console.error("[DEBUG] API error calling video-chunker:", apiError);
+      return { 
+        success: false, 
+        error: `API error: ${apiError.message}` 
+      };
+    }
+  } catch (error: any) {
+    console.error("[DEBUG] Error in initiateServerSideChunking:", error);
     return { success: false, error: error.message };
   }
 };

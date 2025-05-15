@@ -30,7 +30,7 @@ export const parseStoragePath = (fullPath: string | null): { bucketName: string,
     };
   }
   
-  // Check if path starts with 'chunks/' prefix (for chunked videos)
+  // Handle 'chunks/' paths explicitly
   if (cleanPath.startsWith('chunks/')) {
     return {
       bucketName: 'chunks',
@@ -127,4 +127,23 @@ export const createSignedVideoUrl = async (
     console.error("Error in createSignedVideoUrl:", error);
     return null;
   }
+};
+
+/**
+ * Fixes chunked video path references to ensure they're formatted correctly
+ * @param videoPath The video path that might be a chunk reference
+ * @returns Properly formatted path
+ */
+export const ensureCorrectChunkPath = (videoPath: string | null): string | null => {
+  if (!videoPath) return null;
+  
+  // Remove any leading slashes
+  const cleanPath = videoPath.startsWith('/') ? videoPath.substring(1) : videoPath;
+  
+  // Fix incorrect chunk paths
+  if (cleanPath.includes('_chunk_') && !cleanPath.startsWith('chunks/')) {
+    return `chunks/${cleanPath}`;
+  }
+  
+  return videoPath;
 };
