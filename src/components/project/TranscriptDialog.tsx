@@ -42,7 +42,6 @@ export const TranscriptDialog = ({
   const [hasMultipleSections, setHasMultipleSections] = useState<boolean>(false);
   const [isLoadingTranscript, setIsLoadingTranscript] = useState<boolean>(false);
   const [combinedTranscript, setCombinedTranscript] = useState<string>("");
-  // Add debug toggle for logging
   const [debugMode, setDebugMode] = useState<boolean>(false);
 
   // For standalone use
@@ -169,7 +168,7 @@ export const TranscriptDialog = ({
     toast.success("Transcript formatted");
   };
 
-  // Enhanced re-transcription with detailed logging
+  // Enhanced re-transcription with improved error handling
   const handleReTranscribe = async () => {
     if (!project?.id) return;
     
@@ -179,21 +178,22 @@ export const TranscriptDialog = ({
       toast.loading("Re-transcribing video...", { id: toastId });
       
       // Debug logging - enhanced to track chunking process
-      console.log(`[DEBUG] Re-transcribing project ${project.id}`);
-      console.log(`[DEBUG] Project details:`, {
-        id: project.id,
-        title: project.title,
-        source_type: project.source_type,
-        source_file_path: project.source_file_path,
-        has_video_metadata: !!project.video_metadata,
-      });
+      if (debugMode) {
+        console.log(`[DEBUG] Re-transcribing project ${project.id}`);
+        console.log(`[DEBUG] Project details:`, {
+          id: project.id,
+          title: project.title,
+          source_type: project.source_type,
+          source_file_path: project.source_file_path,
+          has_video_metadata: !!project.video_metadata,
+        });
+      }
       
-      // Safely cast video metadata to ExtendedVideoMetadata
+      // Get video metadata with proper type safety
       const videoMetadataFromProject = project.video_metadata;
-      // Create a properly typed variable for the extended metadata
       const extendedVideoMetadata = videoMetadataFromProject as ExtendedVideoMetadata | null;
       
-      if (project.video_metadata) {
+      if (debugMode && project.video_metadata) {
         try {
           console.log(`[DEBUG] Video metadata:`, {
             duration: project.video_metadata.duration,
@@ -209,22 +209,26 @@ export const TranscriptDialog = ({
       // Fetch project videos to ensure we have all videos
       const projectVideos = await fetchProjectVideos(project.id);
       
-      console.log(`[DEBUG] Re-transcribing project ${project.id} with ${projectVideos.length} videos`);
-      
-      if (projectVideos && projectVideos.length > 0) {
-        console.log(`[DEBUG] Project videos:`, projectVideos.map(v => ({
-          id: v.id,
-          title: v.title,
-          path: v.source_file_path,
-          hasMetadata: !!v.video_metadata
-        })));
+      if (debugMode) {
+        console.log(`[DEBUG] Re-transcribing project ${project.id} with ${projectVideos.length} videos`);
+        
+        if (projectVideos && projectVideos.length > 0) {
+          console.log(`[DEBUG] Project videos:`, projectVideos.map(v => ({
+            id: v.id,
+            title: v.title,
+            path: v.source_file_path,
+            hasMetadata: !!v.video_metadata
+          })));
+        }
       }
       
-      // Call the transcribe video service
+      // Call the transcribe video service with improved error handling
       const result = await transcribeVideo(project.id, projectVideos);
       
       if (result.success && result.transcript) {
-        console.log(`[DEBUG] Transcription succeeded. Transcript length: ${result.transcript.length} chars`);
+        if (debugMode) {
+          console.log(`[DEBUG] Transcription succeeded. Transcript length: ${result.transcript.length} chars`);
+        }
         
         // Update the local state
         setEditedTranscript(result.transcript);
@@ -236,7 +240,7 @@ export const TranscriptDialog = ({
         toast.success("Video successfully re-transcribed!", { id: toastId });
       } else {
         console.error(`[DEBUG] Transcription failed:`, result.error);
-        toast.error(`Failed to re-transcribe video: ${result.error || "Unknown error"}`, { id: toastId });
+        toast.error(`Failed to re-transcribe video: ${result.error || "Unknown error"}`, { id: toastId, duration: 6000 });
         
         // Show extended error details
         if (debugMode) {
@@ -248,9 +252,12 @@ export const TranscriptDialog = ({
           });
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[DEBUG] Error re-transcribing video:", error);
-      toast.error("Failed to re-transcribe video");
+      toast.error(`Transcription failed: ${error?.message || "Unknown error"}`, { 
+        id: "retranscribe", 
+        duration: 6000
+      });
     } finally {
       setIsReTranscribing(false);
     }
