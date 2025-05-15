@@ -1,163 +1,101 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Project } from "@/services/projectService";
-import { extractFramesFromVideo, mapTimestampsToImages } from "@/services/frameExtractionService";
-import { initializeStorage } from "@/services/storageService";
-import { fetchProjectVideos } from "@/services/projectVideoService";
 
-/**
- * Initiates the slide generation process for a project
- * @param projectId ID of the project for which to generate slides
- * @returns Object containing success status and generated slides if successful
- */
-export const generateSlidesForProject = async (projectId: string): Promise<{ success: boolean; slides?: any[] }> => {
+// Check if a project has valid slides
+export function hasValidSlides(project: any): boolean {
+  return project?.slides && Array.isArray(project.slides) && project.slides.length > 0;
+}
+
+// Generate slides using the project's transcript
+export const generateSlidesForProject = async (projectId: string): Promise<{
+  success: boolean;
+  slides?: any[];
+  error?: string;
+}> => {
   try {
-    // Verify user is authenticated
-    const { data: session } = await supabase.auth.getSession();
-    if (!session?.session?.access_token) {
-      toast.error("You need to be logged in to generate slides", { id: "generate-slides" });
-      return { success: false };
-    }
-    
-    toast.loading("Generating slides...", { id: "generate-slides" });
-    
-    // Ensure storage buckets are initialized before generating slides
-    await initializeStorage();
-    
-    // Fetch the project to get context_prompt if available
+    // Fetch the most recent project data to ensure we have the latest transcript
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('context_prompt, transcript, source_type, source_file_path, video_metadata, title')
+      .select('*')
       .eq('id', projectId)
       .single();
-      
-    if (projectError) {
-      console.error('Error fetching project context:', projectError);
-      throw new Error('Failed to retrieve project details');
+    
+    if (projectError || !project) {
+      console.error("Error fetching project:", projectError);
+      throw new Error("Failed to fetch project data");
     }
     
-    // Check if we have transcript for video projects
-    if (project.source_type === 'video' && !project.transcript) {
-      toast.error("This video needs to be transcribed before generating slides", { id: "generate-slides" });
-      return { success: false };
+    if (!project.transcript) {
+      throw new Error("No transcript available. Please transcribe the video first.");
     }
     
-    // Get all videos in the project to calculate total duration
-    const projectVideos = await fetchProjectVideos(projectId);
-    let totalVideoDuration = 0;
-    
-    // Calculate total duration from all project videos
-    if (projectVideos.length > 0) {
-      totalVideoDuration = projectVideos.reduce((total, video) => {
-        const duration = video.video_metadata?.duration || 0;
-        return total + duration;
-      }, 0);
-      
-      console.log(`Total duration across all ${projectVideos.length} videos: ${totalVideoDuration}s`);
-    } else if (project.source_type === 'video' && project.video_metadata) {
-      // Fallback to the main video's metadata
-      try {
-        const metadata = project.video_metadata as { duration?: number };
-        if (metadata.duration) {
-          totalVideoDuration = metadata.duration;
-          console.log(`Using main video duration for slide generation: ${totalVideoDuration}s`);
-        }
-      } catch (error) {
-        console.warn('Could not extract video duration from metadata:', error);
-      }
+    // Check if the transcript is excessively large and might cause issues
+    if (project.transcript && project.transcript.length > 100000) {
+      console.warn("Large transcript detected, performance may be affected");
     }
-
-    console.log("Calling generate-slides edge function with params:", {
-      projectId,
-      contextPrompt: project?.context_prompt || '',
-      videoDuration: totalVideoDuration,
-      presentationTitle: project?.title || 'Presentation'
-    });
     
-    // Include additional parameters in the API call
-    const response = await supabase.functions.invoke('generate-slides', {
+    // Set a default target slide count if not specified
+    const targetSlides = project.target_slide_count || 10;
+    
+    // Call the Edge Function to generate slides
+    const { data, error } = await supabase.functions.invoke('generate-slides', {
       body: {
         projectId,
-        contextPrompt: project?.context_prompt || '',
-        videoDuration: totalVideoDuration,
-        presentationTitle: project?.title || 'Presentation'
+        transcript: project.transcript,
+        targetSlideCount: targetSlides,
+        contextPrompt: project.context_prompt || "",
+        projectTitle: project.title || "Untitled Project",
+        videoDuration: project.video_metadata?.duration || 0
       }
     });
     
-    if (response.error) {
-      console.error("Error from generate-slides edge function:", response.error);
-      throw new Error(response.error.message || "Failed to generate slides");
+    if (error) {
+      console.error("Error generating slides:", error);
+      throw new Error(`Failed to generate slides: ${error.message}`);
     }
     
-    const { slides: generatedSlides } = response.data || {};
-    
-    if (!generatedSlides || !Array.isArray(generatedSlides) || generatedSlides.length === 0) {
-      throw new Error("No slides were generated");
+    if (!data || !data.slides || !Array.isArray(data.slides) || data.slides.length === 0) {
+      throw new Error("No slides were generated. Please try again.");
     }
     
-    console.log(`Generated ${generatedSlides.length} slides successfully`);
-    toast.success(`Generated ${generatedSlides.length} slides successfully!`, { id: "generate-slides" });
+    console.log(`Generated ${data.slides.length} slides`);
     
-    // If this is a video source, inform the user that they need to manually extract frames
-    if (project.source_type === 'video' && project.source_file_path) {
-      // Collect all timestamps from all slides
-      const allTimestamps = generatedSlides.reduce((timestamps, slide) => {
-        if (slide.transcriptTimestamps && Array.isArray(slide.transcriptTimestamps)) {
-          return [...timestamps, ...slide.transcriptTimestamps];
-        } else if (slide.timestamp && typeof slide.timestamp === 'string') {
-          return [...timestamps, slide.timestamp];
-        }
-        return timestamps;
-      }, []);
-      
-      if (allTimestamps.length > 0) {
-        console.log("Slides contain timestamps for manual frame extraction:", allTimestamps);
-        toast.info("Slides generated. You can now manually extract frames for your slides.", { id: "generate-slides" });
-      }
+    // Update project with generated slides
+    const { error: updateError } = await supabase
+      .from('projects')
+      .update({ 
+        slides: data.slides,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', projectId);
+    
+    if (updateError) {
+      console.error("Error updating project with slides:", updateError);
+      throw new Error(`Failed to save generated slides: ${updateError.message}`);
     }
     
-    return { success: true, slides: generatedSlides };
+    return {
+      success: true,
+      slides: data.slides
+    };
   } catch (error) {
-    console.error("Error generating slides:", error);
-    toast.error(`Failed to generate slides: ${error.message}`, { id: "generate-slides" });
-    return { success: false };
+    console.error("Error in generateSlidesForProject:", error);
+    toast.error(error.message || "Failed to generate slides");
+    return {
+      success: false,
+      error: error.message
+    };
   }
 };
 
-/**
- * Type definition for a slide
- */
-interface Slide {
-  id: string;
-  title: string;
-  content: string;
-  timestamp?: string;
-  imageUrl?: string;
-  transcriptTimestamps?: string[];
-  imageUrls?: string[];
-}
+// Additional utility functions as needed
+export const countSlidesWithImages = (slides: any[]): number => {
+  if (!slides || !Array.isArray(slides)) return 0;
+  return slides.filter(slide => slide && slide.image).length;
+};
 
-/**
- * Check if a project has slides already generated
- * @param project The project to check
- * @returns Boolean indicating if valid slides exist
- */
-export const hasValidSlides = (project: Project | null): boolean => {
-  if (!project) return false;
-  
-  const slides = project.slides;
-  
-  // Check if slides array exists and has items
-  if (!slides || !Array.isArray(slides) || slides.length === 0) {
-    return false;
-  }
-  
-  // Safely check if the first slide is not a placeholder
-  const firstSlide = slides[0];
-  if (typeof firstSlide === 'object' && firstSlide !== null && 'id' in firstSlide) {
-    return firstSlide.id !== "slide-placeholder";
-  }
-  
-  return false;
+export const countSlidesWithoutImages = (slides: any[]): number => {
+  if (!slides || !Array.isArray(slides)) return 0;
+  return slides.filter(slide => slide && !slide.image).length;
 };

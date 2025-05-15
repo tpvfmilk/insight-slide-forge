@@ -97,7 +97,7 @@ const ProjectPage = () => {
               setContextPrompt={setContextPrompt}
             />
             
-            {/* Action buttons - passing hideSelectFrames=true to hide the Select Frames button */}
+            {/* Action buttons - passing hideSelectFrames=false to allow frame selection */}
             <ActionButtons 
               project={project}
               needsFrameExtraction={needsFrameExtraction}
@@ -113,7 +113,7 @@ const ProjectPage = () => {
               isTranscriptOnlyProject={isTranscriptOnlyProject}
               refreshProject={loadProject}
               totalDuration={totalVideoDuration}
-              hideSelectFrames={true} // Add this prop to hide the Select Frames button
+              hideSelectFrames={false} // Changed to show the Select Frames button
             />
           </div>
         </div>
@@ -153,6 +153,7 @@ const ProjectPage = () => {
           onFramesSelected={handleFrameSelection}
           allExtractedFrames={extractedFrames || []}
           existingFrames={[]} // This will be populated by the SlideEditor when needed
+          videoMetadata={project.video_metadata} // Pass the video metadata for chunked videos
         />
       )}
     </InsightLayout>

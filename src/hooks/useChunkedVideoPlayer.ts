@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getChunkSignedUrls, VideoChunk } from "@/services/videoChunkingService";
 
@@ -17,7 +16,7 @@ export function useChunkedVideoPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [seekingValue, setSeekingValue] = useState(0);
+  const [seekingValue, setSeekingValue] = useState<number>(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
@@ -26,14 +25,12 @@ export function useChunkedVideoPlayer({
   const [activeChunkIndex, setActiveChunkIndex] = useState(0);
   const [isChunked, setIsChunked] = useState(false);
   const [chunks, setChunks] = useState<VideoChunk[]>([]);
+  const [activeChunkUrl, setActiveChunkUrl] = useState<string | null>(null);
+  const [totalDuration, setTotalDuration] = useState(0);
+  const [chunkStartOffset, setChunkStartOffset] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Format time display (seconds to MM:SS)
-  const formatTime = (timeInSeconds: number): string => {
-    const minutes = Math.floor(timeInSeconds / 60);
-    const seconds = Math.floor(timeInSeconds % 60);
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
+  const wasPlayingBeforeSeek = useRef(false);
+  const preloadNextChunkTimeoutRef = useRef<number | null>(null);
 
   // Function to load videos based on videoMetadata
   const loadVideos = async () => {
@@ -53,12 +50,14 @@ export function useChunkedVideoPlayer({
         const urls = await getChunkSignedUrls(chunkedMetadata.chunks);
         setChunkUrls(urls);
         
-        // Set total duration from metadata
-        setDuration(chunkedMetadata.originalDuration || 0);
+        // Calculate total duration from metadata
+        const totalDur = chunkedMetadata.originalDuration || 
+          chunkedMetadata.chunks.reduce((acc: number, chunk: VideoChunk) => acc + (chunk.endTime - chunk.startTime), 0);
+        setTotalDuration(totalDur);
+        setDuration(totalDur);
         
         // Set initial chunk
-        setActiveChunkIndex(0);
-        setIsLoadingVideo(false);
+        loadChunk(0);
       } else if (normalVideoPath) {
         console.log("Loading standard video playback...");
         setIsChunked(false);
@@ -77,6 +76,7 @@ export function useChunkedVideoPlayer({
         
         // Set the first chunk URL to the normal video URL
         setChunkUrls([data.signedUrl]);
+        setActiveChunkUrl(data.signedUrl);
         setIsLoadingVideo(false);
       } else {
         setVideoError("No video source available");
@@ -89,56 +89,140 @@ export function useChunkedVideoPlayer({
     }
   };
 
+  // Calculate the time offset for a specific chunk
+  const calculateChunkOffset = useCallback((chunkIndex: number): number => {
+    if (!chunks || chunkIndex < 0) return 0;
+    
+    let offset = 0;
+    for (let i = 0; i < chunkIndex; i++) {
+      if (chunks[i]) {
+        offset += (chunks[i].endTime - chunks[i].startTime);
+      }
+    }
+    return offset;
+  }, [chunks]);
+
   // Function to determine which chunk should be active based on current time
-  const updateActiveChunk = (currentTimeInSeconds: number) => {
+  const updateActiveChunk = useCallback((currentTimeInSeconds: number) => {
     if (!isChunked || chunks.length === 0) return;
     
+    let accumulatedTime = 0;
     for (let i = 0; i < chunks.length; i++) {
-      if (currentTimeInSeconds >= chunks[i].startTime && 
-          currentTimeInSeconds < chunks[i].endTime) {
+      const chunkDuration = chunks[i].endTime - chunks[i].startTime;
+      
+      if (currentTimeInSeconds >= accumulatedTime && 
+          currentTimeInSeconds < accumulatedTime + chunkDuration) {
         if (i !== activeChunkIndex) {
           console.log(`Switching to chunk ${i} at time ${currentTimeInSeconds}`);
-          setActiveChunkIndex(i);
-        }
-        return;
-      }
-    }
-  };
-
-  // Handle seeking to a specific time across chunks
-  const seekToTime = (timeInSeconds: number) => {
-    if (!isChunked || chunks.length === 0) return;
-    
-    // Find the appropriate chunk for this time
-    for (let i = 0; i < chunks.length; i++) {
-      if (timeInSeconds >= chunks[i].startTime && 
-          timeInSeconds < chunks[i].endTime) {
-        
-        // If we're already on this chunk, just seek within it
-        if (i === activeChunkIndex && videoRef.current) {
-          const relativeChunkTime = timeInSeconds - chunks[i].startTime;
-          videoRef.current.currentTime = relativeChunkTime;
-          return;
-        }
-        
-        // Otherwise, we need to change chunks
-        setActiveChunkIndex(i);
-        
-        // We'll seek to the correct position once the chunk loads
-        // Store the target time relative to the chunk's start
-        const relativeChunkTime = timeInSeconds - chunks[i].startTime;
-        setTimeout(() => {
+          loadChunk(i);
+          
+          // Set the video's current time to the relative position in this chunk
           if (videoRef.current) {
-            videoRef.current.currentTime = relativeChunkTime;
+            const relativeTime = currentTimeInSeconds - accumulatedTime;
+            videoRef.current.currentTime = relativeTime;
           }
-        }, 100);
+        }
         return;
       }
+      
+      accumulatedTime += chunkDuration;
     }
-  };
+  }, [isChunked, chunks, activeChunkIndex]);
+
+  // Function to load a specific chunk
+  const loadChunk = useCallback(async (index: number) => {
+    if (!chunks || !chunks[index]) {
+      setVideoError("Chunk not found");
+      return;
+    }
+    
+    setIsLoadingVideo(true);
+    setVideoError(null);
+    
+    const prevChunkIndex = activeChunkIndex;
+    setActiveChunkIndex(index);
+    
+    try {
+      // Calculate the start offset for this chunk
+      const offset = calculateChunkOffset(index);
+      setChunkStartOffset(offset);
+      
+      // Use the preloaded URL if available
+      if (chunkUrls[index]) {
+        setActiveChunkUrl(chunkUrls[index]);
+        setIsLoadingVideo(false);
+        
+        // Preload the next chunk if available
+        if (index < chunks.length - 1 && !chunkUrls[index + 1]) {
+          preloadChunk(index + 1);
+        }
+        
+        return;
+      }
+      
+      // Otherwise get a new signed URL
+      console.log(`Getting signed URL for chunk ${index}`);
+      const { data, error } = await supabase.storage
+        .from('video_uploads')
+        .createSignedUrl(chunks[index].chunkPath, 7200);
+        
+      if (error || !data?.signedUrl) {
+        console.error("Error getting signed URL for chunk:", error);
+        setVideoError("Failed to load video chunk");
+        setIsLoadingVideo(false);
+        
+        // Revert to previous chunk if there was one
+        if (prevChunkIndex !== index && chunks[prevChunkIndex]) {
+          loadChunk(prevChunkIndex);
+        }
+        return;
+      }
+      
+      // Update the active chunk URL
+      const newUrls = [...chunkUrls];
+      newUrls[index] = data.signedUrl;
+      setChunkUrls(newUrls);
+      setActiveChunkUrl(data.signedUrl);
+      
+      // Preload the next chunk if available
+      if (index < chunks.length - 1) {
+        preloadChunk(index + 1);
+      }
+    } catch (error) {
+      console.error("Error loading chunk:", error);
+      setVideoError("Failed to load video chunk");
+      
+      // Revert to previous chunk if there was one
+      if (prevChunkIndex !== index && chunks[prevChunkIndex]) {
+        loadChunk(prevChunkIndex);
+      }
+    } finally {
+      setIsLoadingVideo(false);
+    }
+  }, [chunks, activeChunkIndex, chunkUrls, calculateChunkOffset]);
+
+  // Preload a chunk without making it active
+  const preloadChunk = useCallback(async (index: number) => {
+    if (!chunks?.[index] || chunkUrls[index]) return;
+    
+    try {
+      console.log(`Preloading chunk ${index}`);
+      const { data, error } = await supabase.storage
+        .from('video_uploads')
+        .createSignedUrl(chunks[index].chunkPath, 7200);
+        
+      if (!error && data?.signedUrl) {
+        const newUrls = [...chunkUrls];
+        newUrls[index] = data.signedUrl;
+        setChunkUrls(newUrls);
+      }
+    } catch (err) {
+      console.error(`Error preloading chunk ${index}:`, err);
+    }
+  }, [chunks, chunkUrls]);
 
   // Handle video playback control
-  const togglePlayPause = () => {
+  const togglePlayback = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     
@@ -149,170 +233,218 @@ export function useChunkedVideoPlayer({
         console.error("Error playing video:", error);
       });
     }
-  };
+    
+    setIsPlaying(!isPlaying);
+  }, [isPlaying]);
 
-  // Seek back 5 seconds
-  const seekBack = () => {
-    const newTime = Math.max(0, currentTime - 5);
+  // Skip backward by seconds
+  const skipBackward = useCallback((seconds: number = 5) => {
+    const newTime = Math.max(0, currentTime - seconds);
     setCurrentTime(newTime);
     setSeekingValue(newTime);
     
     if (isChunked) {
-      seekToTime(newTime);
+      updateActiveChunk(newTime);
     } else if (videoRef.current) {
       videoRef.current.currentTime = newTime;
     }
-  };
+  }, [currentTime, isChunked, updateActiveChunk]);
 
-  // Seek forward 5 seconds
-  const seekForward = () => {
-    const newTime = Math.min(duration, currentTime + 5);
+  // Skip forward by seconds
+  const skipForward = useCallback((seconds: number = 5) => {
+    const newTime = Math.min(totalDuration || duration, currentTime + seconds);
     setCurrentTime(newTime);
     setSeekingValue(newTime);
     
     if (isChunked) {
-      seekToTime(newTime);
+      updateActiveChunk(newTime);
     } else if (videoRef.current) {
       videoRef.current.currentTime = newTime;
     }
-  };
+  }, [currentTime, duration, totalDuration, isChunked, updateActiveChunk]);
 
   // Handle seeking via slider
-  const handleSeekStart = () => {
+  const handleSeekStart = useCallback(() => {
     setIsSeeking(true);
-  };
+    wasPlayingBeforeSeek.current = isPlaying;
+    
+    // Pause video during seeking for smoother experience
+    if (isPlaying && videoRef.current) {
+      videoRef.current.pause();
+    }
+  }, [isPlaying]);
 
-  const handleSeekChange = (value: number[]) => {
-    setSeekingValue(value[0]);
-  };
+  const handleSeekChange = useCallback((value: number | number[]) => {
+    const newValue = Array.isArray(value) ? value[0] : value;
+    setSeekingValue(newValue);
+  }, []);
 
-  const handleSeekEnd = () => {
-    const newTime = seekingValue;
+  const handleSeekCommit = useCallback((value: number) => {
+    const newTime = value;
     setCurrentTime(newTime);
+    setIsSeeking(false);
     
     if (isChunked) {
-      seekToTime(newTime);
+      updateActiveChunk(newTime);
     } else if (videoRef.current) {
       videoRef.current.currentTime = newTime;
     }
     
-    setIsSeeking(false);
-  };
-
-  // Handle video events
-  const handleVideoTimeUpdate = () => {
-    const video = videoRef.current;
-    if (!video || isSeeking) return;
-    
-    // Update current time relative to active chunk
-    if (isChunked && chunks.length > 0) {
-      const absoluteTime = video.currentTime + chunks[activeChunkIndex].startTime;
-      setCurrentTime(absoluteTime);
-      setSeekingValue(absoluteTime);
-      
-      // Check if we need to move to the next chunk
-      if (video.currentTime >= (chunks[activeChunkIndex].endTime - chunks[activeChunkIndex].startTime - 0.5)) {
-        // We're near the end of this chunk, prepare to switch to next chunk
-        if (activeChunkIndex < chunks.length - 1) {
-          console.log(`Near end of chunk ${activeChunkIndex}, preparing to switch to next chunk`);
-          setActiveChunkIndex(activeChunkIndex + 1);
-        }
-      }
-    } else {
-      // For non-chunked videos, just use the current time
-      setCurrentTime(video.currentTime);
-      setSeekingValue(video.currentTime);
+    // Resume playback if it was playing before seeking
+    if (wasPlayingBeforeSeek.current && videoRef.current) {
+      videoRef.current.play().catch(e => console.error("Error resuming playback:", e));
     }
-  };
+  }, [isChunked, updateActiveChunk]);
 
-  const handleVideoEnded = () => {
-    if (isChunked && activeChunkIndex < chunks.length - 1) {
-      // Move to the next chunk
-      setActiveChunkIndex(activeChunkIndex + 1);
-      // It will autoplay when the new chunk loads
-    } else {
-      // End of video or last chunk
-      setIsPlaying(false);
-    }
-  };
-  
-  const handleVideoLoaded = () => {
-    const video = videoRef.current;
-    if (!video) return;
+  // Handle video loaded event
+  const handleVideoLoaded = useCallback(() => {
+    if (!videoRef.current) return;
     
     setIsVideoLoaded(true);
-    setVideoError(null);
+    setIsLoadingVideo(false);
     
     if (!isChunked) {
-      // For non-chunked videos, get duration from the video element
-      setDuration(video.duration);
+      setDuration(videoRef.current.duration);
     }
     
-    // If we were playing before, resume playback
-    if (isPlaying) {
-      video.play().catch(e => console.error("Error resuming playback:", e));
+    // If we're playing a chunk, setup for correct relative time
+    if (isChunked && chunks?.[activeChunkIndex]) {
+      // If we were seeking to a specific time, set it now
+      if (isSeeking && videoRef.current) {
+        const relativeTime = seekingValue - chunkStartOffset;
+        if (relativeTime >= 0) {
+          videoRef.current.currentTime = relativeTime;
+        }
+        setIsSeeking(false);
+      }
+      
+      // Resume playback if it was playing
+      if (wasPlayingBeforeSeek.current) {
+        videoRef.current.play().catch(e => console.error("Error resuming playback:", e));
+      }
     }
-  };
+    
+    // Clear any existing preload timeout
+    if (preloadNextChunkTimeoutRef.current) {
+      clearTimeout(preloadNextChunkTimeoutRef.current);
+    }
+    
+    // Preload the next chunk after a short delay if available
+    if (isChunked && activeChunkIndex < chunks.length - 1) {
+      preloadNextChunkTimeoutRef.current = setTimeout(() => {
+        preloadChunk(activeChunkIndex + 1);
+      }, 1000) as unknown as number;
+    }
+  }, [isChunked, chunks, activeChunkIndex, isSeeking, seekingValue, chunkStartOffset, preloadChunk]);
   
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+  // Handle video error event
+  const handleVideoError = useCallback((e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     console.error("Video error:", e);
     setVideoError("Failed to load video. Please check the video file format and try again.");
     setIsVideoLoaded(false);
-  };
+    setIsLoadingVideo(false);
+  }, []);
 
-  // Load videos when the component mounts
+  // Load videos when the component mounts or when dependencies change
   useEffect(() => {
     loadVideos();
     
-    // Cleanup function
+    // Cleanup
     return () => {
-      setChunkUrls([]);
-      setIsChunked(false);
+      if (preloadNextChunkTimeoutRef.current) {
+        clearTimeout(preloadNextChunkTimeoutRef.current);
+      }
     };
   }, [videoMetadata, normalVideoPath]);
+
+  // Update time display and check for chunk transitions
+  useEffect(() => {
+    if (!videoRef.current || !isVideoLoaded || !isChunked || chunks.length === 0) return;
+    
+    const updateTimeAndCheckChunk = () => {
+      if (isSeeking) return;
+      
+      const video = videoRef.current;
+      if (!video) return;
+      
+      // Update current global time based on current chunk and video position
+      const globalTime = chunkStartOffset + video.currentTime;
+      setCurrentTime(globalTime);
+      setSeekingValue(globalTime);
+      
+      // Check if we're near the end of this chunk and need to transition
+      const currentChunkDuration = chunks[activeChunkIndex].endTime - chunks[activeChunkIndex].startTime;
+      const timeUntilEnd = currentChunkDuration - video.currentTime;
+      
+      if (isPlaying && timeUntilEnd < 0.5 && activeChunkIndex < chunks.length - 1) {
+        // We're very close to the end, prepare to switch to the next chunk
+        loadChunk(activeChunkIndex + 1);
+      }
+    };
+    
+    const intervalId = setInterval(updateTimeAndCheckChunk, 100);
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [isVideoLoaded, isChunked, chunks, activeChunkIndex, chunkStartOffset, isSeeking, isPlaying, loadChunk]);
   
-  // Update video event listeners
+  // Handle video play/pause/ended events
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => {
+      if (isChunked && activeChunkIndex < chunks.length - 1) {
+        // Move to next chunk on end
+        loadChunk(activeChunkIndex + 1);
+      } else {
+        setIsPlaying(false);
+      }
+    };
     
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
-    video.addEventListener('timeupdate', handleVideoTimeUpdate);
-    video.addEventListener('ended', handleVideoEnded);
+    video.addEventListener('ended', handleEnded);
     
     return () => {
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
-      video.removeEventListener('timeupdate', handleVideoTimeUpdate);
-      video.removeEventListener('ended', handleVideoEnded);
+      video.removeEventListener('ended', handleEnded);
     };
-  }, [isChunked, activeChunkIndex, chunks]);
+  }, [videoRef, isChunked, chunks, activeChunkIndex, loadChunk]);
+
+  // Format time to MM:SS
+  const formatTime = useCallback((timeInSeconds: number) => {
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }, []);
 
   return {
     videoRef,
     isPlaying,
     currentTime,
-    duration,
+    duration: totalDuration || duration,
     seekingValue,
     isSeeking,
     videoError,
     isVideoLoaded,
     isLoadingVideo,
-    activeChunkUrl: chunkUrls[activeChunkIndex],
-    isChunked,
-    activeChunkIndex,
-    loadVideos, // Expose loadVideos so it can be called from other components
+    activeChunkUrl,
+    chunks,
+    currentChunkIndex,
+    loadVideos,
+    loadChunk,
     formatTime,
-    togglePlayPause,
-    seekBack,
-    seekForward,
+    togglePlayback,
+    skipBackward,
+    skipForward,
     handleSeekStart,
     handleSeekChange,
-    handleSeekEnd,
+    handleSeekCommit,
     handleVideoLoaded,
     handleVideoError
   };
