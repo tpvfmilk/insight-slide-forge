@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { FileVideo, Upload, AlertTriangle, Info } from "lucide-react";
@@ -121,7 +120,7 @@ export const VideoUpload = () => {
           console.log("Project created successfully:", project.id);
           
           if (isLargeFile) {
-            toast.info("Large video will be automatically processed in chunks for better transcription", { duration: 6000 });
+            toast("Large video will be automatically processed in chunks for better transcription", { duration: 6000 });
           }
           
           toast.success("Redirecting to slide editor...");
@@ -174,7 +173,7 @@ export const VideoUpload = () => {
         </div>
         
         {isLargeFile && videoFile && (
-          <Alert variant="info">
+          <Alert>
             <Info className="h-4 w-4" />
             <AlertTitle>Large Video File</AlertTitle>
             <AlertDescription>

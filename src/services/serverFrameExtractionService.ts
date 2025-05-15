@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { ExtractedFrame } from "./clientFrameExtractionService";
 import { parseStoragePath } from "@/utils/videoPathUtils";
+import { ExtendedVideoMetadata } from "@/types/videoChunking";
 
 /**
  * Server-side frame extraction has been disabled for regular videos
@@ -29,7 +30,10 @@ export async function serverSideExtractFrames(
       .eq('id', projectId)
       .single();
       
-    if (project?.video_metadata?.chunking?.isChunked) {
+    // Need to cast video_metadata to ExtendedVideoMetadata to access chunking property
+    const videoMetadata = project?.video_metadata as ExtendedVideoMetadata | null;
+
+    if (videoMetadata?.chunking?.isChunked) {
       // For chunked videos, we map timestamps to chunk references
       // This is a simplified implementation - in a full implementation,
       // you would use FFmpeg on the server to extract frames from specific chunks
@@ -40,7 +44,7 @@ export async function serverSideExtractFrames(
       // In a real implementation, you would extract actual frames
       const frames: ExtractedFrame[] = timestamps.map((timestamp, index) => {
         // Find which chunk this timestamp belongs to
-        const chunks = project.video_metadata.chunking.chunks;
+        const chunks = videoMetadata.chunking.chunks;
         const chunkIndex = chunks.findIndex(chunk => 
           parseFloat(timestamp) >= chunk.startTime && 
           parseFloat(timestamp) < (chunk.endTime || Infinity)
@@ -54,7 +58,8 @@ export async function serverSideExtractFrames(
           url: `${videoPath}?timestamp=${timestamp}&chunk=${chunkIndex !== -1 ? chunkIndex : 'main'}`,
           type: 'server',
           // In a real implementation, you'd extract the actual thumbnail
-          thumbnailUrl: `${videoPath}?timestamp=${timestamp}&chunk=${chunkIndex !== -1 ? chunkIndex : 'main'}&thumbnail=true`
+          thumbnailUrl: `${videoPath}?timestamp=${timestamp}&chunk=${chunkIndex !== -1 ? chunkIndex : 'main'}&thumbnail=true`,
+          imageUrl: `${videoPath}?timestamp=${timestamp}&chunk=${chunkIndex !== -1 ? chunkIndex : 'main'}&thumbnail=true`
         };
       });
       

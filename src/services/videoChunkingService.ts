@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ExtendedVideoMetadata, ChunkMetadata, ChunkingInfo } from "@/types/videoChunking";
@@ -245,7 +244,10 @@ export const initiateServerSideChunking = async (
       .eq('id', projectId)
       .single();
       
-    if (!project?.video_metadata?.chunking) {
+    // Need to cast to ExtendedVideoMetadata to access chunking property  
+    const videoMetadata = project?.video_metadata as ExtendedVideoMetadata | null;
+    
+    if (!videoMetadata?.chunking) {
       console.error("Project doesn't have chunking metadata");
       return { success: false, error: "Missing chunking metadata" };
     }
@@ -255,7 +257,7 @@ export const initiateServerSideChunking = async (
       body: { 
         projectId,
         originalVideoPath: sourceFilePath,
-        chunkingMetadata: project.video_metadata.chunking
+        chunkingMetadata: videoMetadata.chunking
       }
     });
     
@@ -278,13 +280,14 @@ export const initiateServerSideChunking = async (
  * @returns Array of timemarks (in seconds) where chunks start
  */
 export const getChunkTimemarksFromProject = (project: any): number[] => {
-  if (!project || !project.video_metadata || !project.video_metadata.chunking) {
+  if (!project || !project.video_metadata) {
     return [];
   }
   
-  const metadata = project.video_metadata;
+  // Cast to ExtendedVideoMetadata to access chunking property
+  const metadata = project.video_metadata as ExtendedVideoMetadata;
   
-  if (!metadata.chunking.isChunked || !metadata.chunking.chunks || metadata.chunking.chunks.length === 0) {
+  if (!metadata.chunking?.isChunked || !metadata.chunking.chunks || metadata.chunking.chunks.length === 0) {
     return [];
   }
   
