@@ -1,10 +1,11 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
 import { parseStoragePath } from "@/utils/videoPathUtils";
+import { videoNeedsChunking, analyzeVideoForChunking, createVideoChunks } from "@/services/videoChunkingService";
+import { ExtendedVideoMetadata } from "@/types/videoChunking";
 
-// Update this function to remove the slides per minute parameter
+// Update this function to handle large videos through chunking
 export const createProjectFromVideo = async (
   videoFile: File,
   title: string,
@@ -19,27 +20,56 @@ export const createProjectFromVideo = async (
       return null;
     }
     
-    // Upload the video to Supabase storage
-    const filePath = `uploads/${session.session.user.id}/${videoFile.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from('video_uploads')
-      .upload(filePath, videoFile, {
-        cacheControl: '3600',
-        upsert: false
-      });
-    
-    if (uploadError) {
-      console.error("File upload error:", uploadError);
-      toast.error("Failed to upload video file");
+    // Analyze video file for potential chunking
+    const videoMetadata = await analyzeVideoForChunking(videoFile);
+    if (!videoMetadata) {
+      toast.error("Failed to analyze video file");
       return null;
     }
     
-    // Get video metadata
-    const videoMetadata = {
-      original_file_name: videoFile.name,
-      file_type: videoFile.type,
-      file_size: videoFile.size,
-    };
+    let filePath = `uploads/${session.session.user.id}/${videoFile.name}`;
+    let needsChunking = false;
+    
+    // Check if video needs chunking
+    if (videoMetadata.chunking?.isChunked) {
+      needsChunking = true;
+      
+      // If video needs chunking, create a different path for the original file
+      filePath = `chunks/${session.session.user.id}/${videoFile.name}`;
+      
+      // Process the video chunks
+      if (videoMetadata.chunking.chunks.length > 0) {
+        const updatedChunks = await createVideoChunks(
+          videoFile,
+          session.session.user.id, // Using user ID as temporary project ID
+          videoMetadata.chunking.chunks
+        );
+        
+        if (!updatedChunks) {
+          toast.error("Failed to process video chunks");
+          return null;
+        }
+        
+        // Update the metadata with chunk paths
+        videoMetadata.chunking.chunks = updatedChunks;
+      }
+    }
+    
+    if (!needsChunking) {
+      // For normal-sized videos, upload the file to Supabase storage directly
+      const { error: uploadError } = await supabase.storage
+        .from('video_uploads')
+        .upload(filePath, videoFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (uploadError) {
+        console.error("File upload error:", uploadError);
+        toast.error("Failed to upload video file");
+        return null;
+      }
+    }
     
     // Create a new project in the database
     const { data: project, error: projectError } = await supabase
@@ -150,6 +180,32 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
           console.log(`Storage public URL check: ${fileData?.publicUrl ? 'URL available' : 'No URL available'}`);
         } catch (e) {
           console.warn("Error checking file existence:", e);
+        }
+      }
+
+      // Check if the video is chunked
+      const videoMetadata = project.video_metadata as ExtendedVideoMetadata;
+      const isChunkedVideo = Boolean(videoMetadata?.chunking?.isChunked);
+      
+      if (isChunkedVideo) {
+        console.log("This is a chunked video. Processing chunk information for transcription.");
+        console.log(`Found ${videoMetadata.chunking?.chunks.length || 0} chunks.`);
+        
+        // Add chunking information to the project videos array if needed
+        if (projectVideos.length === 0 && videoMetadata.chunking?.chunks) {
+          projectVideos = videoMetadata.chunking.chunks.map(chunk => ({
+            id: null,
+            project_id: projectId,
+            source_file_path: chunk.videoPath,
+            title: chunk.title || `Chunk ${chunk.index + 1}`,
+            video_metadata: {
+              duration: chunk.duration,
+              start_time: chunk.startTime,
+              end_time: chunk.endTime
+            }
+          }));
+          
+          console.log(`Created ${projectVideos.length} video objects from chunks`);
         }
       }
     }

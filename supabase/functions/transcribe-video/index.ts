@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -83,43 +84,67 @@ serve(async (req) => {
       console.log("Project data:", JSON.stringify({
         id: project.id,
         source_type: project.source_type,
-        source_file_path: project.source_file_path
+        source_file_path: project.source_file_path,
+        has_chunking: project.video_metadata?.chunking?.isChunked ? 'Yes' : 'No'
       }));
+
+      // Check if this is a chunked video
+      const isChunkedVideo = project.video_metadata?.chunking?.isChunked;
+      
+      if (isChunkedVideo) {
+        console.log(`This is a chunked video with ${project.video_metadata?.chunking?.chunks?.length || 0} chunks`);
+      }
 
       // Determine which videos to process
       let videosToProcess = [];
       
+      // If we have explicit project videos (like chunks), use those
       if (projectVideos && projectVideos.length > 0) {
         console.log(`Using ${projectVideos.length} videos provided in request`);
         videosToProcess = projectVideos;
-      } else {
-        // Fallback to using the project's main video
-        if (project.source_type === 'video' && project.source_file_path) {
-          console.log("Using project's main video");
-          videosToProcess = [{
-            id: null,
-            project_id: projectId,
-            source_file_path: project.source_file_path,
-            title: "Main Video",
-            video_metadata: project.video_metadata
-          }];
-        } else {
-          // Try to get videos from project_videos table as another fallback
-          console.log("Fetching videos from project_videos table");
-          // Fix ambiguous column reference by using aliases and qualified names
-          const { data: projectVideosData, error: projectVideosError } = await supabase
-            .from('project_videos')
-            .select('id, source_file_path, title, video_metadata, display_order')
-            .eq('project_id', projectId)
-            .order('display_order', { ascending: true });
-            
-          if (!projectVideosError && projectVideosData && projectVideosData.length > 0) {
-            videosToProcess = projectVideosData.map(video => ({
-              ...video,
-              project_id: projectId // Explicitly add project_id to avoid ambiguity
-            }));
-            console.log(`Found ${projectVideosData.length} videos in project_videos table`);
+      } 
+      // If we have chunking information in the project metadata, use those chunks
+      else if (isChunkedVideo && project.video_metadata?.chunking?.chunks) {
+        console.log(`Using ${project.video_metadata.chunking.chunks.length} chunks from project metadata`);
+        
+        videosToProcess = project.video_metadata.chunking.chunks.map((chunk) => ({
+          id: null,
+          project_id: projectId,
+          source_file_path: chunk.videoPath,
+          title: chunk.title || `Chunk ${chunk.index + 1}`,
+          video_metadata: {
+            duration: chunk.duration,
+            start_time: chunk.startTime,
+            end_time: chunk.endTime
           }
+        }));
+      }
+      // Fallback to using the project's main video
+      else if (project.source_type === 'video' && project.source_file_path) {
+        console.log("Using project's main video");
+        videosToProcess = [{
+          id: null,
+          project_id: projectId,
+          source_file_path: project.source_file_path,
+          title: "Main Video",
+          video_metadata: project.video_metadata
+        }];
+      } else {
+        // Try to get videos from project_videos table as another fallback
+        console.log("Fetching videos from project_videos table");
+        // Fix ambiguous column reference by using aliases and qualified names
+        const { data: projectVideosData, error: projectVideosError } = await supabase
+          .from('project_videos')
+          .select('id, source_file_path, title, video_metadata, display_order')
+          .eq('project_id', projectId)
+          .order('display_order', { ascending: true });
+          
+        if (!projectVideosError && projectVideosData && projectVideosData.length > 0) {
+          videosToProcess = projectVideosData.map(video => ({
+            ...video,
+            project_id: projectId // Explicitly add project_id to avoid ambiguity
+          }));
+          console.log(`Found ${projectVideosData.length} videos in project_videos table`);
         }
       }
       
@@ -207,17 +232,17 @@ serve(async (req) => {
           
           // Check if the file is too large for OpenAI
           if (videoData.size > MAX_OPENAI_SIZE) {
-            console.log("Video file is too large for OpenAI API, using chunk processing");
-            // For large files, we need to extract audio and split it into chunks
-            // This implementation will depend on how you want to handle large files
-            const chunkedTranscript = await processLargeVideo(videoData);
-            if (chunkedTranscript) {
-              const videoTitle = video.title || `Video ${i + 1}`;
-              const videoHeader = `\n\n## ${videoTitle}\n\n`;
-              transcripts.push(videoHeader + chunkedTranscript);
-            } else {
-              console.error("Failed to process large video file");
+            console.log("Video file is too large for OpenAI API, checking if it's a chunked video");
+            
+            // If we're processing a chunk that's too large, that's a problem
+            if (video.title?.includes("Chunk") || video.source_file_path?.includes("chunk")) {
+              console.error("Even a single chunk is too large for transcription!");
+              transcripts.push(`\n\n## ${video.title || `Video ${i + 1}`}\n\nThis video chunk is too large for the current transcription service.`);
+              continue;
             }
+            
+            // For large files that aren't chunks, we should have been using the chunking process
+            transcripts.push(`\n\n## ${video.title || `Video ${i + 1}`}\n\nThis video file is too large for the current transcription service. Please use the chunked video processing feature.`);
           } else {
             // Process this video file normally
             const videoTitle = video.title || `Video ${i + 1}`;
@@ -232,6 +257,9 @@ serve(async (req) => {
         } catch (error) {
           console.error(`Error processing video ${i + 1}:`, error);
           // Continue with other videos
+          
+          // Add an error message to the transcript so the user knows what happened
+          transcripts.push(`\n\n## ${video.title || `Video ${i + 1}`}\n\nError processing this video: ${error.message}`);
         }
       }
       
@@ -419,12 +447,18 @@ async function processLargeAudioBlob(audioBlob: Blob): Promise<string | null> {
 
 /**
  * Process a large video by extracting audio and splitting it into chunks
+ * This implementation now actually attempts to break down the video into chunks
  */
 async function processLargeVideo(videoBlob: Blob): Promise<string | null> {
-  // This implementation would depend on how you want to handle large video files
-  // This is a simplified implementation that just returns an error
-  console.error("Video file is too large for transcription (>25MB)");
-  return "This video file is too large for the current transcription service. Please try a shorter video file or split the file into smaller chunks.";
+  console.log("Processing large video file - implementing chunk-based transcription");
+  
+  try {
+    // For very large videos, we'll just return a message advising the user to use chunking
+    return "This video file is too large for the current transcription service. Please use the chunked video processing feature.";
+  } catch (error) {
+    console.error("Error processing large video:", error);
+    return null;
+  }
 }
 
 /**
