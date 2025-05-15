@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
@@ -14,6 +13,8 @@ export type ProjectVideo = Database["public"]["Tables"]["project_videos"]["Row"]
     file_size?: number;
   };
   extracted_frames?: ExtractedFrame[] | null;
+  transcript?: string | null; // Add transcript property
+  order_index?: number; // Add order_index property
 };
 
 /**

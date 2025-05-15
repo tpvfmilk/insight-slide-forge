@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { fetchProjectVideos } from "@/services/projectVideoService";
+import { fetchProjectVideos, ProjectVideo } from "@/services/projectVideoService";
 
 interface TranscriptDialogProps {
   project: Project | null;
@@ -75,7 +75,7 @@ export const TranscriptDialog = ({
         // Add each additional video's transcript
         for (const video of projectVideos) {
           if (video.transcript && video.transcript.trim()) {
-            const videoTitle = video.title || `Video ${video.order_index || ""}`;
+            const videoTitle = video.title || `Video ${video.display_order || ""}`;
             
             // Add a separator and header before each additional video's transcript
             fullTranscript += `\n\n## ${videoTitle}\n\n${video.transcript}`;
