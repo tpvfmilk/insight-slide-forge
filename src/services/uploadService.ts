@@ -2,8 +2,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
 import { parseStoragePath } from "@/utils/videoPathUtils";
-import { videoNeedsChunking, analyzeVideoForChunking, createVideoChunks, initiateServerSideChunking, forceUpdateChunkingMetadata } from "@/services/videoChunkingService";
-import { ExtendedVideoMetadata, ChunkMetadata, JsonSafeChunkMetadata, JsonSafeVideoMetadata } from "@/types/videoChunking";
+import { 
+  videoNeedsChunking, 
+  analyzeVideoForChunking, 
+  createVideoChunks, 
+  initiateServerSideChunking, 
+  forceUpdateChunkingMetadata 
+} from "@/services/videoChunkingService";
+import { 
+  ExtendedVideoMetadata, 
+  ChunkMetadata, 
+  JsonSafeChunkMetadata, 
+  JsonSafeVideoMetadata 
+} from "@/types/videoChunking";
 
 // Update this function to handle large videos through chunking with the correct signature
 export const createProjectFromVideo = async (
@@ -39,6 +50,8 @@ export const createProjectFromVideo = async (
       
       // Process the video chunks
       if (chunkMetadata.length > 0) {
+        // Since we know that the ChunkMetadata[] is what we expect here,
+        // we can safely pass it as is without worrying about JsonSafeChunkMetadata[]
         const updatedChunks = await createVideoChunks(
           videoFile,
           session.session.user.id, // Using user ID as temporary project ID
@@ -141,13 +154,13 @@ export const createProjectFromVideo = async (
     };
     
     if (videoMetadata.chunking) {
-      // Convert chunks to JSON-safe format - make sure to cast them properly
+      // Convert chunks to JSON-safe format
       const jsonSafeChunks: JsonSafeChunkMetadata[] = [];
       
       // Safely convert each chunk regardless of its original type
       if (Array.isArray(videoMetadata.chunking.chunks)) {
         videoMetadata.chunking.chunks.forEach((chunk) => {
-          jsonSafeChunks.push({
+          const safeChunk: JsonSafeChunkMetadata = {
             index: chunk.index,
             startTime: chunk.startTime,
             endTime: chunk.endTime,
@@ -155,7 +168,8 @@ export const createProjectFromVideo = async (
             videoPath: chunk.videoPath,
             title: chunk.title || `Chunk ${chunk.index + 1}`,
             status: chunk.status || 'pending'
-          });
+          };
+          jsonSafeChunks.push(safeChunk);
         });
       }
       

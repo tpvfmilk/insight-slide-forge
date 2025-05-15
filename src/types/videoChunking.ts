@@ -51,7 +51,7 @@ export type JsonSafeChunkMetadata = {
 /**
  * Type for JSON-safe extended video metadata for database storage
  */
-export type JsonSafeVideoMetadata = {
+export interface JsonSafeVideoMetadata {
   duration?: number;
   original_file_name?: string;
   file_type?: string;
@@ -63,4 +63,15 @@ export type JsonSafeVideoMetadata = {
     status?: string;
     processedAt?: string;
   };
-};
+}
+
+/**
+ * Json compatible type for Supabase storage
+ */
+export type Json = 
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];

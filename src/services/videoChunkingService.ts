@@ -1,6 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ExtendedVideoMetadata, ChunkMetadata, ChunkingInfo, JsonSafeChunkMetadata, JsonSafeVideoMetadata } from "@/types/videoChunking";
+import { 
+  ExtendedVideoMetadata, 
+  ChunkMetadata, 
+  ChunkingInfo, 
+  JsonSafeChunkMetadata, 
+  JsonSafeVideoMetadata,
+  Json
+} from "@/types/videoChunking";
 import { parseStoragePath } from "@/utils/videoPathUtils";
 
 /**
@@ -84,8 +91,7 @@ export const analyzeVideoForChunking = async (
       status: chunk.status || 'pending'
     }));
     
-    // THIS IS THE FIX: Return a JSON-safe object explicitly instead of returning a type that might not match Json
-    // Create a simple object with proper field access instead of using the ChunkingInfo type directly
+    // Create a JSON-safe metadata object
     const jsonSafeMetadata: JsonSafeVideoMetadata = {
       duration: videoDuration,
       original_file_name: file.name,
@@ -100,7 +106,9 @@ export const analyzeVideoForChunking = async (
       }
     };
     
-    return jsonSafeMetadata;
+    // Return the metadata - need to cast to make TypeScript happy
+    // since we know the structure matches what ExtendedVideoMetadata expects
+    return jsonSafeMetadata as unknown as ExtendedVideoMetadata;
   } catch (error) {
     console.error("[DEBUG] Error analyzing video for chunking:", error);
     return null;
@@ -492,8 +500,8 @@ export const forceUpdateChunkingMetadata = async (
         status: chunk.status || 'pending'
       }));
       
-      // Create JSON-safe chunking info for database
-      const jsonSafeChunkingInfo = {
+      // Create JSON-safe chunking info for database as an object type that matches Json requirements
+      const jsonSafeChunkingInfo: Record<string, Json> = {
         isChunked: true,
         totalDuration: videoMetadata.duration,
         chunks: jsonSafeChunks,

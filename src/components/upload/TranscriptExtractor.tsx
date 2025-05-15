@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -119,8 +118,12 @@ export const TranscriptExtractor = () => {
       // Convert the audio blob to a file for upload
       const audioFile = new File([audioBlob], "extracted_audio.mp3", { type: "audio/mpeg" });
       
-      // Create the project first
-      const project = await createProjectFromVideo(audioFile, title, "", "");
+      // Create the project first - fix the argument to match createProjectFromVideo signature
+      const project = await createProjectFromVideo(
+        audioFile, 
+        title, 
+        ""  // Pass empty string for contextPrompt
+      );
 
       // Handle successful creation
       if (project && project.id) {

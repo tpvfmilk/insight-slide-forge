@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -73,8 +72,7 @@ export const CombinedUpload = () => {
       const project = await createProjectFromVideo(
         videoFile, 
         videoFileName || "Video Project",
-        contextPrompt,
-        transcriptText
+        contextPrompt
       );
       
       clearInterval(interval);
