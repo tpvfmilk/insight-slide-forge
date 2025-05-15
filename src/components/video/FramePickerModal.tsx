@@ -1,3 +1,4 @@
+
 // At the top of the file, import our new hook and types
 import { useChunkedVideoPlayer } from "@/hooks/useChunkedVideoPlayer";
 import { getChunkTimemarksFromProject } from "@/services/videoChunkingService";
@@ -98,26 +99,27 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
     videoMetadata: project?.video_metadata
   });
 
-  const {
-    capturedFrameTimemarks,
-    isCapturing,
-    handleCaptureFrame
-  } = useFrameCapture(videoRef);
+  // Handle frame capture with the useFrameCapture hook
+  const handleFrameCaptured = (frame: ExtractedFrame) => {
+    frameLibraryHook.addFrameToLibrary(frame);
+  };
 
-  const {
-    frameLibrary,
-    selectedFrames,
-    searchTerm,
-    isFrameSelected,
-    handleFrameSelect,
-    handleSearchChange,
-    clearSearch,
-    applySelectedFrames
-  } = useFrameLibrary({
-    allExtractedFrames,
+  const frameCaptureHook = useFrameCapture({
+    videoRef,
+    projectId,
+    videoUrl,
+    duration,
+    formatTime,
+    onFrameCaptured: handleFrameCaptured,
+    allExtractedFrames
+  });
+
+  // Use the frame library hook with the correct props
+  const frameLibraryHook = useFrameLibrary({
+    projectId,
     existingFrames,
-    onFramesSelected,
-    onClose
+    allExtractedFrames,
+    onFramesSelected
   });
 
   return (
@@ -148,9 +150,9 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                     isVideoLoaded={isVideoLoaded}
                     isLoadingVideo={isLoadingVideo}
                     videoError={videoError}
-                    capturedTimemarks={capturedFrameTimemarks}
-                    chunkTimemarks={chunkTimemarks} // Add chunk timemarks here
-                    isCapturingFrame={isCapturing}
+                    capturedTimemarks={frameCaptureHook.capturedTimemarks}
+                    chunkTimemarks={chunkTimemarks} 
+                    isCapturingFrame={frameCaptureHook.isCapturingFrame}
                     formatTime={formatTime}
                     togglePlayPause={togglePlayPause}
                     seekBack={seekBack}
@@ -161,8 +163,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                     retryLoadVideo={retryLoadVideo}
                     handleVideoLoaded={handleVideoLoaded}
                     handleVideoError={handleVideoError}
-                    onCaptureFrame={handleCaptureFrame}
-                    getChunkInfoAtTime={getChunkInfoForTime} // Add info getter here
+                    onCaptureFrame={frameCaptureHook.captureFrame}
+                    getChunkInfoAtTime={getChunkInfoForTime}
                   />
                 )}
               </AspectRatio>
@@ -176,10 +178,10 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
               <Input
                 type="text"
                 placeholder="Search frames..."
-                value={searchTerm}
-                onChange={handleSearchChange}
+                value={frameLibraryHook.searchTerm}
+                onChange={frameLibraryHook.handleSearchChange}
               />
-              <Button variant="ghost" size="sm" onClick={clearSearch}>
+              <Button variant="ghost" size="sm" onClick={frameLibraryHook.clearSearch}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -188,7 +190,7 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
             <div className="flex-1 overflow-hidden">
               <ScrollArea className="rounded-md border h-full">
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 p-2">
-                  {frameLibrary.map((frame) => (
+                  {frameLibraryHook.libraryFrames.map((frame) => (
                     <div key={frame.id} className="relative">
                       <AspectRatio ratio={16 / 9}>
                         <img
@@ -203,8 +205,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
                       >
                         <Checkbox
                           id={frame.id}
-                          checked={isFrameSelected(frame)}
-                          onCheckedChange={() => handleFrameSelect(frame)}
+                          checked={frameLibraryHook.isFrameSelected(frame)}
+                          onCheckedChange={() => frameLibraryHook.toggleFrameSelection(frame)}
                           className="border-primary ring-offset-background focus-visible:ring-ring"
                         />
                       </Label>
@@ -223,8 +225,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           </Button>
           <Button
             type="button"
-            onClick={applySelectedFrames}
-            disabled={selectedFrames.length === 0}
+            onClick={frameLibraryHook.applySelectedFrames}
+            disabled={frameLibraryHook.selectedFramesCount === 0}
           >
             Apply Selected Frames
           </Button>

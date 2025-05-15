@@ -9,16 +9,19 @@ export function useFrameLibrary({
   projectId,
   existingFrames = [],
   allExtractedFrames = [],
-  onCapturedFrame
+  onCapturedFrame,
+  onFramesSelected
 }: {
   projectId: string;
   existingFrames?: ExtractedFrame[];
   allExtractedFrames?: ExtractedFrame[];
   onCapturedFrame?: (frame: ExtractedFrame) => void;
+  onFramesSelected?: (frames: ExtractedFrame[]) => void;
 }) {
   const [selectedFrames, setSelectedFrames] = useState<{[key: string]: boolean}>({});
   const [libraryFrames, setLibraryFrames] = useState<ExtractedFrame[]>([]);
   const [isUploadingFrames, setIsUploadingFrames] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // Utility function to convert timestamp string to seconds
   const timeToSeconds = (timestamp: string): number => {
@@ -116,6 +119,21 @@ export function useFrameLibrary({
       
       return updated;
     });
+  };
+  
+  // Check if a frame is selected
+  const isFrameSelected = (frame: ExtractedFrame): boolean => {
+    return !!frame.id && !!selectedFrames[frame.id];
+  };
+  
+  // Handle search term change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+  
+  // Clear search
+  const clearSearch = () => {
+    setSearchTerm('');
   };
   
   // Remove a frame from the library
@@ -232,7 +250,7 @@ export function useFrameLibrary({
   };
   
   // Apply selected frames to slide
-  const handleApplyFrames = async (onFramesSelected: (frames: ExtractedFrame[]) => void) => {
+  const handleApplyFrames = () => {
     // Get selected frames from library
     const selectedFramesList = libraryFrames.filter(frame => 
       frame.id && selectedFrames[frame.id]
@@ -264,16 +282,16 @@ export function useFrameLibrary({
           setIsUploadingFrames(false);
           return;
         } else {
-          // Fix: Use Sonner's format instead of variant which isn't supported
           toast("Some frames will be skipped", {
             description: `${invalidFrames} frames have invalid URLs`,
           });
         }
       }
       
-      // Call the onFramesSelected callback with the selected frames
-      // This will apply the selected frames to the current slide
-      await onFramesSelected(validFrames);
+      // Call the onFramesSelected callback with the selected frames if provided
+      if (onFramesSelected) {
+        onFramesSelected(validFrames);
+      }
     } catch (error) {
       console.error("Error in handleApplyFrames:", error);
       toast.error(error instanceof Error ? error.message : "Unknown error");
@@ -281,17 +299,26 @@ export function useFrameLibrary({
       setIsUploadingFrames(false);
     }
   };
+
+  // Filter library frames based on search term
+  const frameLibrary = searchTerm 
+    ? libraryFrames.filter(frame => frame.timestamp?.toLowerCase().includes(searchTerm.toLowerCase()))
+    : libraryFrames;
   
   return {
     selectedFrames,
-    libraryFrames,
+    libraryFrames: frameLibrary,
     isUploadingFrames,
     selectedFramesCount: Object.keys(selectedFrames).length,
     toggleFrameSelection,
     removeFrame,
-    handleApplyFrames,
+    applySelectedFrames: handleApplyFrames,
     addFrameToLibrary,
     timeToSeconds,
-    deleteMultipleFrames
+    deleteMultipleFrames,
+    searchTerm,
+    isFrameSelected,
+    handleSearchChange,
+    clearSearch
   };
 }
