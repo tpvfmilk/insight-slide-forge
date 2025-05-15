@@ -8,6 +8,7 @@ export interface ExtendedVideoMetadata {
   file_type?: string;
   file_size?: number;
   chunking?: ChunkingInfo;
+  [key: string]: any; // Add index signature for Json compatibility
 }
 
 /**
@@ -19,6 +20,7 @@ export interface ChunkingInfo {
   chunks: ChunkMetadata[] | JsonSafeChunkMetadata[];
   status?: "prepared" | "processing" | "complete" | "error"; // Status of the chunking process
   processedAt?: string; // Timestamp when chunking was completed
+  [key: string]: any; // Add index signature for Json compatibility
 }
 
 /**
@@ -32,6 +34,7 @@ export interface ChunkMetadata {
   videoPath: string;
   title?: string;
   status?: "pending" | "processing" | "complete" | "error"; // Status of chunk processing
+  [key: string]: any; // Add index signature for Json compatibility
 }
 
 /**
@@ -46,6 +49,7 @@ export type JsonSafeChunkMetadata = {
   videoPath: string;
   title?: string;
   status?: string;
+  [key: string]: any; // Add index signature for Json compatibility
 };
 
 /**
@@ -62,7 +66,9 @@ export interface JsonSafeVideoMetadata {
     chunks: JsonSafeChunkMetadata[];
     status?: string;
     processedAt?: string;
+    [key: string]: any; // Add index signature for Json compatibility
   };
+  [key: string]: any; // Add index signature for Json compatibility
 }
 
 /**

@@ -469,7 +469,7 @@ export const forceUpdateChunkingMetadata = async (
     }
     
     // Even if chunking already exists, we'll force-update it to ensure it's properly configured
-    if (videoMetadata.file_size && videoNeedsChunking(videoMetadata.file_size)) {
+    if (videoMetadata?.file_size && videoNeedsChunking(videoMetadata.file_size)) {
       console.log("[DEBUG] Forcing chunking metadata update for large video");
       
       // Calculate chunks based on file size and duration
