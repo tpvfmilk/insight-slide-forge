@@ -435,7 +435,7 @@ export function useChunkedVideoPlayer({
     isLoadingVideo,
     activeChunkUrl,
     chunks,
-    currentChunkIndex,
+    currentChunkIndex: activeChunkIndex, // Fix missing property by using activeChunkIndex
     loadVideos,
     loadChunk,
     formatTime,
