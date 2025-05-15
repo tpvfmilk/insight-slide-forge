@@ -22,9 +22,8 @@ export function CleanupStorageButton() {
       
       toast.info("Cleaning up storage...");
       
-      // Call the cleanup function with forceDeleteAll=true to completely wipe storage
+      // Call the cleanup function using standard functions.invoke method
       const response = await supabase.functions.invoke("cleanup-orphaned-files", {
-        method: "POST",
         body: { forceDeleteAll: true }
       });
       
@@ -36,10 +35,15 @@ export function CleanupStorageButton() {
       if (response.data.success) {
         toast.success(response.data.message);
         
-        // Force sync storage info
-        await supabase.functions.invoke('sync-storage-usage', {
+        // Force sync storage info using the standard functions.invoke method
+        const syncResponse = await supabase.functions.invoke('sync-storage-usage', {
           body: { userId: session.user.id }
         });
+        
+        if (syncResponse.error) {
+          console.warn("Storage sync warning:", syncResponse.error);
+          // Continue with page reload even if sync fails
+        }
         
         // Refresh the page to update storage usage display
         setTimeout(() => {

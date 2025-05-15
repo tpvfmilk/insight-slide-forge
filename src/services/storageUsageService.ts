@@ -16,7 +16,7 @@ export const syncStorageUsage = async (): Promise<{ success: boolean; message: s
     
     const userId = session.session.user.id;
     
-    // Call the edge function to sync storage
+    // Call the edge function to sync storage using the standard functions.invoke method
     const response = await supabase.functions.invoke('sync-storage-usage', {
       body: { userId }
     });

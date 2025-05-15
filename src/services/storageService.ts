@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -27,30 +28,23 @@ export const initializeStorage = async (): Promise<boolean> => {
       return false;
     }
     
-    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/init-storage', {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.session.access_token}`
-      }
-    });
+    // Use the functions.invoke method for more reliable calls
+    const response = await supabase.functions.invoke('init-storage', {});
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Storage initialization failed:", errorData);
+    if (response.error) {
+      console.error("Storage initialization failed:", response.error);
       toast.error("Failed to initialize storage buckets. Some features may not work correctly.");
       return false;
     }
     
-    const data = await response.json();
-    console.log("Storage initialization result:", data);
+    console.log("Storage initialization result:", response.data);
     
     // Mark as initialized to avoid unnecessary repeat calls
-    if (data.success) {
+    if (response.data.success) {
       storageInitialized = true;
       
       // Check specifically if the video_uploads bucket is public
-      const videoUploadsResult = data.results.find(r => r.bucket === 'video_uploads');
+      const videoUploadsResult = response.data.results.find(r => r.bucket === 'video_uploads');
       if (videoUploadsResult && videoUploadsResult.status !== 'error') {
         console.log("Video uploads bucket is properly configured");
       } else {
@@ -59,7 +53,7 @@ export const initializeStorage = async (): Promise<boolean> => {
       }
     }
     
-    return data.success === true;
+    return response.data.success === true;
   } catch (error) {
     console.error("Error initializing storage:", error);
     toast.error("Storage initialization error. Please try refreshing the page.");
@@ -124,30 +118,26 @@ export const syncStorageUsage = async (): Promise<boolean> => {
     
     // Check if user is authenticated before proceeding
     const { data: session } = await supabase.auth.getSession();
-    if (!session?.session?.access_token) {
+    if (!session?.session) {
       console.log("Storage sync skipped: User not authenticated");
       return false;
     }
+
+    const userId = session.session.user.id;
     
-    // Call the storage sync function
-    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/sync-storage-usage', {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.session.access_token}`
-      }
+    // Call the storage sync function using functions.invoke for consistency
+    const response = await supabase.functions.invoke('sync-storage-usage', {
+      body: { userId }
     });
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Storage sync failed:", errorData);
+    if (response.error) {
+      console.error("Storage sync failed:", response.error);
       return false;
     }
     
-    const data = await response.json();
-    console.log("Storage sync result:", data);
+    console.log("Storage sync result:", response.data);
     
-    return data.success === true;
+    return response.data.success === true;
   } catch (error) {
     console.error("Error syncing storage usage:", error);
     return false;

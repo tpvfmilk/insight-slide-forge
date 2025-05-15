@@ -1,5 +1,5 @@
 
-// If this file doesn't exist, create it
+// Edge function to sync user storage usage stats
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -15,32 +15,32 @@ serve(async (req) => {
   }
   
   try {
-    // Get the user ID from the request body
+    // Get the user ID from the request body or auth token
     let userId;
     try {
       const body = await req.json();
       userId = body.userId;
     } catch (error) {
-      // If no body or invalid JSON, try to get the user from auth
+      // If no body or invalid JSON, get the user from auth
       const authHeader = req.headers.get('Authorization');
       if (!authHeader) {
         return new Response(
-          JSON.stringify({ error: 'No authorization header and no userId in body' }),
+          JSON.stringify({ error: 'No authorization header and no userId in body', success: false }),
           { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      const supabaseClient = createClient(
+      const supabaseAdmin = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       );
       
       const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+      const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
       
       if (authError || !user) {
         return new Response(
-          JSON.stringify({ error: 'Unauthorized', details: authError }),
+          JSON.stringify({ error: 'Unauthorized', details: authError, success: false }),
           { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -50,7 +50,7 @@ serve(async (req) => {
     
     if (!userId) {
       return new Response(
-        JSON.stringify({ error: 'No user ID provided' }),
+        JSON.stringify({ error: 'No user ID provided', success: false }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -63,31 +63,26 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
-    // First, get the storage breakdown
-    const breakdownResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/get-storage-breakdown`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-      },
-      body: JSON.stringify({ userId })
+    // First, get the storage breakdown directly using the get-storage-breakdown edge function
+    const breakdownResponse = await supabaseAdmin.functions.invoke('get-storage-breakdown', {
+      body: { userId }
     });
     
-    if (!breakdownResponse.ok) {
-      const errorData = await breakdownResponse.json();
-      throw new Error(`Failed to get storage breakdown: ${errorData.error || 'Unknown error'}`);
+    if (breakdownResponse.error) {
+      throw new Error(`Failed to get storage breakdown: ${breakdownResponse.error.message || 'Unknown error'}`);
     }
     
-    const breakdownData = await breakdownResponse.json();
+    const breakdownData = breakdownResponse.data;
+    
+    if (!breakdownData || !breakdownData.breakdown) {
+      throw new Error('No breakdown data returned from get-storage-breakdown function');
+    }
+    
     const breakdown = breakdownData.breakdown;
-    
-    if (!breakdown) {
-      throw new Error('No breakdown data returned');
-    }
     
     console.log(`Total storage used by user ${userId}: ${breakdown.total} bytes`);
     
-    // Update the user's storage record in the database with both total and breakdown data
+    // Update the user's storage record with both total and breakdown data
     const { data, error } = await supabaseAdmin.rpc(
       'update_user_storage_with_breakdown',
       { 
