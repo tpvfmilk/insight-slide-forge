@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
@@ -140,16 +141,13 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
         console.log(`Checking file existence at ${bucketName}/${filePath}`);
         
         try {
-          // Verify the file exists by attempting to get its metadata
-          const { data: fileData, error: fileError } = await supabase.storage
+          // Verify the file exists by attempting to get its public URL
+          // Note: getPublicUrl doesn't return an error property, it always returns { data: { publicUrl: string } }
+          const { data: fileData } = await supabase.storage
             .from(bucketName)
             .getPublicUrl(filePath);
             
-          console.log(`Storage public URL check: ${fileData ? 'URL available' : 'No URL available'}`);
-          
-          if (fileError) {
-            console.warn("Warning when checking file:", fileError);
-          }
+          console.log(`Storage public URL check: ${fileData?.publicUrl ? 'URL available' : 'No URL available'}`);
         } catch (e) {
           console.warn("Error checking file existence:", e);
         }
