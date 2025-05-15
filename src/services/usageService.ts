@@ -20,6 +20,15 @@ export interface StorageInfo {
   tierName: string;
   percentageUsed: number;
   tierPrice: number;
+  breakdown?: StorageBreakdown;
+}
+
+export interface StorageBreakdown {
+  videos: number;
+  slides: number;
+  frames: number;
+  other: number;
+  total: number;
 }
 
 /**
@@ -131,11 +140,67 @@ export const fetchStorageInfo = async (): Promise<StorageInfo | null> => {
   // The data comes as an array with a single row, so we need to extract the first element
   const storageData = Array.isArray(data) ? data[0] : data;
 
+  // Get storage breakdown data
+  let breakdown: StorageBreakdown | undefined;
+  
+  try {
+    const { data: userData } = await supabase
+      .from('user_storage')
+      .select('storage_breakdown')
+      .maybeSingle();
+    
+    if (userData && userData.storage_breakdown) {
+      breakdown = userData.storage_breakdown as StorageBreakdown;
+    }
+  } catch (breakdownError) {
+    console.warn('Error fetching storage breakdown:', breakdownError);
+    // Continue without breakdown data
+  }
+
   return {
     storageUsed: storageData.storage_used || 0,
     storageLimit: storageData.storage_limit || 0,
     tierName: storageData.tier_name || 'Free',
     percentageUsed: storageData.percentage_used || 0,
     tierPrice: storageData.tier_price || 0,
+    breakdown
   };
+};
+
+/**
+ * Fetches storage breakdown data for the current user
+ */
+export const fetchStorageBreakdown = async (): Promise<StorageBreakdown | null> => {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session) {
+      return null;
+    }
+    
+    // First check if we have the breakdown in user_storage
+    const { data: userData } = await supabase
+      .from('user_storage')
+      .select('storage_breakdown')
+      .maybeSingle();
+    
+    if (userData && userData.storage_breakdown) {
+      return userData.storage_breakdown as StorageBreakdown;
+    }
+    
+    // If not available, call the edge function to calculate it
+    const response = await supabase.functions.invoke('get-storage-breakdown');
+    
+    if (response.error) {
+      throw new Error(`Failed to get storage breakdown: ${response.error.message || 'Unknown error'}`);
+    }
+    
+    if (response.data && response.data.breakdown) {
+      return response.data.breakdown;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching storage breakdown:', error);
+    return null;
+  }
 };

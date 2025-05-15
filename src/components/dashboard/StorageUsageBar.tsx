@@ -1,24 +1,24 @@
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Progress } from "@/components/ui/progress";
 import { fetchStorageInfo } from "@/services/usageService";
 import { formatFileSize } from "@/utils/formatUtils";
-import { Database, HardDrive, RefreshCw } from "lucide-react";
+import { HardDrive, RefreshCw } from "lucide-react";
 import { syncStorageUsage } from "@/services/storageUsageService";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CleanupStorageButton } from "./CleanupStorageButton";
+import { StorageBreakdownChart } from "./StorageBreakdownChart";
 
 export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
-  const [percentage, setPercentage] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
   const queryClient = useQueryClient();
   
   const {
     data: storageInfo,
     isLoading,
-    refetch
+    refetch,
+    isFetching
   } = useQuery({
     queryKey: ['storage-info'],
     queryFn: fetchStorageInfo,
@@ -31,15 +31,9 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
     refetch();
   }, [refetch]);
   
-  useEffect(() => {
-    if (storageInfo) {
-      setPercentage(Math.min(100, storageInfo.percentageUsed));
-    }
-  }, [storageInfo]);
-  
   const handleSyncStorage = async () => {
-    setIsSyncing(true);
     try {
+      toast.loading("Syncing storage usage...");
       const result = await syncStorageUsage();
       if (result.success) {
         toast.success(result.message);
@@ -47,14 +41,14 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
         await queryClient.invalidateQueries({
           queryKey: ['storage-info']
         });
-        refetch();
+        await queryClient.invalidateQueries({
+          queryKey: ['storage-breakdown']
+        });
       } else {
         toast.error(result.message);
       }
     } catch (error) {
       toast.error("Failed to sync storage usage");
-    } finally {
-      setIsSyncing(false);
     }
   };
   
@@ -74,6 +68,7 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
   
   const usedFormatted = formatFileSize(storageInfo.storageUsed);
   const limitFormatted = formatFileSize(storageInfo.storageLimit);
+  const percentage = Math.min(100, storageInfo.percentageUsed);
 
   // Determine color based on percentage
   let progressColor = "bg-primary";
@@ -83,24 +78,38 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
     progressColor = "bg-warning";
   }
   
-  return <div className="space-y-3 px-[25px] py-[16px]">
-      <div className="flex justify-between text-xs text-muted-foreground">
+  return <div className="space-y-4 px-[25px] py-[16px]">
+      <div className="flex justify-between items-center text-sm">
         <div className="flex items-center gap-2">
           <HardDrive className="h-3.5 w-3.5" />
-          <span>Total Storage</span>
+          <span className="font-medium">Total Storage</span>
         </div>
-        <div className="flex items-center gap-2 px-[11px]">
-          <span className="px-0 mx-0">
+        <div className="flex items-center gap-2">
+          <span>
             {usedFormatted} / {limitFormatted}
           </span>
-          <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={handleSyncStorage} disabled={isSyncing}>
-            <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 rounded-full" 
+            onClick={handleSyncStorage} 
+            disabled={isFetching}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
             <span className="sr-only">Sync storage usage</span>
           </Button>
         </div>
       </div>
+      
       <Progress value={percentage} className="h-2" indicatorClassName={progressColor} />
+      
       {percentage > 90 && <div className="text-xs text-destructive">Storage almost full</div>}
+      
+      {/* Storage breakdown chart */}
+      <div className="mt-6 pt-4 border-t">
+        <StorageBreakdownChart />
+      </div>
+      
       <div className="flex justify-end">
         <CleanupStorageButton />
       </div>
