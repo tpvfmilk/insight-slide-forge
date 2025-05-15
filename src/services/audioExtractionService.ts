@@ -268,11 +268,15 @@ const compressAudioIfNeeded = async (audioBlob: Blob): Promise<Blob> => {
   const MAX_SIZE_BYTES = 25 * 1024 * 1024;
   
   if (audioBlob.size <= MAX_SIZE_BYTES) {
-    console.log(`Audio size (${audioBlob.size / (1024 * 1024).toFixed(2)}MB) is under limit, no compression needed`);
+    // Fixed: Convert string to number by removing .toFixed() from the output
+    const audioSizeMB = audioBlob.size / (1024 * 1024);
+    console.log(`Audio size (${audioSizeMB.toFixed(2)}MB) is under limit, no compression needed`);
     return audioBlob;
   }
   
-  console.log(`Audio size (${audioBlob.size / (1024 * 1024).toFixed(2)}MB) exceeds limit, compressing...`);
+  // Fixed: Convert string to number by removing .toFixed() from the output
+  const audioSizeMB = audioBlob.size / (1024 * 1024);
+  console.log(`Audio size (${audioSizeMB.toFixed(2)}MB) exceeds limit, compressing...`);
   
   // If necessary, implement more advanced compression techniques here
   // For now, we'll use a basic approach to convert to lower quality mp3
@@ -299,7 +303,9 @@ const compressAudioIfNeeded = async (audioBlob: Blob): Promise<Blob> => {
   const chunkSize = Math.floor(audioBlob.size / numChunks);
   const compressedBlob = audioBlob.slice(0, MAX_SIZE_BYTES * 0.9);
   
-  console.log(`Compressed audio to ${(compressedBlob.size / (1024 * 1024)).toFixed(2)}MB (keeping first portion)`);
+  // Fixed: Convert string to number by removing .toFixed() from the calculation
+  const compressedSizeMB = compressedBlob.size / (1024 * 1024);
+  console.log(`Compressed audio to ${compressedSizeMB.toFixed(2)}MB (keeping first portion)`);
   
   return compressedBlob;
 };
