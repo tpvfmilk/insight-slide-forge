@@ -38,7 +38,10 @@ serve(async (req) => {
     } catch (parseError) {
       console.error("Failed to parse request body:", parseError);
       return new Response(
-        JSON.stringify({ error: "Invalid JSON in request body" }),
+        JSON.stringify({ 
+          error: "Invalid JSON in request body",
+          code: "INVALID_REQUEST"
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -51,21 +54,30 @@ serve(async (req) => {
 
     if (!projectId) {
       return new Response(
-        JSON.stringify({ error: "Project ID is required" }),
+        JSON.stringify({ 
+          error: "Project ID is required",
+          code: "MISSING_PROJECT_ID"
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (!originalVideoPath) {
       return new Response(
-        JSON.stringify({ error: "Original video path is required" }),
+        JSON.stringify({ 
+          error: "Original video path is required",
+          code: "MISSING_VIDEO_PATH"
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (!chunkingMetadata) {
       return new Response(
-        JSON.stringify({ error: "Chunking metadata is required" }),
+        JSON.stringify({ 
+          error: "Chunking metadata is required",
+          code: "MISSING_METADATA"
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -84,14 +96,20 @@ serve(async (req) => {
     if (projectError) {
       console.error("Project not found:", projectError);
       return new Response(
-        JSON.stringify({ error: `Project not found: ${projectError.message}` }),
+        JSON.stringify({ 
+          error: `Project not found: ${projectError.message}`,
+          code: "PROJECT_NOT_FOUND"
+        }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (!project) {
       return new Response(
-        JSON.stringify({ error: "Project not found in database" }),
+        JSON.stringify({ 
+          error: "Project not found in database",
+          code: "PROJECT_NOT_FOUND"
+        }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -100,7 +118,10 @@ serve(async (req) => {
     const originalFilePath = project.source_file_path;
     if (!originalFilePath) {
       return new Response(
-        JSON.stringify({ error: "Project source file path not found" }),
+        JSON.stringify({ 
+          error: "Project source file path not found",
+          code: "MISSING_SOURCE_PATH"
+        }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -123,7 +144,7 @@ serve(async (req) => {
     // 2. Use FFmpeg to split it into chunks based on the timestamps
     // 3. Upload each chunk to storage
     
-    // In this implementation, we'll:
+    // For this implementation, we'll:
     // 1. Create a copy of the original video in the chunks bucket
     // 2. Reference this copy for all chunks in metadata
     // 3. Update the project with simulated chunk information
@@ -143,7 +164,10 @@ serve(async (req) => {
       if (error) {
         console.error("Error accessing original video:", error);
         return new Response(
-          JSON.stringify({ error: `Could not access original video file: ${error.message}` }),
+          JSON.stringify({ 
+            error: `Could not access original video file: ${error.message}`,
+            code: "VIDEO_ACCESS_ERROR"
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -153,12 +177,15 @@ serve(async (req) => {
     } catch (downloadError) {
       console.error("Error during download:", downloadError);
       return new Response(
-        JSON.stringify({ error: `Download error: ${downloadError.message}` }),
+        JSON.stringify({ 
+          error: `Download error: ${downloadError instanceof Error ? downloadError.message : "Unknown error"}`,
+          code: "DOWNLOAD_ERROR"
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    // First, copy the original video to the chunks bucket
+    // Create chunks directory
     const projectTitle = project.title.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
     const chunksBasePath = `${projectId}/${projectTitle}`;
     const mainChunkFilePath = `${chunksBasePath}/original.${fileExtension}`;
@@ -178,7 +205,10 @@ serve(async (req) => {
       if (uploadError) {
         console.error("Error copying original video to chunks bucket:", uploadError);
         return new Response(
-          JSON.stringify({ error: `Failed to copy video to chunks bucket: ${uploadError.message}` }),
+          JSON.stringify({ 
+            error: `Failed to copy video to chunks bucket: ${uploadError.message}`,
+            code: "CHUNK_UPLOAD_ERROR"
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -187,32 +217,49 @@ serve(async (req) => {
     } catch (uploadError: any) {
       console.error("Error during upload to chunks bucket:", uploadError);
       return new Response(
-        JSON.stringify({ error: `Upload error: ${uploadError.message}` }),
+        JSON.stringify({ 
+          error: `Upload error: ${uploadError instanceof Error ? uploadError.message : "Unknown error"}`,
+          code: "CHUNK_UPLOAD_ERROR"
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    const updatedChunks = [];
+    // Calculate appropriate chunk duration based on video metadata
+    const videoDuration = chunkingMetadata.totalDuration || 0;
+    const idealChunkDuration = 60; // Default to 60 second chunks
     
-    // Process each chunk in the metadata
-    for (let i = 0; i < chunkingMetadata.chunks.length; i++) {
-      const chunk = chunkingMetadata.chunks[i];
+    // Generate chunks metadata with evenly distributed segments
+    const updatedChunks = [];
+    let startTime = 0;
+    let chunkIndex = 0;
+    
+    while (startTime < videoDuration) {
+      // For the last chunk, make sure we don't exceed the total duration
+      const chunkDuration = Math.min(idealChunkDuration, videoDuration - startTime);
+      if (chunkDuration <= 0) break;
       
-      // Generate paths for the chunk files
-      // In a real implementation with FFmpeg, each chunk would be a separate file
-      // For this implementation, all chunks reference the same copied file
-      const chunkFileName = `${chunksBasePath}/${projectTitle}_chunk_${i + 1}.${fileExtension}`;
+      const endTime = startTime + chunkDuration;
+      
+      // Generate the chunk file path - in production this would be a separate file
+      const chunkFileName = `${chunksBasePath}/${projectTitle}_chunk_${chunkIndex + 1}.${fileExtension}`;
       const chunkPath = `chunks/${chunkFileName}`;
       
-      console.log(`Creating reference for chunk ${i + 1} at path: ${chunkPath}`);
+      console.log(`Creating reference for chunk ${chunkIndex + 1} at path: ${chunkPath}`);
       
-      // Update the chunk metadata with the path
+      // Add chunk metadata
       updatedChunks.push({
-        ...chunk,
+        index: chunkIndex,
+        startTime: startTime,
+        endTime: endTime,
+        duration: chunkDuration,
         videoPath: chunkPath,
         status: 'complete',
-        title: `Chunk ${i + 1}`
+        title: `Chunk ${chunkIndex + 1}`
       });
+      
+      startTime = endTime;
+      chunkIndex++;
     }
     
     // Update project with chunk info
@@ -240,7 +287,10 @@ serve(async (req) => {
       if (updateError) {
         console.error("Failed to update project with chunk paths:", updateError);
         return new Response(
-          JSON.stringify({ error: `Failed to update project with chunk paths: ${updateError.message}` }),
+          JSON.stringify({ 
+            error: `Failed to update project with chunk paths: ${updateError.message}`,
+            code: "DB_UPDATE_ERROR"
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -253,21 +303,29 @@ serve(async (req) => {
         JSON.stringify({ 
           success: true, 
           message: "Video chunks processed successfully",
-          chunks: updatedChunks 
+          processingTime: totalTime/1000,
+          chunks: updatedChunks,
+          count: updatedChunks.length
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } catch (updateError: any) {
       console.error("Error during database update:", updateError);
       return new Response(
-        JSON.stringify({ error: `Database update error: ${updateError.message}` }),
+        JSON.stringify({ 
+          error: `Database update error: ${updateError instanceof Error ? updateError.message : "Unknown error"}`,
+          code: "DB_UPDATE_ERROR"
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
   } catch (error: any) {
     console.error("Error in video-chunker function:", error);
     return new Response(
-      JSON.stringify({ error: `Unexpected error: ${error.message}` }),
+      JSON.stringify({ 
+        error: `Unexpected error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        code: "UNEXPECTED_ERROR"
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

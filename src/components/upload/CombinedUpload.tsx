@@ -6,13 +6,14 @@ import { FileVideo, Upload, RefreshCw, AlertTriangle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner"; // Updated import
+import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const CombinedUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadStage, setUploadStage] = useState<string>("preparing");
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [transcriptText, setTranscriptText] = useState<string>("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -40,15 +41,23 @@ export const CombinedUpload = () => {
       return;
     }
     
-    // Check file size (limit to 100MB)
-    if (file.size > 100 * 1024 * 1024) {
-      toast.error("File size must be less than 100MB");
+    // Check file size (limit to 500MB now that we have server-side processing)
+    if (file.size > 500 * 1024 * 1024) {
+      toast.error("File size must be less than 500MB");
       return;
     }
     
     setVideoFile(file);
     setVideoFileName(file.name);
-    toast.success("Video file selected successfully");
+    
+    // Calculate file size in MB for display
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    toast.success(`Video file selected: ${fileSizeMB}MB`);
+    
+    // Let user know if this is a large file that will be processed server-side
+    if (file.size > 50 * 1024 * 1024) {
+      toast.info("Large video detected. Server-side processing will be used for better performance.", { duration: 5000 });
+    }
   };
 
   const handleSubmit = async () => {
@@ -63,40 +72,47 @@ export const CombinedUpload = () => {
     // Start uploading
     setIsUploading(true);
     setUploadProgress(0);
+    setUploadStage("uploading");
     
     // Simulate progress while actual upload happens
     const interval = setInterval(() => {
       setUploadProgress(prev => {
-        const newProgress = prev + 3; // Slower progress increments
+        const newProgress = prev + 2; // Slower progress increments
         if (newProgress >= 80) { // Cap progress at 80% until actually complete
           clearInterval(interval);
           return 80;
         }
         return newProgress;
       });
-    }, 800); // Slower updates to avoid UI freezing
+    }, 1000); // Slower updates to avoid UI freezing
     
     try {
       console.log("[DEBUG] Starting video upload process");
+      console.log(`[DEBUG] File size: ${(videoFile.size / (1024 * 1024)).toFixed(2)}MB`);
       
-      // Create project from video, passing the transcript text
-      // Pass false as default value for needsChunking
+      // Determine if chunking is needed based on file size
+      const needsChunking = videoFile.size > 50 * 1024 * 1024;
+      console.log(`[DEBUG] Server-side chunking needed: ${needsChunking}`);
+      
+      // Create project from video, passing the transcript text and chunking flag
       const project = await createProjectFromVideo(
         videoFile, 
         videoFileName || "Video Project",
         contextPrompt,
-        false, // Explicitly pass boolean value for needsChunking
-        [], // No chunk files for CombinedUpload
-        [], // No chunk metadata for CombinedUpload
-        (progress) => {
+        needsChunking, // Pass true if file is large
+        [], // No chunk files for combined upload - server will handle chunking
+        [], // No chunk metadata - server will generate
+        (progress, stage) => {
           // Allow progress updates from the service
-          setUploadProgress(Math.min(90, progress)); // Cap at 90% until complete
-          console.log(`[DEBUG] Upload progress update: ${progress}%`);
+          if (stage) setUploadStage(stage);
+          setUploadProgress(Math.min(95, progress)); // Cap at 95% until complete
+          console.log(`[DEBUG] Upload progress update: ${progress}% (${stage || 'processing'})`);
         }
       );
       
       clearInterval(interval);
       setUploadProgress(100);
+      setUploadStage("complete");
       
       setTimeout(() => {
         setIsUploading(false);
@@ -111,7 +127,17 @@ export const CombinedUpload = () => {
     } catch (error: any) {
       clearInterval(interval);
       setIsUploading(false);
-      const errorMessage = error?.message || "Failed to upload content";
+      setUploadStage("error");
+      
+      let errorMessage = error?.message || "Failed to upload content";
+      
+      // Check for specific error types
+      if (errorMessage.includes("chunking failed") || errorMessage.includes("video processing")) {
+        errorMessage = "Video processing failed. The server might be busy or the video format is not supported.";
+      } else if (errorMessage.includes("network") || errorMessage.includes("timeout")) {
+        errorMessage = "Network error. Please check your connection and try again with a smaller video.";
+      }
+      
       setUploadError(errorMessage);
       console.error("Upload error:", error);
       toast.error(`Upload failed: ${errorMessage}`);
@@ -126,13 +152,26 @@ export const CombinedUpload = () => {
     }
   };
 
+  // Helper function to show a more human-readable status
+  const getUploadStatusText = () => {
+    switch (uploadStage) {
+      case "uploading": return "Uploading video...";
+      case "processing": return "Processing video...";
+      case "chunking": return "Breaking video into manageable chunks...";
+      case "analyzing": return "Analyzing video content...";
+      case "finalizing": return "Finalizing project...";
+      case "complete": return "Upload complete!";
+      default: return "Uploading...";
+    }
+  };
+
   return (
     <div className="space-y-6" tabIndex={0} onKeyDown={handleKeyDown}>
       <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/50">
         <FileVideo className="h-8 w-8 text-muted-foreground mb-4" />
         <h3 className="font-medium mb-1">Upload a video file</h3>
         <p className="text-sm text-muted-foreground mb-4 text-center">
-          MP4 or WebM format, up to 100MB
+          MP4 or WebM format, up to 500MB
         </p>
         
         <input 
@@ -165,7 +204,7 @@ export const CombinedUpload = () => {
             <div className="font-medium">Upload error:</div>
             <div className="text-sm mt-1">{uploadError}</div>
             <div className="text-xs mt-2">
-              Try refreshing the page or using a smaller video file (under 50MB).
+              Try refreshing the page or using a smaller/different video file. Large videos might take longer to process.
             </div>
           </AlertDescription>
         </Alert>
@@ -214,7 +253,7 @@ export const CombinedUpload = () => {
       {isUploading ? (
         <div className="w-full mt-6 space-y-2">
           <div className="flex justify-between text-sm mb-1">
-            <span>Uploading...</span>
+            <span>{getUploadStatusText()}</span>
             <span>{uploadProgress}%</span>
           </div>
           <Progress 

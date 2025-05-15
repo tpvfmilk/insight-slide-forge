@@ -18,8 +18,9 @@ export interface ChunkingInfo {
   isChunked: boolean;
   totalDuration?: number;
   chunks: ChunkMetadata[] | JsonSafeChunkMetadata[];
-  status?: "prepared" | "processing" | "complete" | "error"; // Status of the chunking process
+  status?: "pending" | "prepared" | "processing" | "complete" | "error"; // Extended status options
   processedAt?: string; // Timestamp when chunking was completed
+  error?: string; // Error message if chunking failed
   [key: string]: any; // Index signature for Json compatibility
 }
 
@@ -34,6 +35,7 @@ export interface ChunkMetadata {
   videoPath: string;
   title?: string;
   status?: "pending" | "processing" | "complete" | "error"; // Status of chunk processing
+  error?: string; // Error message if chunk processing failed
   [key: string]: any; // Index signature for Json compatibility
 }
 
@@ -49,6 +51,7 @@ export type JsonSafeChunkMetadata = {
   videoPath: string;
   title?: string;
   status?: string;
+  error?: string;
   [key: string]: any; // Index signature for Json compatibility
 };
 
@@ -66,6 +69,7 @@ export interface JsonSafeVideoMetadata {
     chunks: JsonSafeChunkMetadata[];
     status?: string;
     processedAt?: string;
+    error?: string;
     [key: string]: any; // Index signature for Json compatibility
   };
   [key: string]: any; // Index signature for Json compatibility
@@ -108,7 +112,8 @@ export function toJsonSafe(metadata: ExtendedVideoMetadata): Json {
             duration: chunk.duration,
             videoPath: chunk.videoPath,
             title: chunk.title || `Chunk ${chunk.index + 1}`,
-            status: chunk.status || 'pending'
+            status: chunk.status || 'pending',
+            error: chunk.error
           };
           jsonSafeChunks.push(safeChunk);
         });
@@ -119,7 +124,8 @@ export function toJsonSafe(metadata: ExtendedVideoMetadata): Json {
         totalDuration: metadata.chunking.totalDuration,
         chunks: jsonSafeChunks,
         status: metadata.chunking.status || "prepared",
-        processedAt: metadata.chunking.processedAt || new Date().toISOString()
+        processedAt: metadata.chunking.processedAt || new Date().toISOString(),
+        error: metadata.chunking.error
       };
     }
     
@@ -129,7 +135,8 @@ export function toJsonSafe(metadata: ExtendedVideoMetadata): Json {
     // Return a simplified version in case of errors
     return {
       duration: metadata.duration || 0,
-      file_size: metadata.file_size || 0
+      file_size: metadata.file_size || 0,
+      error: error instanceof Error ? error.message : "Unknown error"
     };
   }
 }
@@ -159,7 +166,8 @@ export function fromJsonSafe(jsonMetadata: Json): ExtendedVideoMetadata {
         totalDuration: chunking.totalDuration,
         chunks: Array.isArray(chunking.chunks) ? chunking.chunks : [],
         status: chunking.status as any,
-        processedAt: chunking.processedAt
+        processedAt: chunking.processedAt,
+        error: chunking.error
       };
     }
     
