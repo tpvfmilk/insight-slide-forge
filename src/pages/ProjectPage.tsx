@@ -11,6 +11,7 @@ import { useProjectState } from "@/hooks/useProjectState";
 import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
+import { ExtendedVideoMetadata } from "@/types/videoChunking";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -85,10 +86,10 @@ const ProjectPage = () => {
     }
   };
   
-  // Check if this project has chunked video content
+  // Check if this project has chunked video content - with proper type assertion
   const hasChunkedVideo = Boolean(
-    project?.video_metadata?.chunking?.isChunked || 
-    videoMetadata?.chunking?.isChunked
+    (project?.video_metadata as ExtendedVideoMetadata)?.chunking?.isChunked || 
+    (videoMetadata as ExtendedVideoMetadata)?.chunking?.isChunked
   );
   
   return (

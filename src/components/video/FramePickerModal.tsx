@@ -39,6 +39,7 @@ interface FramePickerModalProps {
   onFramesSelected: (frames: ExtractedFrame[]) => void;
   allExtractedFrames: ExtractedFrame[];
   existingFrames: ExtractedFrame[];
+  hasChunkedVideo?: boolean; // Added this prop
 }
 
 export const FramePickerModal: React.FC<FramePickerModalProps> = ({
@@ -48,7 +49,8 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   projectId,
   onFramesSelected,
   allExtractedFrames,
-  existingFrames
+  existingFrames,
+  hasChunkedVideo = false // Added with default value
 }) => {
   // Get metadata for the project to extract chunk information
   const [project, setProject] = useState<Project | null>(null);

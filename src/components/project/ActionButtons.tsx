@@ -26,7 +26,8 @@ interface ActionButtonsProps {
   isTranscriptOnlyProject: boolean;
   refreshProject: () => void;
   totalDuration?: number;
-  hideSelectFrames?: boolean; // Add this new prop
+  hideSelectFrames?: boolean;
+  hasChunkedVideo?: boolean; // Added this prop
 }
 
 export const ActionButtons = ({
@@ -38,7 +39,8 @@ export const ActionButtons = ({
   handleGenerateSlides,
   handleOpenManualFramePicker,
   isTranscriptOnlyProject,
-  hideSelectFrames = false, // Default to false for backward compatibility
+  hideSelectFrames = false,
+  hasChunkedVideo = false, // Added default value
 }: ActionButtonsProps) => {
   return (
     <>
@@ -47,6 +49,7 @@ export const ActionButtons = ({
           variant="outline"
           disabled={isTranscribing}
           onClick={handleTranscribeVideo}
+          title={hasChunkedVideo ? "Transcribe all video chunks" : "Transcribe video"}
         >
           {isTranscribing ? (
             <>

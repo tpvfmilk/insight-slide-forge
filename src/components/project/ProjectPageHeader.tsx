@@ -13,13 +13,15 @@ interface ProjectPageHeaderProps {
   isLoading: boolean;
   videoFileName: string | undefined;
   totalVideoDuration?: number;
+  hasChunkedVideo?: boolean; // Added this prop
 }
 
 export const ProjectPageHeader = ({
   project,
   isLoading,
   videoFileName,
-  totalVideoDuration
+  totalVideoDuration,
+  hasChunkedVideo
 }: ProjectPageHeaderProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(project?.title || "");
@@ -100,6 +102,7 @@ export const ProjectPageHeader = ({
           <div className="flex items-center gap-1">
             <VideoIcon className="h-3.5 w-3.5" />
             <span>{videoFileName}</span>
+            {hasChunkedVideo && <span className="text-xs bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full ml-1">Chunked</span>}
           </div>
         )}
         
