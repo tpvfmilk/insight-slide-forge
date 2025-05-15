@@ -145,7 +145,16 @@ export const fetchStorageInfo = async (): Promise<StorageInfo | null> => {
   let breakdown: StorageBreakdown | undefined;
   
   if (storageData.storage_breakdown) {
-    breakdown = storageData.storage_breakdown as StorageBreakdown;
+    // Safely convert the JSON data to our expected type
+    const breakdownData = storageData.storage_breakdown as Record<string, number>;
+    
+    breakdown = {
+      videos: breakdownData.videos || 0,
+      slides: breakdownData.slides || 0,
+      frames: breakdownData.frames || 0,
+      other: breakdownData.other || 0,
+      total: breakdownData.total || 0
+    };
   }
 
   return {
@@ -175,7 +184,16 @@ export const fetchStorageBreakdown = async (): Promise<StorageBreakdown | null> 
       .maybeSingle();
     
     if (userData && userData.storage_breakdown) {
-      return userData.storage_breakdown as StorageBreakdown;
+      // Safely convert the JSON data to our expected type
+      const breakdownData = userData.storage_breakdown as Record<string, number>;
+      
+      return {
+        videos: breakdownData.videos || 0,
+        slides: breakdownData.slides || 0,
+        frames: breakdownData.frames || 0,
+        other: breakdownData.other || 0,
+        total: breakdownData.total || 0
+      };
     }
     
     // If not available, call the edge function to calculate it
@@ -186,7 +204,7 @@ export const fetchStorageBreakdown = async (): Promise<StorageBreakdown | null> 
     }
     
     if (response.data && response.data.breakdown) {
-      return response.data.breakdown;
+      return response.data.breakdown as StorageBreakdown;
     }
     
     return null;
