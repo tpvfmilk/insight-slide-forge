@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchProjectById } from "@/services/projectService";
@@ -172,16 +171,18 @@ const PresentationPage = () => {
         />
       )}
 
-      {/* Add global styles for fullscreen mode */}
-      <style jsx global>{`
-        .fullscreen-mode {
-          width: 100vw;
-          height: 100vh;
-        }
-        .fullscreen-mode .presentation-slide-container {
-          max-width: 98% !important;
-        }
-      `}</style>
+      {/* Fixed global styles for fullscreen mode */}
+      <style>
+        {`
+          .fullscreen-mode {
+            width: 100vw;
+            height: 100vh;
+          }
+          .fullscreen-mode .presentation-slide-container {
+            max-width: 98% !important;
+          }
+        `}
+      </style>
     </div>
   );
 };
