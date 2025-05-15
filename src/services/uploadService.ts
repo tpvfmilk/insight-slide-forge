@@ -114,16 +114,20 @@ export const createProjectFromVideo = async (
           
           console.log(`[DEBUG] Uploading chunk ${i} to ${bucketName}/${chunkPath}`);
           
-          const { error: chunkUploadError } = await supabase.storage
-            .from(bucketName)
-            .upload(chunkPath, chunkFile, {
-              cacheControl: '3600',
-              upsert: true
-            });
-          
-          if (chunkUploadError) {
-            console.error(`[DEBUG] Chunk ${i} upload error:`, chunkUploadError);
-            // We'll continue with other chunks even if one fails
+          try {
+            const { error: chunkUploadError } = await supabase.storage
+              .from(bucketName)
+              .upload(chunkPath, chunkFile, {
+                cacheControl: '3600',
+                upsert: true
+              });
+            
+            if (chunkUploadError) {
+              console.error(`[DEBUG] Chunk ${i} upload error:`, chunkUploadError);
+              // We'll continue with other chunks even if one fails
+            }
+          } catch (uploadError) {
+            console.error(`[DEBUG] Unexpected error uploading chunk ${i}:`, uploadError);
           }
           
           // Update progress

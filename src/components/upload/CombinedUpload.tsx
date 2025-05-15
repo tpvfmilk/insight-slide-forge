@@ -58,14 +58,14 @@ export const CombinedUpload = () => {
     // Simulate progress while actual upload happens
     const interval = setInterval(() => {
       setUploadProgress(prev => {
-        const newProgress = prev + 10;
-        if (newProgress >= 90) {
+        const newProgress = prev + 5; // Slower progress increments
+        if (newProgress >= 80) { // Cap progress at 80% until actually complete
           clearInterval(interval);
-          return 90;
+          return 80;
         }
         return newProgress;
       });
-    }, 300);
+    }, 500); // Slower updates to avoid UI freezing
     
     try {
       // Create project from video, passing the transcript text
@@ -74,7 +74,13 @@ export const CombinedUpload = () => {
         videoFile, 
         videoFileName || "Video Project",
         contextPrompt,
-        false // Pass a proper boolean value for needsChunking
+        false, // Explicitly pass boolean value for needsChunking
+        [], // No chunk files for CombinedUpload
+        [], // No chunk metadata for CombinedUpload
+        (progress) => {
+          // Allow progress updates from the service
+          setUploadProgress(Math.min(90, progress)); // Cap at 90% until complete
+        }
       );
       
       clearInterval(interval);
