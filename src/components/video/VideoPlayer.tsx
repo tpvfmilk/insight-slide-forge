@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { VideoChunk } from "@/services/videoChunkingService";
 
 interface VideoPlayerProps {
   videoPath: string;
@@ -120,6 +121,16 @@ export const VideoPlayer = ({
     } else {
       player.seekForward();
     }
+  };
+
+  // Type guard to check if chunks property exists and is an array
+  const hasChunks = (player: any): player is { chunks: VideoChunk[], currentChunkIndex: number, loadChunk: (index: number) => void } => {
+    return (
+      'chunks' in player && 
+      Array.isArray(player.chunks) && 
+      'currentChunkIndex' in player && 
+      'loadChunk' in player
+    );
   };
 
   return (
@@ -244,22 +255,23 @@ export const VideoPlayer = ({
               </Button>
             </div>
             
-            {isChunkedVideo && 'chunks' in chunkedPlayer && 'currentChunkIndex' in chunkedPlayer && (
+            {/* Only show the chunk selector if we have chunks */}
+            {hasChunks(player) && player.chunks && player.chunks.length > 0 && (
               <Collapsible>
                 <CollapsibleTrigger asChild>
                   <Button variant="outline" size="sm">
-                    Chunk {chunkedPlayer.currentChunkIndex + 1}/{chunkedPlayer.chunks?.length || 1}
+                    Chunk {player.currentChunkIndex + 1}/{player.chunks.length}
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-2">
                   <div className="flex flex-wrap gap-1 p-2 bg-muted/20 rounded-md max-w-xs">
-                    {chunkedPlayer.chunks?.map((_, index) => (
+                    {player.chunks.map((_, index: number) => (
                       <Button
                         key={`chunk-${index}`}
-                        variant={index === chunkedPlayer.currentChunkIndex ? "default" : "outline"}
+                        variant={index === player.currentChunkIndex ? "default" : "outline"}
                         size="sm"
                         className="w-8 h-8 p-0"
-                        onClick={() => chunkedPlayer.loadChunk(index)}
+                        onClick={() => player.loadChunk(index)}
                       >
                         {index + 1}
                       </Button>
@@ -274,4 +286,3 @@ export const VideoPlayer = ({
     </div>
   );
 };
-
