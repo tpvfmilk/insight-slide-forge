@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -174,8 +175,8 @@ export const TranscriptDialog = ({
     
     try {
       setIsReTranscribing(true);
-      const toastId = "retranscribe"; // Properly define toastId variable
-      toast.loading("Re-transcribing video...", { id: toastId });
+      const reTranscribeToastId = "retranscribe"; // Fixed toastId variable name
+      toast.loading("Re-transcribing video...", { id: reTranscribeToastId });
       
       // Debug logging - enhanced to track chunking process
       if (debugMode) {
@@ -238,18 +239,18 @@ export const TranscriptDialog = ({
           // Reload all transcripts to get the updated combined version
           await loadAllProjectTranscripts();
           
-          toast.success("Video successfully re-transcribed!", { id: toastId });
+          toast.success("Video successfully re-transcribed!", { id: reTranscribeToastId });
         } else {
           console.error(`[DEBUG] Transcription failed:`, result.error);
           const errorMessage = result.error || "Unknown error";
           
           // Show more helpful error message for common issues
           if (errorMessage.includes("download") || errorMessage.includes("Storage access error")) {
-            toast.error("Failed to access video file. It may be missing or inaccessible.", { id: toastId, duration: 6000 });
+            toast.error("Failed to access video file. It may be missing or inaccessible.", { id: reTranscribeToastId, duration: 6000 });
           } else if (errorMessage.includes("large")) {
-            toast.error("Video file is too large for direct transcription. Try using automatic chunking.", { id: toastId, duration: 6000 });
+            toast.error("Video file is too large for direct transcription. Try using automatic chunking.", { id: reTranscribeToastId, duration: 6000 });
           } else {
-            toast.error(`Failed to re-transcribe video: ${errorMessage}`, { id: toastId, duration: 6000 });
+            toast.error(`Failed to re-transcribe video: ${errorMessage}`, { id: reTranscribeToastId, duration: 6000 });
           }
           
           // Show extended error details
@@ -265,15 +266,15 @@ export const TranscriptDialog = ({
       } catch (apiError: any) {
         console.error("[DEBUG] API error re-transcribing video:", apiError);
         toast.error(`API error: ${apiError?.message || "Unknown error"}`, { 
-          id: toastId, 
+          id: reTranscribeToastId, 
           duration: 6000
         });
       }
     } catch (error: any) {
       console.error("[DEBUG] Error in re-transcribe handler:", error);
-      const toastId = "retranscribe-error"; // Define a new toastId for the catch block
+      const errorToastId = "retranscribe-error"; // Define a separate toastId for the catch block
       toast.error(`Error preparing transcription: ${error?.message || "Unknown error"}`, { 
-        id: toastId, 
+        id: errorToastId, 
         duration: 6000
       });
     } finally {
