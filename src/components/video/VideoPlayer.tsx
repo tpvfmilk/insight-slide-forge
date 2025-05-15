@@ -1,8 +1,9 @@
-
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Play, Pause, Rewind, FastForward, Camera, RefreshCw, AlertCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface VideoPlayerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -15,6 +16,7 @@ interface VideoPlayerProps {
   isLoadingVideo: boolean;
   videoError: string | null;
   capturedTimemarks: number[];
+  chunkTimemarks?: number[]; // Add chunk timemarks prop
   isCapturingFrame: boolean;
   formatTime: (seconds: number) => string;
   togglePlayPause: () => void;
@@ -27,6 +29,7 @@ interface VideoPlayerProps {
   handleVideoLoaded: () => void;
   handleVideoError: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
   onCaptureFrame: () => void;
+  getChunkInfoAtTime?: (time: number) => string | null; // Optional function to get chunk info
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -40,6 +43,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   isLoadingVideo,
   videoError,
   capturedTimemarks,
+  chunkTimemarks = [], // Default to empty array if not provided
   isCapturingFrame,
   formatTime,
   togglePlayPause,
@@ -51,36 +55,89 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   retryLoadVideo,
   handleVideoLoaded,
   handleVideoError,
-  onCaptureFrame
+  onCaptureFrame,
+  getChunkInfoAtTime
 }) => {
-  // Custom render for slider with captured frame markers
+  const [hoveredTime, setHoveredTime] = useState<number | null>(null);
+  
+  // Custom render for slider with captured frame markers and chunk markers
   const renderSliderWithMarkers = () => {
     return (
-      <div className="relative w-full">
-        <Slider 
-          value={[seekingValue]} 
-          min={0} 
-          max={duration || 100}
-          step={0.01}
-          onValueChange={handleSeekChange}
-          onValueCommit={handleSeekEnd}
-          onPointerDown={handleSeekStart}
-          className="z-10"
-        />
-        
-        {/* Timemark indicators - Make indicators more visible */}
-        {capturedTimemarks.map((time, index) => (
-          <div 
-            key={index}
-            className="absolute top-1/2 w-1 h-4 bg-green-500 rounded-full transform -translate-y-1/2 z-0"
-            style={{ 
-              left: `${(time / (duration || 100)) * 100}%`,
-              marginLeft: -2 // Center the marker
+      <TooltipProvider>
+        <div 
+          className="relative w-full" 
+          onMouseLeave={() => setHoveredTime(null)}
+        >
+          <Slider 
+            value={[seekingValue]} 
+            min={0} 
+            max={duration || 100}
+            step={0.01}
+            onValueChange={handleSeekChange}
+            onValueCommit={handleSeekEnd}
+            onPointerDown={handleSeekStart}
+            className="z-10"
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const pos = (e.clientX - rect.left) / rect.width;
+              const time = pos * (duration || 100);
+              setHoveredTime(time);
             }}
-            title={`Captured frame at ${formatTime(time)}`}
           />
-        ))}
-      </div>
+          
+          {/* Chunk markers - blue/purple indicators */}
+          {chunkTimemarks.map((time, index) => (
+            <Tooltip key={`chunk-${index}`}>
+              <TooltipTrigger asChild>
+                <div 
+                  className="absolute top-1/2 w-1 h-5 bg-blue-500 rounded-full transform -translate-y-1/2 z-0 cursor-pointer"
+                  style={{ 
+                    left: `${(time / (duration || 100)) * 100}%`,
+                    marginLeft: -2 // Center the marker
+                  }}
+                />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="z-50">
+                <p>
+                  Video chunk at {formatTime(time)}
+                  {getChunkInfoAtTime && getChunkInfoAtTime(time) ? 
+                    ` - ${getChunkInfoAtTime(time)}` : ''}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          ))}
+          
+          {/* Timemark indicators - Green color for captured frames */}
+          {capturedTimemarks.map((time, index) => (
+            <Tooltip key={`frame-${index}`}>
+              <TooltipTrigger asChild>
+                <div 
+                  className="absolute top-1/2 w-1 h-4 bg-green-500 rounded-full transform -translate-y-1/2 z-0 cursor-pointer"
+                  style={{ 
+                    left: `${(time / (duration || 100)) * 100}%`,
+                    marginLeft: -2 // Center the marker
+                  }}
+                />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="z-50">
+                <p>Captured frame at {formatTime(time)}</p>
+              </TooltipContent>
+            </Tooltip>
+          ))}
+          
+          {/* Current position indicator with time tooltip */}
+          {hoveredTime !== null && (
+            <div 
+              className="absolute top-0 -translate-y-6 transform -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-none"
+              style={{ 
+                left: `${(hoveredTime / (duration || 100)) * 100}%` 
+              }}
+            >
+              {formatTime(hoveredTime)}
+            </div>
+          )}
+        </div>
+      </TooltipProvider>
     );
   };
 

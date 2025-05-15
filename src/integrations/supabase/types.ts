@@ -292,6 +292,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          storage_breakdown: Json | null
           storage_used: number
           tier_id: string
           updated_at: string
@@ -300,6 +301,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          storage_breakdown?: Json | null
           storage_used?: number
           tier_id: string
           updated_at?: string
@@ -308,6 +310,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          storage_breakdown?: Json | null
           storage_used?: number
           tier_id?: string
           updated_at?: string
@@ -352,6 +355,7 @@ export type Database = {
           tier_name: string
           percentage_used: number
           tier_price: number
+          storage_breakdown: Json
         }[]
       }
       get_user_token_stats: {
@@ -383,6 +387,20 @@ export type Database = {
       update_storage_usage: {
         Args: { file_size_change: number }
         Returns: boolean
+      }
+      update_user_storage_with_breakdown: {
+        Args: {
+          user_id_param: string
+          new_storage_value: number
+          videos_size?: number
+          slides_size?: number
+          frames_size?: number
+          other_size?: number
+        }
+        Returns: {
+          previous_size: number
+          new_size: number
+        }[]
       }
       update_user_storage_with_value: {
         Args: { user_id_param: string; new_storage_value: number }
