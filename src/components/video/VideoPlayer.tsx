@@ -137,10 +137,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 standardPlayer.handleSeekChange(values);
               }
             }}
-            onValueCommit={(value) => {
+            onValueCommit={(values) => {
               if (isChunked) {
-                chunkedPlayer.handleSeekCommit(value);
+                chunkedPlayer.handleSeekCommit(values[0]);
               } else {
+                // Fix: Pass the first item in the array to handleSeekEnd
                 standardPlayer.handleSeekEnd();
               }
             }}

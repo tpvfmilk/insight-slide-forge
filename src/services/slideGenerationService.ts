@@ -1,5 +1,7 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
+import { toast } from "sonner";
 
 // Helper function to safely extract duration from video metadata
 function getVideoDurationFromMetadata(metadata: Json | null): number | undefined {
@@ -87,4 +89,76 @@ export const hasValidSlides = (project: any): boolean => {
   }
 
   return project.slides.length > 0;
+};
+
+// Add the missing generateSlidesForProject function
+export const generateSlidesForProject = async (projectId: string): Promise<{ success: boolean, slides?: any[] }> => {
+  if (!projectId) {
+    console.error("No project ID provided for slide generation");
+    return { success: false };
+  }
+  
+  try {
+    // Show loading toast
+    toast.loading("Generating slides...", { id: "generate-slides" });
+    
+    // Get the project data including transcript and context prompt
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('transcript, context_prompt')
+      .eq('id', projectId)
+      .single();
+
+    if (projectError || !project) {
+      toast.error("Failed to fetch project data", { id: "generate-slides" });
+      console.error("Error fetching project data for slide generation:", projectError);
+      return { success: false };
+    }
+
+    const transcript = project.transcript || "";
+    const contextPrompt = project.context_prompt || "";
+    
+    if (!transcript || transcript.trim() === "") {
+      toast.error("No transcript available for slide generation", { id: "generate-slides" });
+      return { success: false };
+    }
+    
+    // Call the generate slides API
+    const response = await fetch('/api/generateSlides', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        projectId, 
+        contextPrompt, 
+        transcript
+      }),
+    });
+
+    if (!response.ok) {
+      toast.error("Failed to generate slides", { id: "generate-slides" });
+      console.error('Slide generation API error:', response.statusText);
+      return { success: false };
+    }
+
+    const data = await response.json();
+    
+    if (data.slides) {
+      // Success - slides were generated
+      toast.success(`Successfully generated ${data.slides.length} slides`, { id: "generate-slides" });
+      return { 
+        success: true, 
+        slides: data.slides 
+      };
+    } else {
+      toast.error("Failed to generate slides", { id: "generate-slides" });
+      console.error('Slide generation failed - no slides returned');
+      return { success: false };
+    }
+  } catch (error) {
+    toast.error("Error generating slides", { id: "generate-slides" });
+    console.error('Error during slide generation:', error);
+    return { success: false };
+  }
 };
