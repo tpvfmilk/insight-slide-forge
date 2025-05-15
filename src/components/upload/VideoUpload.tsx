@@ -112,8 +112,7 @@ export const VideoUpload = () => {
       const project = await createProjectFromVideo(
         processResult.originalFile, 
         title, 
-        contextPrompt,
-        "", 
+        contextPrompt, 
         processResult.needsChunking,
         processResult.chunkFiles,
         processResult.chunkMetadata,

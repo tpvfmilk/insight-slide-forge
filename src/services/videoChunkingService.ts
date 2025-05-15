@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ExtendedVideoMetadata, ChunkMetadata, ChunkingInfo, JsonSafeChunkMetadata, JsonSafeVideoMetadata } from "@/types/videoChunking";
@@ -85,8 +84,9 @@ export const analyzeVideoForChunking = async (
       status: chunk.status || 'pending'
     }));
     
-    // Return JSON-safe metadata for the database
-    return {
+    // THIS IS THE FIX: Return a JSON-safe object explicitly instead of returning a type that might not match Json
+    // Create a simple object with proper field access instead of using the ChunkingInfo type directly
+    const jsonSafeMetadata: JsonSafeVideoMetadata = {
       duration: videoDuration,
       original_file_name: file.name,
       file_type: file.type,
@@ -95,9 +95,12 @@ export const analyzeVideoForChunking = async (
         isChunked: true,
         totalDuration: videoDuration,
         chunks: jsonSafeChunks,
-        status: "prepared"
+        status: "prepared",
+        processedAt: new Date().toISOString()
       }
-    } as ExtendedVideoMetadata;
+    };
+    
+    return jsonSafeMetadata;
   } catch (error) {
     console.error("[DEBUG] Error analyzing video for chunking:", error);
     return null;
@@ -169,7 +172,8 @@ export const calculateOptimalChunks = (
       endTime: endTime,
       duration: chunkDuration,
       videoPath: "", // Will be filled in later when the chunk is created
-      title: `Chunk ${chunkIndex + 1}`
+      title: `Chunk ${chunkIndex + 1}`,
+      status: "pending"
     });
     
     startTime = endTime;
@@ -227,13 +231,13 @@ export const createVideoChunks = async (
     const updatedChunks = chunkMetadata.map((chunk, index) => {
       // Create a path for this chunk
       const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
-      const extension = file.name.split('.').pop();
+      const extension = file.name.split('.').pop() || '';
       const chunkFileName = `${fileNameWithoutExt}_chunk_${index + 1}.${extension}`;
       const chunkPath = `chunks/${projectId}/${chunkFileName}`;
       
       return {
         ...chunk,
-        videoPath: chunkPath
+        videoPath: `video_uploads/${chunkPath}` // Include bucket name in path
       };
     });
     
@@ -484,8 +488,8 @@ export const forceUpdateChunkingMetadata = async (
         endTime: chunk.endTime,
         duration: chunk.duration,
         videoPath: chunk.videoPath,
-        title: chunk.title,
-        status: chunk.status
+        title: chunk.title || '',
+        status: chunk.status || 'pending'
       }));
       
       // Create JSON-safe chunking info for database
@@ -493,7 +497,8 @@ export const forceUpdateChunkingMetadata = async (
         isChunked: true,
         totalDuration: videoMetadata.duration,
         chunks: jsonSafeChunks,
-        status: "prepared"
+        status: "prepared",
+        processedAt: new Date().toISOString()
       };
       
       // Update the project with chunking metadata

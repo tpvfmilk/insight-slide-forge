@@ -5,12 +5,11 @@ import { parseStoragePath } from "@/utils/videoPathUtils";
 import { videoNeedsChunking, analyzeVideoForChunking, createVideoChunks, initiateServerSideChunking, forceUpdateChunkingMetadata } from "@/services/videoChunkingService";
 import { ExtendedVideoMetadata, ChunkMetadata, JsonSafeChunkMetadata, JsonSafeVideoMetadata } from "@/types/videoChunking";
 
-// Update this function to handle large videos through chunking
+// Update this function to handle large videos through chunking with the correct signature
 export const createProjectFromVideo = async (
   videoFile: File,
   title: string,
   contextPrompt: string = "",
-  transcript: string = "",
   needsChunking: boolean = false,
   chunkFiles: File[] = [],
   chunkMetadata: ChunkMetadata[] = [],
@@ -52,10 +51,12 @@ export const createProjectFromVideo = async (
         }
         
         // Update the metadata with chunk paths
-        videoMetadata.chunking = {
-          ...videoMetadata.chunking,
-          chunks: updatedChunks
-        };
+        if (videoMetadata.chunking) {
+          videoMetadata.chunking = {
+            ...videoMetadata.chunking,
+            chunks: updatedChunks
+          };
+        }
       }
       
       // Upload the original file
@@ -80,7 +81,22 @@ export const createProjectFromVideo = async (
           
           if (!chunkInfo.videoPath) continue;
           
-          const { bucketName, filePath: chunkPath } = parseStoragePath(chunkInfo.videoPath);
+          // Extract the bucket name and path
+          // Note: chunkInfo.videoPath might be in format "bucketName/path/to/file"
+          // or just "path/to/file" where we assume the bucket is 'video_uploads'
+          let bucketName = 'video_uploads';
+          let chunkPath = chunkInfo.videoPath;
+          
+          if (chunkInfo.videoPath.includes('/')) {
+            // Check if the path contains a bucket name prefix
+            const parts = chunkInfo.videoPath.split('/');
+            if (parts[0] === 'video_uploads' || parts[0] === 'chunks') {
+              bucketName = parts[0];
+              chunkPath = chunkInfo.videoPath.substring(parts[0].length + 1);
+            }
+          }
+          
+          console.log(`[DEBUG] Uploading chunk ${i} to ${bucketName}/${chunkPath}`);
           
           const { error: chunkUploadError } = await supabase.storage
             .from(bucketName)
@@ -125,25 +141,30 @@ export const createProjectFromVideo = async (
     };
     
     if (videoMetadata.chunking) {
-      // Convert chunks to JSON-safe format
-      const jsonSafeChunks = videoMetadata.chunking.chunks.map((chunk: ChunkMetadata | JsonSafeChunkMetadata) => {
-        return {
-          index: chunk.index,
-          startTime: chunk.startTime,
-          endTime: chunk.endTime,
-          duration: chunk.duration,
-          videoPath: chunk.videoPath,
-          title: chunk.title,
-          status: chunk.status
-        };
-      });
+      // Convert chunks to JSON-safe format - make sure to cast them properly
+      const jsonSafeChunks: JsonSafeChunkMetadata[] = [];
+      
+      // Safely convert each chunk regardless of its original type
+      if (Array.isArray(videoMetadata.chunking.chunks)) {
+        videoMetadata.chunking.chunks.forEach((chunk) => {
+          jsonSafeChunks.push({
+            index: chunk.index,
+            startTime: chunk.startTime,
+            endTime: chunk.endTime,
+            duration: chunk.duration,
+            videoPath: chunk.videoPath,
+            title: chunk.title || `Chunk ${chunk.index + 1}`,
+            status: chunk.status || 'pending'
+          });
+        });
+      }
       
       jsonSafeMetadata.chunking = {
         isChunked: videoMetadata.chunking.isChunked,
         totalDuration: videoMetadata.chunking.totalDuration,
         chunks: jsonSafeChunks,
-        status: videoMetadata.chunking.status,
-        processedAt: videoMetadata.chunking.processedAt
+        status: videoMetadata.chunking.status || "prepared",
+        processedAt: videoMetadata.chunking.processedAt || new Date().toISOString()
       };
     }
     
@@ -156,7 +177,7 @@ export const createProjectFromVideo = async (
         source_type: 'video',
         source_file_path: filePath,
         context_prompt: contextPrompt,
-        transcript: transcript,
+        transcript: "",
         video_metadata: jsonSafeMetadata
       })
       .select()
@@ -406,7 +427,7 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
     }
     
     return { success: true, transcript: transcript };
-  } catch (error) {
+  } catch (error: any) {
     console.error("[DEBUG] Error transcribing video:", error);
     toast.error("Failed to transcribe video", { id: "transcribe-video" });
     return { 
