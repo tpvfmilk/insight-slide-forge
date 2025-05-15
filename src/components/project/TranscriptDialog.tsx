@@ -15,6 +15,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { fetchProjectVideos } from "@/services/projectVideoService";
 import { transcribeVideo, updateProject } from "@/services/uploadService";
+import { ExtendedVideoMetadata } from "@/types/videoChunking";
 
 interface TranscriptDialogProps {
   project: Project | null;
@@ -188,13 +189,16 @@ export const TranscriptDialog = ({
         has_video_metadata: !!project.video_metadata,
       });
       
+      // Safely cast video metadata to ExtendedVideoMetadata
+      const extendedVideoMetadata = project.video_metadata as ExtendedVideoMetadata | null;
+      
       if (project.video_metadata) {
         try {
           console.log(`[DEBUG] Video metadata:`, {
             duration: project.video_metadata.duration,
             file_size: project.video_metadata.file_size,
-            isChunked: project.video_metadata.chunking?.isChunked || false,
-            chunkCount: project.video_metadata.chunking?.chunks?.length || 0
+            isChunked: extendedVideoMetadata?.chunking?.isChunked || false,
+            chunkCount: extendedVideoMetadata?.chunking?.chunks?.length || 0
           });
         } catch (e) {
           console.log(`[DEBUG] Error parsing video metadata:`, e);
@@ -386,11 +390,11 @@ export const TranscriptDialog = ({
       )}
       
       <div className="flex justify-between mt-4">
-        {debugMode && (
+        {debugMode && project?.video_metadata && (
           <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-muted-foreground max-w-[350px]">
-            <p>Debug Info: {project?.video_metadata?.chunking?.isChunked ? "Video is chunked" : "Not chunked"}</p>
-            <p>File size: {project?.video_metadata?.file_size ? `${(project?.video_metadata?.file_size / (1024 * 1024)).toFixed(2)} MB` : "Unknown"}</p>
-            <p>Duration: {project?.video_metadata?.duration ? `${project?.video_metadata?.duration.toFixed(1)}s` : "Unknown"}</p>
+            <p>Debug Info: {extendedVideoMetadata?.chunking?.isChunked ? "Video is chunked" : "Not chunked"}</p>
+            <p>File size: {project.video_metadata.file_size ? `${(project.video_metadata.file_size / (1024 * 1024)).toFixed(2)} MB` : "Unknown"}</p>
+            <p>Duration: {project.video_metadata.duration ? `${project.video_metadata.duration.toFixed(1)}s` : "Unknown"}</p>
           </div>
         )}
         

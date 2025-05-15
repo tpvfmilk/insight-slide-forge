@@ -33,3 +33,17 @@ export interface ChunkMetadata {
   title?: string;
   status?: "pending" | "processing" | "complete" | "error"; // Status of chunk processing
 }
+
+/**
+ * Type to ensure JSON compatibility when storing in the database
+ * Note: This type ensures all objects are JSON serializable
+ */
+export type JsonSafeChunkMetadata = {
+  index: number;
+  startTime: number;
+  endTime?: number;
+  duration?: number;
+  videoPath: string;
+  title?: string;
+  status?: string;
+};

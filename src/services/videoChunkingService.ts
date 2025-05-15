@@ -279,6 +279,17 @@ export const initiateServerSideChunking = async (
           videoMetadata.file_size
         );
         
+        // Convert the chunks to a plain objects to be compatible with JSON
+        const jsonSafeChunks = chunks.map(chunk => ({
+          index: chunk.index,
+          startTime: chunk.startTime,
+          endTime: chunk.endTime,
+          duration: chunk.duration,
+          videoPath: chunk.videoPath,
+          title: chunk.title,
+          status: chunk.status
+        }));
+        
         // Update the project with chunking metadata
         const { error: updateError } = await supabase
           .from('projects')
@@ -288,7 +299,7 @@ export const initiateServerSideChunking = async (
               chunking: {
                 isChunked: true,
                 totalDuration: videoMetadata.duration,
-                chunks: chunks,
+                chunks: jsonSafeChunks,
                 status: "prepared"
               }
             }
@@ -344,6 +355,17 @@ export const initiateServerSideChunking = async (
         return chunk;
       });
       
+      // Convert to JSON-safe objects for Supabase
+      const jsonSafeChunks = updatedChunks.map(chunk => ({
+        index: chunk.index,
+        startTime: chunk.startTime,
+        endTime: chunk.endTime,
+        duration: chunk.duration,
+        videoPath: chunk.videoPath,
+        title: chunk.title,
+        status: chunk.status
+      }));
+      
       // Update project with the simulated chunk paths
       const { error: updateError } = await supabase
         .from('projects')
@@ -352,7 +374,7 @@ export const initiateServerSideChunking = async (
             ...videoMetadata,
             chunking: {
               ...videoMetadata.chunking,
-              chunks: updatedChunks,
+              chunks: jsonSafeChunks,
               status: "complete" // Simulate successful chunking
             }
           }
@@ -470,6 +492,17 @@ export const forceUpdateChunkingMetadata = async (
         videoMetadata.file_size
       );
       
+      // Convert to JSON-safe format for Supabase
+      const jsonSafeChunks = chunks.map(chunk => ({
+        index: chunk.index,
+        startTime: chunk.startTime,
+        endTime: chunk.endTime,
+        duration: chunk.duration,
+        videoPath: chunk.videoPath,
+        title: chunk.title,
+        status: chunk.status
+      }));
+      
       // Update the project with chunking metadata
       const { error: updateError } = await supabase
         .from('projects')
@@ -479,7 +512,7 @@ export const forceUpdateChunkingMetadata = async (
             chunking: {
               isChunked: true,
               totalDuration: videoMetadata.duration,
-              chunks: chunks,
+              chunks: jsonSafeChunks,
               status: "prepared"
             }
           }
