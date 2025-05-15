@@ -21,6 +21,10 @@ interface VideoPlayerProps {
   className?: string;
   autoPlay?: boolean;
   showControls?: boolean;
+  // Add these new props for frame capture functionality
+  capturedTimemarks?: number[];
+  isCapturingFrame?: boolean;
+  onCaptureFrame?: () => Promise<void>;
 }
 
 export const VideoPlayer = ({ 
@@ -32,7 +36,10 @@ export const VideoPlayer = ({
   height = 360,
   className = "",
   autoPlay = false,
-  showControls = true
+  showControls = true,
+  capturedTimemarks,
+  isCapturingFrame,
+  onCaptureFrame
 }: VideoPlayerProps) => {
   // Check if the video is chunked from metadata
   const isChunkedVideo = videoMetadata?.chunked_video_metadata?.isChunked === true;
@@ -75,7 +82,7 @@ export const VideoPlayer = ({
               variant="outline"
               size="sm"
               className="mt-4"
-              onClick={isChunkedVideo ? () => chunkedPlayer.loadVideos() : standardPlayer.retryLoadVideo}
+              onClick={isChunkedVideo ? chunkedPlayer.loadVideos : standardPlayer.retryLoadVideo}
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Try Again
@@ -98,6 +105,41 @@ export const VideoPlayer = ({
         
         {!player.isVideoLoaded && !player.videoError && !player.isLoadingVideo && (
           <Skeleton className="w-full h-full absolute inset-0" />
+        )}
+
+        {/* Add UI for frame capturing if enabled */}
+        {capturedTimemarks && onCaptureFrame && (
+          <div className="absolute bottom-2 right-2">
+            <Button 
+              size="sm" 
+              className="bg-primary/80 hover:bg-primary"
+              disabled={isCapturingFrame}
+              onClick={onCaptureFrame}
+            >
+              {isCapturingFrame ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                "Capture Frame"
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/* Timemarks indicators */}
+        {capturedTimemarks && capturedTimemarks.length > 0 && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-transparent">
+            {capturedTimemarks.map((time, index) => (
+              <div 
+                key={index}
+                className="absolute h-2 w-1 bg-yellow-400" 
+                style={{ 
+                  left: `${(time / player.duration) * 100}%`,
+                  transform: 'translateX(-50%)',
+                  bottom: 0
+                }}
+              />
+            ))}
+          </div>
         )}
       </div>
       

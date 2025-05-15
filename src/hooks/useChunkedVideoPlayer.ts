@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getChunkSignedUrls, VideoChunk } from "@/services/videoChunkingService";
@@ -304,6 +305,7 @@ export function useChunkedVideoPlayer({
     activeChunkUrl: chunkUrls[activeChunkIndex],
     isChunked,
     activeChunkIndex,
+    loadVideos, // Expose loadVideos so it can be called from other components
     formatTime,
     togglePlayPause,
     seekBack,

@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
@@ -187,13 +186,28 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
         .eq('id', projectId)
         .single();
         
-      if (projectData?.video_metadata?.chunked_video_metadata?.isChunked) {
+      // Type-safe check for chunked_video_metadata
+      if (projectData?.video_metadata && 
+          typeof projectData.video_metadata === 'object' && 
+          projectData.video_metadata !== null &&
+          'chunked_video_metadata' in projectData.video_metadata &&
+          projectData.video_metadata.chunked_video_metadata &&
+          typeof projectData.video_metadata.chunked_video_metadata === 'object' &&
+          'isChunked' in projectData.video_metadata.chunked_video_metadata &&
+          projectData.video_metadata.chunked_video_metadata.isChunked === true) {
         hasChunkedVideos = true;
       }
     } else {
       // Check if any of the provided videos are chunked
       for (const video of videosToProcess) {
-        if (video.video_metadata?.chunked_video_metadata?.isChunked) {
+        if (video.video_metadata && 
+            typeof video.video_metadata === 'object' && 
+            video.video_metadata !== null &&
+            'chunked_video_metadata' in video.video_metadata &&
+            video.video_metadata.chunked_video_metadata &&
+            typeof video.video_metadata.chunked_video_metadata === 'object' &&
+            'isChunked' in video.video_metadata.chunked_video_metadata &&
+            video.video_metadata.chunked_video_metadata.isChunked === true) {
           hasChunkedVideos = true;
           break;
         }

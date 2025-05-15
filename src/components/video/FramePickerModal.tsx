@@ -104,10 +104,13 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
           {/* Video player section - increased fixed height */}
           <div className="flex justify-center mb-4" style={{ height: "400px", minHeight: "400px" }}>
             <VideoPlayer
-              {...videoPlayer}
+              videoPath={videoPath}
+              projectId={projectId}
               capturedTimemarks={frameCapture.capturedTimemarks}
               isCapturingFrame={frameCapture.isCapturingFrame}
               onCaptureFrame={frameCapture.captureFrame}
+              width={640}
+              height={360}
             />
           </div>
           
