@@ -24,11 +24,11 @@ export const SlidePreview: React.FC<SlidePreviewProps> = ({ currentSlide, isFull
   return (
     <div className="w-full h-full flex items-center justify-center p-4 bg-black text-white">
       <SlideTransition slide={currentSlide} isFullscreen={isFullscreen}>
-        <div className={`w-full ${isFullscreen ? 'max-w-[96%]' : 'max-w-7xl'} mx-auto`}>
+        <div className={`w-full ${isFullscreen ? 'max-w-[96%] h-full flex items-center' : 'max-w-7xl'} mx-auto`}>
           {hasImages ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
               {/* Left side: Image grid */}
-              <div className="space-y-4">
+              <div className="space-y-4 flex flex-col justify-center">
                 {hasSingleImage ? (
                   // Single image - take full width of the container
                   <div className="w-full rounded-md overflow-hidden border border-white/10">
@@ -59,14 +59,14 @@ export const SlidePreview: React.FC<SlidePreviewProps> = ({ currentSlide, isFull
               </div>
               
               {/* Right side: Slide content */}
-              <div className="flex flex-col p-4 space-y-4">
+              <div className="flex flex-col p-4 space-y-4 justify-center">
                 <h2 className="text-2xl font-semibold">{currentSlide.title}</h2>
                 <div className="mt-2 whitespace-pre-wrap">{currentSlide.content}</div>
               </div>
             </div>
           ) : (
             // No images - center the content
-            <div className="text-center p-6 max-w-2xl mx-auto">
+            <div className="text-center p-6 max-w-2xl mx-auto flex flex-col justify-center">
               <h2 className="text-2xl font-semibold mb-4">{currentSlide.title}</h2>
               <div className="mt-2 whitespace-pre-wrap">{currentSlide.content}</div>
             </div>

@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchProjectById } from "@/services/projectService";
@@ -158,7 +157,7 @@ const PresentationPage = () => {
         toggleFullscreen={toggleFullscreen}
       />
       
-      {/* Main Content */}
+      {/* Main Content - Updated to center content in fullscreen mode */}
       <div className={`flex-1 flex items-center justify-center ${isFullscreen ? 'p-1' : 'p-2'} overflow-hidden`}>
         {isLoading ? (
           <PresentationSkeleton />
@@ -185,7 +184,7 @@ const PresentationPage = () => {
         />
       )}
 
-      {/* Fixed global styles for fullscreen mode */}
+      {/* Fixed global styles for fullscreen mode - Updated for vertical centering */}
       <style>
         {`
           .fullscreen-mode {
@@ -194,6 +193,10 @@ const PresentationPage = () => {
           }
           .fullscreen-mode .presentation-slide-container {
             max-width: 98% !important;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
           }
           
           /* Preload hidden images to prevent layout shifts */
@@ -322,14 +325,14 @@ const PresentationSlide: React.FC<{
           </div>
           
           {/* Right side: Slide content */}
-          <div className={`flex flex-col ${isFullscreen ? 'p-3' : 'p-4'} space-y-4`}>
+          <div className={`flex flex-col ${isFullscreen ? 'p-3' : 'p-4'} space-y-4 justify-center`}>
             <h2 className="text-2xl font-semibold">{slide.title}</h2>
             <div className="mt-2 whitespace-pre-wrap">{slide.content}</div>
           </div>
         </div>
       ) : (
         // No images - center the content
-        <div className={`text-center ${isFullscreen ? 'p-4 max-w-3xl' : 'p-6 max-w-2xl'} mx-auto`}>
+        <div className={`text-center ${isFullscreen ? 'p-4 max-w-3xl' : 'p-6 max-w-2xl'} mx-auto flex flex-col justify-center h-full`}>
           <h2 className="text-2xl font-semibold mb-4">{slide.title}</h2>
           <div className="mt-2 whitespace-pre-wrap">{slide.content}</div>
         </div>
