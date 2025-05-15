@@ -95,3 +95,36 @@ export const checkFileExists = async (fullPath: string | null): Promise<boolean>
     return false;
   }
 };
+
+/**
+ * Creates a signed URL for a video file
+ * @param fullPath The full storage path
+ * @param expiresIn Expiration time in seconds (default: 3600 = 1 hour)
+ * @returns Promise resolving to the signed URL or null if error
+ */
+export const createSignedVideoUrl = async (
+  fullPath: string | null, 
+  expiresIn: number = 3600
+): Promise<string | null> => {
+  if (!fullPath) return null;
+  
+  try {
+    const { bucketName, filePath } = parseStoragePath(fullPath);
+    
+    // Create a signed URL with the specified expiry time
+    const { data, error } = await supabase
+      .storage
+      .from(bucketName)
+      .createSignedUrl(filePath, expiresIn);
+    
+    if (error) {
+      console.error("Error creating signed URL:", error);
+      return null;
+    }
+    
+    return data.signedUrl;
+  } catch (error) {
+    console.error("Error in createSignedVideoUrl:", error);
+    return null;
+  }
+};

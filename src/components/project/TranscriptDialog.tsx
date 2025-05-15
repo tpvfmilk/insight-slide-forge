@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -18,6 +17,7 @@ import { transcribeVideo, updateProject } from "@/services/uploadService";
 import { ExtendedVideoMetadata } from "@/types/videoChunking";
 import { initializeStorage } from "@/services/storageService";
 import { parseStoragePath } from "@/utils/videoPathUtils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TranscriptDialogProps {
   project: Project | null;
