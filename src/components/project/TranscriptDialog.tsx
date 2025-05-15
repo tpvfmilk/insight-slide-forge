@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -190,7 +189,9 @@ export const TranscriptDialog = ({
       });
       
       // Safely cast video metadata to ExtendedVideoMetadata
-      const extendedVideoMetadata = project.video_metadata as ExtendedVideoMetadata | null;
+      const videoMetadataFromProject = project.video_metadata;
+      // Create a properly typed variable for the extended metadata
+      const extendedVideoMetadata = videoMetadataFromProject as ExtendedVideoMetadata | null;
       
       if (project.video_metadata) {
         try {
@@ -392,7 +393,7 @@ export const TranscriptDialog = ({
       <div className="flex justify-between mt-4">
         {debugMode && project?.video_metadata && (
           <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-muted-foreground max-w-[350px]">
-            <p>Debug Info: {extendedVideoMetadata?.chunking?.isChunked ? "Video is chunked" : "Not chunked"}</p>
+            <p>Debug Info: {project.video_metadata && (project.video_metadata as ExtendedVideoMetadata)?.chunking?.isChunked ? "Video is chunked" : "Not chunked"}</p>
             <p>File size: {project.video_metadata.file_size ? `${(project.video_metadata.file_size / (1024 * 1024)).toFixed(2)} MB` : "Unknown"}</p>
             <p>Duration: {project.video_metadata.duration ? `${project.video_metadata.duration.toFixed(1)}s` : "Unknown"}</p>
           </div>
