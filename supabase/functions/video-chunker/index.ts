@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -10,6 +9,11 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+// Define constants for server-side chunking
+const MAX_CHUNK_SIZE_MB = 20; // Updated to match client-side settings
+const MIN_CHUNK_DURATION = 30; // Minimum 30 seconds per chunk
+const MAX_CHUNK_DURATION = 300; // Maximum 5 minutes per chunk
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error("Missing Supabase environment variables");
@@ -227,9 +231,25 @@ serve(async (req) => {
     
     // Calculate appropriate chunk duration based on video metadata
     const videoDuration = chunkingMetadata.totalDuration || 0;
-    const idealChunkDuration = 60; // Default to 60 second chunks
+    const videoFileSize = project.video_metadata?.file_size || 0;
     
-    // Generate chunks metadata with evenly distributed segments
+    // Calculate bytes per second (approximate) to better determine chunk sizes
+    const bytesPerSecond = videoFileSize > 0 && videoDuration > 0 
+      ? videoFileSize / videoDuration 
+      : 500 * 1024; // Fallback to 500KB/s if we can't calculate
+    
+    // Calculate ideal chunk duration to stay under MAX_CHUNK_SIZE_MB
+    const maxChunkSizeBytes = MAX_CHUNK_SIZE_MB * 1024 * 1024;
+    let idealChunkDuration = Math.floor(maxChunkSizeBytes / bytesPerSecond);
+    
+    // Ensure chunk duration is between MIN and MAX thresholds
+    idealChunkDuration = Math.min(MAX_CHUNK_DURATION, Math.max(MIN_CHUNK_DURATION, idealChunkDuration));
+    
+    console.log(`Video duration: ${videoDuration}s, size: ${(videoFileSize / (1024 * 1024)).toFixed(2)}MB`);
+    console.log(`Calculated bytes per second: ${(bytesPerSecond / 1024).toFixed(2)}KB/s`);
+    console.log(`Ideal chunk duration: ${idealChunkDuration}s to stay under ${MAX_CHUNK_SIZE_MB}MB`);
+    
+    // Generate chunks metadata with appropriately sized segments
     const updatedChunks = [];
     let startTime = 0;
     let chunkIndex = 0;
@@ -246,6 +266,7 @@ serve(async (req) => {
       const chunkPath = `chunks/${chunkFileName}`;
       
       console.log(`Creating reference for chunk ${chunkIndex + 1} at path: ${chunkPath}`);
+      console.log(`Chunk duration: ${chunkDuration}s (${startTime}s - ${endTime}s)`);
       
       // Add chunk metadata
       updatedChunks.push({

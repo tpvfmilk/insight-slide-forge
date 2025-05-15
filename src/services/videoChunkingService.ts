@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ChunkingInfo, ExtendedVideoMetadata, Json, ChunkMetadata } from "@/types/videoChunking";
 
 // Define constants for chunking
-export const MAX_CHUNK_SIZE_MB = 50;
+export const MAX_CHUNK_SIZE_MB = 20; // Changed from 50MB to 20MB per requirement
 export const MIN_CHUNK_DURATION = 30; // Minimum 30 seconds per chunk
 export const MAX_CHUNK_DURATION = 300; // Maximum 5 minutes per chunk
 
