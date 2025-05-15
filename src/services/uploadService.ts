@@ -115,12 +115,8 @@ export const createProjectFromVideo = async (
       onProgress?.(80, "chunking");
       console.log("[DEBUG] Initiating server-side chunking process");
       
-      const chunkingResult = await initiateServerSideChunking(project.id, filePath, {
-        isChunked: true,
-        totalDuration: videoMetadata.duration || 0,
-        chunks: [],
-        status: "prepared"
-      });
+      // FIX: Remove the third argument that's causing the TypeScript error
+      const chunkingResult = await initiateServerSideChunking(project.id, filePath);
       
       if (!chunkingResult.success) {
         console.error("[DEBUG] Server-side chunking failed:", chunkingResult.error);
@@ -257,11 +253,10 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
           console.log("[DEBUG] Successfully forced chunking metadata update");
         }
         
-        // Initiate server-side chunking
+        // FIX: Remove the third argument that's causing the TypeScript error
         const chunkingResult = await initiateServerSideChunking(
           projectId, 
-          project.source_file_path, 
-          videoMetadata?.chunking || { isChunked: true, chunks: [] }
+          project.source_file_path
         );
         
         if (!chunkingResult.success) {
