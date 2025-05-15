@@ -85,6 +85,43 @@ export const VideoPlayer = ({
     );
   };
 
+  // Unified method handlers for both player types
+  const handleSeekChange = (vals: number[]) => {
+    player.handleSeekChange(vals);
+  };
+
+  const handleSeekCommit = (vals: number[]) => {
+    if ('handleSeekCommit' in player) {
+      player.handleSeekCommit(vals[0]);
+    } else {
+      player.handleSeekEnd();
+    }
+  };
+
+  const togglePlayPause = () => {
+    if ('togglePlayback' in player) {
+      player.togglePlayback();
+    } else {
+      player.togglePlayPause();
+    }
+  };
+
+  const handleSkipBackward = () => {
+    if ('skipBackward' in player) {
+      player.skipBackward(10);
+    } else {
+      player.seekBack();
+    }
+  };
+
+  const handleSkipForward = () => {
+    if ('skipForward' in player) {
+      player.skipForward(10);
+    } else {
+      player.seekForward();
+    }
+  };
+
   return (
     <div className={`flex flex-col w-full max-w-full ${className}`}>
       {/* Video element */}
@@ -160,8 +197,8 @@ export const VideoPlayer = ({
               max={player.duration || 100}
               step={0.01}
               value={[player.seekingValue !== null ? player.seekingValue : player.currentTime]}
-              onValueChange={(vals) => player.handleSeekChange(vals[0])}
-              onValueCommit={(vals) => player.handleSeekCommit(vals[0])}
+              onValueChange={handleSeekChange}
+              onValueCommit={handleSeekCommit}
               className="flex-1"
             />
             <span className="text-xs text-muted-foreground font-mono w-12">
@@ -176,7 +213,7 @@ export const VideoPlayer = ({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => player.skipBackward(10)}
+                onClick={handleSkipBackward}
                 disabled={player.isLoadingVideo}
               >
                 <SkipBack className="h-4 w-4" />
@@ -186,7 +223,7 @@ export const VideoPlayer = ({
                 variant="outline"
                 size="icon"
                 className="h-9 w-9 rounded-full"
-                onClick={player.togglePlayback}
+                onClick={togglePlayPause}
                 disabled={player.isLoadingVideo}
               >
                 {player.isPlaying ? (
@@ -200,14 +237,14 @@ export const VideoPlayer = ({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => player.skipForward(10)}
+                onClick={handleSkipForward}
                 disabled={player.isLoadingVideo}
               >
                 <SkipForward className="h-4 w-4" />
               </Button>
             </div>
             
-            {isChunkedVideo && (
+            {isChunkedVideo && 'chunks' in chunkedPlayer && 'currentChunkIndex' in chunkedPlayer && (
               <Collapsible>
                 <CollapsibleTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -237,3 +274,4 @@ export const VideoPlayer = ({
     </div>
   );
 };
+
