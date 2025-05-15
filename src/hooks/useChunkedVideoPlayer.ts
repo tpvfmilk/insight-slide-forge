@@ -21,7 +21,7 @@ export function useChunkedVideoPlayer({
     projectId
   });
   
-  const [isGeneratingSignedUrl, setIsGeneratingSignedUrl] = useState(false);
+  const [isGeneratingSignedUrl, setIsGeneratingSignedUrl] = useState<boolean>(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   
   // Extract chunk data from metadata
@@ -51,13 +51,76 @@ export function useChunkedVideoPlayer({
           // Strip any existing signed params from the URL
           const cleanPath = videoPath.split('?')[0];
           
+          // Determine the correct storage bucket based on the path
+          // Chunked videos might be in a different format or bucket
+          let bucketName = 'video_uploads'; // Default bucket
+          let storagePath = cleanPath;
+          
+          // Check if this is a chunked video path (look for chunk indicators)
+          if (cleanPath.includes('/chunks/') || cleanPath.includes('_chunk_')) {
+            console.log("Detected chunked video path:", cleanPath);
+            bucketName = 'video_uploads'; // Make sure to use the correct bucket for chunks
+            
+            // If path has bucket prefix, extract just the file path
+            if (cleanPath.includes('/')) {
+              const pathParts = cleanPath.split('/');
+              // If the path format is: bucket-name/actual-path
+              if (pathParts.length > 1 && !pathParts[0].includes('.')) {
+                bucketName = pathParts[0];
+                storagePath = pathParts.slice(1).join('/');
+              }
+            }
+          } else {
+            // Handle standard video paths
+            // If path has bucket prefix, extract just the file path
+            if (cleanPath.includes('/')) {
+              const pathParts = cleanPath.split('/');
+              // If the path format is: bucket-name/actual-path
+              if (pathParts.length > 1 && !pathParts[0].includes('.')) {
+                bucketName = pathParts[0];
+                storagePath = pathParts.slice(1).join('/');
+              }
+            }
+          }
+          
+          console.log(`Creating signed URL for ${bucketName}/${storagePath}`);
+          
           // Create a signed URL with an expiration
           const { data, error } = await supabase.storage
-            .from('video_uploads') // Adjust if your bucket name is different
-            .createSignedUrl(cleanPath, 3600); // 1 hour expiration
+            .from(bucketName)
+            .createSignedUrl(storagePath, 3600); // 1 hour expiration
           
           if (error) {
             console.error("Error creating signed URL:", error);
+            
+            // Try alternate approach - maybe the path structure is different
+            if (error.message.includes("not found") || error.message.includes("Key not found")) {
+              console.log("Attempting alternate path resolution...");
+              
+              // Try to get video URL directly from project if we have projectId
+              if (projectId) {
+                const { data: projectData } = await supabase
+                  .from('projects')
+                  .select('source_file_path')
+                  .eq('id', projectId)
+                  .single();
+                  
+                if (projectData?.source_file_path) {
+                  const altBucket = 'video_uploads';
+                  const { data: altData } = await supabase.storage
+                    .from(altBucket)
+                    .createSignedUrl(projectData.source_file_path, 3600);
+                    
+                  if (altData?.signedUrl) {
+                    console.log("Successfully used alternate path resolution");
+                    setSignedUrl(altData.signedUrl);
+                    setIsGeneratingSignedUrl(false);
+                    return;
+                  }
+                }
+              }
+            }
+            
             // Use the original URL as fallback
             setSignedUrl(videoPath);
           } else if (data?.signedUrl) {

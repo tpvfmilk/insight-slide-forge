@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { parseStoragePath, createSignedVideoUrl } from "@/utils/videoPathUtils";
 
 export function useVideoPlayer({
   videoPath,
@@ -42,31 +43,25 @@ export function useVideoPlayer({
     try {
       console.log(`Attempting to load video from path: ${videoPath}`);
       
-      // Extract bucket and file path
-      let bucket = 'video_uploads';
-      let filePath = videoPath;
+      // Parse the path to get bucket and file path
+      const { bucketName, filePath } = parseStoragePath(videoPath);
       
-      // If path includes '/', extract the actual file path without bucket name
-      if (videoPath.includes('/')) {
-        const pathParts = videoPath.split('/');
-        if (pathParts.length > 1) {
-          filePath = pathParts.pop() || '';
-          bucket = pathParts.join('/');
-        }
-      }
-      
-      console.log(`Getting signed URL for ${bucket}/${filePath}`);
+      console.log(`Getting signed URL for ${bucketName}/${filePath}`);
       
       // Get a fresh signed URL with longer expiry
-      const { data, error } = await supabase
-        .storage
-        .from(bucket)
-        .createSignedUrl(filePath, 7200); // 2 hour expiry
-        
-      if (error || !data?.signedUrl) {
-        console.error("Error getting signed URL:", error);
-        
-        // Try alternate methods to get video URL
+      const signedUrl = await createSignedVideoUrl(videoPath, 7200); // 2 hour expiry
+      
+      if (!signedUrl) {
+        throw new Error("Couldn't create access link for video");
+      }
+      
+      console.log("Got signed URL for video");
+      setVideoUrl(signedUrl);
+    } catch (error) {
+      console.error("Error getting fresh video URL:", error);
+      
+      // Try alternate methods to get video URL
+      try {
         if (projectId) {
           // If we have project ID, try to get source URL from project
           const { data: projectData } = await supabase
@@ -82,28 +77,21 @@ export function useVideoPlayer({
           } else if (projectData?.source_file_path) {
             // Try with the source file path from project
             const altPath = projectData.source_file_path;
-            const altBucket = 'video_uploads';
+            const { bucketName: altBucket, filePath: altFilePath } = parseStoragePath(altPath);
             
-            const { data: altData, error: altError } = await supabase
-              .storage
-              .from(altBucket)
-              .createSignedUrl(altPath, 7200);
+            const signedUrl = await createSignedVideoUrl(altPath, 7200);
               
-            if (!altError && altData?.signedUrl) {
+            if (signedUrl) {
               console.log("Using alternate file path from project");
-              setVideoUrl(altData.signedUrl);
+              setVideoUrl(signedUrl);
               return;
             }
           }
         }
-        
-        throw new Error("Couldn't create access link for video");
+      } catch (fallbackError) {
+        console.error("All fallback attempts failed:", fallbackError);
       }
       
-      console.log("Got signed URL for video");
-      setVideoUrl(data.signedUrl);
-    } catch (error) {
-      console.error("Error getting fresh video URL:", error);
       setVideoError("Failed to access video. The video might be unavailable or the format is not supported.");
     } finally {
       setIsLoadingVideo(false);

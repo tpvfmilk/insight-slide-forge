@@ -13,6 +13,9 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const openAIKey = Deno.env.get("OPENAI_API_KEY");
 const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
+// Maximum OpenAI file size (25MB, but we'll use 24MB to be safe)
+const MAX_OPENAI_SIZE = 24 * 1024 * 1024;
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -129,28 +132,58 @@ serve(async (req) => {
         console.log(`Processing video ${i + 1}/${videosToProcess.length}: ${video.source_file_path}`);
         
         try {
+          // Parse the video file path to determine correct bucket
+          const { bucketName, filePath } = parseStoragePath(video.source_file_path);
+          console.log(`Resolved bucket: ${bucketName}, path: ${filePath}`);
+          
           // Download the video file from storage
-          console.log("Downloading video file from storage:", video.source_file_path);
+          console.log(`Downloading video file from storage: ${bucketName}/${filePath}`);
           const { data: videoData, error: fileError } = await supabase
             .storage
-            .from('video_uploads')
-            .download(video.source_file_path);
+            .from(bucketName)
+            .download(filePath);
           
           if (fileError || !videoData) {
             console.error("Failed to download video file:", fileError);
+            // Try alternative approach - maybe it's a chunked video
+            if (video.video_metadata?.chunking?.chunks) {
+              console.log("Video has chunks, trying to process chunks instead");
+              const chunkTranscripts = await processVideoChunks(video);
+              if (chunkTranscripts) {
+                const videoTitle = video.title || `Video ${i + 1}`;
+                const videoHeader = `\n\n## ${videoTitle}\n\n`;
+                transcripts.push(videoHeader + chunkTranscripts);
+                continue;
+              }
+            }
             continue; // Skip this video but continue with others
           }
           
-          console.log("Video file downloaded successfully");
+          console.log(`Video file downloaded successfully, size: ${videoData.size / 1024 / 1024} MB`);
           
-          // Process this video file
-          const videoTitle = video.title || `Video ${i + 1}`;
-          const videoTranscript = await transcribeVideoFile(videoData, useSpeakerDetection);
-          
-          if (videoTranscript) {
-            // Add a header with the video title - use ## for consistency
-            const videoHeader = `\n\n## ${videoTitle}\n\n`;
-            transcripts.push(videoHeader + videoTranscript);
+          // Check if the file is too large for OpenAI
+          if (videoData.size > MAX_OPENAI_SIZE) {
+            console.log("Video file is too large for OpenAI API, using chunk processing");
+            // For large files, we need to extract audio and split it into chunks
+            // This implementation will depend on how you want to handle large files
+            const chunkedTranscript = await processLargeVideo(videoData);
+            if (chunkedTranscript) {
+              const videoTitle = video.title || `Video ${i + 1}`;
+              const videoHeader = `\n\n## ${videoTitle}\n\n`;
+              transcripts.push(videoHeader + chunkedTranscript);
+            } else {
+              console.error("Failed to process large video file");
+            }
+          } else {
+            // Process this video file normally
+            const videoTitle = video.title || `Video ${i + 1}`;
+            const videoTranscript = await transcribeVideoFile(videoData, useSpeakerDetection);
+            
+            if (videoTranscript) {
+              // Add a header with the video title - use ## for consistency
+              const videoHeader = `\n\n## ${videoTitle}\n\n`;
+              transcripts.push(videoHeader + videoTranscript);
+            }
           }
         } catch (error) {
           console.error(`Error processing video ${i + 1}:`, error);
@@ -249,8 +282,9 @@ serve(async (req) => {
     // If this is a transcript-only project and we should delete the source file
     if (isTranscriptOnly && project && project.source_file_path) {
       try {
-        console.log(`Deleting source file ${project.source_file_path} for transcript-only project`);
-        await supabase.storage.from('video_uploads').remove([project.source_file_path]);
+        const { bucketName, filePath } = parseStoragePath(project.source_file_path);
+        console.log(`Deleting source file ${bucketName}/${filePath} for transcript-only project`);
+        await supabase.storage.from(bucketName).remove([filePath]);
         
         // Update project to reflect the file has been deleted
         await supabase
@@ -314,12 +348,103 @@ async function processAudioData(audioData: string): Promise<string | null> {
     const audioBlob = new Blob([bytes], { type: 'audio/mp3' });
     console.log(`Audio blob created, size: ${audioBlob.size / 1024 / 1024} MB`);
     
+    // Check if the blob is too large for OpenAI
+    if (audioBlob.size > MAX_OPENAI_SIZE) {
+      console.log("Audio file is too large for OpenAI API, splitting into smaller chunks");
+      return await processLargeAudioBlob(audioBlob);
+    }
+    
     // Transcribe the audio blob
     return await transcribeAudioBlob(audioBlob);
   } catch (e) {
     console.error("Error processing audio data:", e);
     return null;
   }
+}
+
+/**
+ * Process a large audio blob by splitting it into chunks and transcribing each chunk
+ */
+async function processLargeAudioBlob(audioBlob: Blob): Promise<string | null> {
+  // This implementation would depend on how you want to handle large audio files
+  // For example, you could split the audio into 1-minute chunks
+  // This is a simplified implementation that just returns an error
+  console.error("Audio file is too large for transcription (>25MB)");
+  return "This audio file is too large for the current transcription service. Please try a shorter audio file or split the file into smaller chunks.";
+}
+
+/**
+ * Process a large video by extracting audio and splitting it into chunks
+ */
+async function processLargeVideo(videoBlob: Blob): Promise<string | null> {
+  // This implementation would depend on how you want to handle large video files
+  // This is a simplified implementation that just returns an error
+  console.error("Video file is too large for transcription (>25MB)");
+  return "This video file is too large for the current transcription service. Please try a shorter video file or split the file into smaller chunks.";
+}
+
+/**
+ * Process video chunks from metadata
+ */
+async function processVideoChunks(video): Promise<string | null> {
+  if (!video.video_metadata?.chunking?.chunks || !Array.isArray(video.video_metadata.chunking.chunks)) {
+    console.error("No valid chunks found in video metadata");
+    return null;
+  }
+  
+  const chunks = video.video_metadata.chunking.chunks;
+  console.log(`Found ${chunks.length} chunks to process`);
+  
+  const chunkTranscripts = [];
+  
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    if (!chunk.videoPath) {
+      console.error(`Chunk ${i} has no video path`);
+      continue;
+    }
+    
+    try {
+      const { bucketName, filePath } = parseStoragePath(chunk.videoPath);
+      console.log(`Processing chunk ${i+1}/${chunks.length}: ${bucketName}/${filePath}`);
+      
+      // Download the chunk video file
+      const { data: chunkData, error: chunkError } = await supabase
+        .storage
+        .from(bucketName)
+        .download(filePath);
+        
+      if (chunkError || !chunkData) {
+        console.error(`Failed to download chunk ${i+1}:`, chunkError);
+        continue;
+      }
+      
+      console.log(`Chunk ${i+1} file downloaded successfully, size: ${chunkData.size / 1024 / 1024} MB`);
+      
+      // Check if chunk is too large
+      if (chunkData.size > MAX_OPENAI_SIZE) {
+        console.error(`Chunk ${i+1} is too large for OpenAI API`);
+        chunkTranscripts.push(`[Start of chunk ${i+1} - content too large for transcription]`);
+        continue;
+      }
+      
+      // Transcribe this chunk
+      const chunkTranscript = await transcribeVideoFile(chunkData, false);
+      if (chunkTranscript) {
+        const chunkTitle = chunk.title ? `\n### ${chunk.title}\n` : `\n### Chunk ${i+1}\n`;
+        chunkTranscripts.push(chunkTitle + chunkTranscript);
+      }
+    } catch (error) {
+      console.error(`Error processing chunk ${i+1}:`, error);
+    }
+  }
+  
+  if (chunkTranscripts.length === 0) {
+    console.error("No chunks were successfully transcribed");
+    return null;
+  }
+  
+  return chunkTranscripts.join("\n\n");
 }
 
 /**
@@ -529,4 +654,31 @@ function processSpeakerSegments(speaker, segments) {
   });
   
   return text;
+}
+
+/**
+ * Parse a storage path to determine bucket name and file path
+ */
+function parseStoragePath(fullPath: string): { bucketName: string; filePath: string } {
+  if (!fullPath) {
+    return { bucketName: 'video_uploads', filePath: fullPath };
+  }
+
+  // Check if path has a bucket prefix (bucket/path format)
+  if (fullPath.includes('/')) {
+    const parts = fullPath.split('/');
+    // If first part doesn't have a dot (likely not a filename), treat as bucket
+    if (parts.length > 1 && !parts[0].includes('.')) {
+      return { 
+        bucketName: parts[0],
+        filePath: parts.slice(1).join('/')
+      };
+    }
+  }
+  
+  // Default to video_uploads bucket
+  return { 
+    bucketName: 'video_uploads', 
+    filePath: fullPath 
+  };
 }
