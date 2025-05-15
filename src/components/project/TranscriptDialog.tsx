@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { FileText, RefreshCw, Check, Undo, ArrowDown, AlertTriangle } from "lucide-react";
+import { FileText, RefreshCw, Check, Undo, ArrowDown, AlertTriangle, Info } from "lucide-react";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
 import { cleanupTranscript, formatWithSpeakers, splitIntoParagraphs, addTimestamps, hasMultipleVideoSections } from "@/utils/transcriptUtils";
@@ -16,6 +16,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { fetchProjectVideos } from "@/services/projectVideoService";
 import { transcribeVideo, updateProject } from "@/services/uploadService";
 import { ExtendedVideoMetadata } from "@/types/videoChunking";
+import { initializeStorage } from "@/services/storageService";
+import { parseStoragePath } from "@/utils/videoPathUtils";
 
 interface TranscriptDialogProps {
   project: Project | null;
@@ -44,10 +46,35 @@ export const TranscriptDialog = ({
   const [isLoadingTranscript, setIsLoadingTranscript] = useState<boolean>(false);
   const [combinedTranscript, setCombinedTranscript] = useState<string>("");
   const [debugMode, setDebugMode] = useState<boolean>(false);
+  const [storageStatus, setStorageStatus] = useState<{initialized: boolean, message: string | null}>({
+    initialized: false,
+    message: null
+  });
 
   // For standalone use
   const open = isOpen !== undefined ? isOpen : isTranscriptDialogOpen;
   const setOpen = onOpenChange || setIsTranscriptDialogOpen;
+  
+  // Initialize storage buckets when component loads
+  useEffect(() => {
+    const checkStorage = async () => {
+      try {
+        const success = await initializeStorage();
+        setStorageStatus({
+          initialized: success,
+          message: success ? null : "Storage buckets may not be configured correctly"
+        });
+      } catch (error) {
+        console.error("Error checking storage:", error);
+        setStorageStatus({
+          initialized: false,
+          message: "Failed to check storage configuration"
+        });
+      }
+    };
+    
+    checkStorage();
+  }, []);
   
   // Fetch and combine all transcripts from project videos
   const loadAllProjectTranscripts = async () => {
@@ -173,10 +200,19 @@ export const TranscriptDialog = ({
   const handleReTranscribe = async () => {
     if (!project?.id) return;
     
+    // First, ensure storage is initialized
     try {
       setIsReTranscribing(true);
-      const reTranscribeToastId = "retranscribe"; // Fixed toastId variable name
+      const reTranscribeToastId = "retranscribe";
       toast.loading("Re-transcribing video...", { id: reTranscribeToastId });
+      
+      // Initialize storage buckets to ensure they exist
+      const storageInitResult = await initializeStorage();
+      if (!storageInitResult) {
+        toast.error("Failed to initialize storage buckets. Cannot transcribe.", { id: reTranscribeToastId });
+        setIsReTranscribing(false);
+        return;
+      }
       
       // Debug logging - enhanced to track chunking process
       if (debugMode) {
@@ -188,6 +224,39 @@ export const TranscriptDialog = ({
           source_file_path: project.source_file_path,
           has_video_metadata: !!project.video_metadata,
         });
+      }
+      
+      // Verify source file path is valid and accessible
+      if (project.source_file_path) {
+        const { bucketName, filePath } = parseStoragePath(project.source_file_path);
+        
+        // Check if the file exists in storage
+        try {
+          const { data, error } = await supabase.storage
+            .from(bucketName)
+            .list(filePath.split('/').slice(0, -1).join('/'));
+            
+          if (error) {
+            console.error("[DEBUG] Error verifying source file:", error);
+            toast.error(`Storage error: ${error.message}`, { id: reTranscribeToastId });
+            setIsReTranscribing(false);
+            return;
+          }
+          
+          const fileName = filePath.split('/').pop();
+          const fileExists = data?.some(item => item.name === fileName);
+          
+          if (!fileExists) {
+            console.warn(`[DEBUG] Source file not found: ${bucketName}/${filePath}`);
+            toast.error("Source video file not found in storage", { id: reTranscribeToastId });
+            setIsReTranscribing(false);
+            return;
+          }
+          
+          console.log(`[DEBUG] Source file verified: ${bucketName}/${filePath}`);
+        } catch (e) {
+          console.error("[DEBUG] Error checking file existence:", e);
+        }
       }
       
       // Get video metadata with proper type safety
@@ -202,6 +271,13 @@ export const TranscriptDialog = ({
             isChunked: extendedVideoMetadata?.chunking?.isChunked || false,
             chunkCount: extendedVideoMetadata?.chunking?.chunks?.length || 0
           });
+          
+          if (extendedVideoMetadata?.chunking?.chunks) {
+            console.log("[DEBUG] Chunk details:");
+            extendedVideoMetadata.chunking.chunks.forEach((chunk, index) => {
+              console.log(`[DEBUG] Chunk ${index + 1}: ${chunk.videoPath} (exists: ${!!chunk.videoPath})`);
+            });
+          }
         } catch (e) {
           console.log(`[DEBUG] Error parsing video metadata:`, e);
         }
@@ -272,7 +348,7 @@ export const TranscriptDialog = ({
       }
     } catch (error: any) {
       console.error("[DEBUG] Error in re-transcribe handler:", error);
-      const errorToastId = "retranscribe-error"; // Define a separate toastId for the catch block
+      const errorToastId = "retranscribe-error";
       toast.error(`Error preparing transcription: ${error?.message || "Unknown error"}`, { 
         id: errorToastId, 
         duration: 6000
@@ -326,6 +402,15 @@ export const TranscriptDialog = ({
           </div>
         </div>
       </div>
+
+      {!storageStatus.initialized && storageStatus.message && (
+        <div className="mb-4 p-3 bg-amber-50 rounded-md border border-amber-200 flex items-center">
+          <AlertTriangle className="h-5 w-5 text-amber-500 mr-2 flex-shrink-0" />
+          <p className="text-sm text-muted-foreground">
+            {storageStatus.message} - This may affect video transcription.
+          </p>
+        </div>
+      )}
 
       {isLoadingTranscript ? (
         <div className="flex items-center justify-center p-12">
@@ -417,15 +502,24 @@ export const TranscriptDialog = ({
       )}
       
       <div className="flex justify-between mt-4">
-        {debugMode && project?.video_metadata && (
+        {debugMode && (
           <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-muted-foreground max-w-[350px]">
-            <p>Debug Info: {project.video_metadata && (project.video_metadata as ExtendedVideoMetadata)?.chunking?.isChunked ? "Video is chunked" : "Not chunked"}</p>
-            <p>File size: {project.video_metadata.file_size ? `${(project.video_metadata.file_size / (1024 * 1024)).toFixed(2)} MB` : "Unknown"}</p>
-            <p>Duration: {project.video_metadata.duration ? `${project.video_metadata.duration.toFixed(1)}s` : "Unknown"}</p>
+            <p>Debug Info:</p>
+            <p>Storage Status: {storageStatus.initialized ? "Initialized" : "Not initialized"}</p>
+            {project?.video_metadata && (
+              <>
+                <p>Video Chunking: {(project.video_metadata as ExtendedVideoMetadata)?.chunking?.isChunked ? "Chunked" : "Not chunked"}</p>
+                <p>File size: {project.video_metadata.file_size ? `${(project.video_metadata.file_size / (1024 * 1024)).toFixed(2)} MB` : "Unknown"}</p>
+                <p>Duration: {project.video_metadata.duration ? `${project.video_metadata.duration.toFixed(1)}s` : "Unknown"}</p>
+              </>
+            )}
+            {project?.source_file_path && (
+              <p>Source Path: {project.source_file_path}</p>
+            )}
           </div>
         )}
         
-        {/* Add Re-Transcribe Button */}
+        {/* Re-Transcribe Button */}
         <Button
           variant="secondary"
           size="sm"

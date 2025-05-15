@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
@@ -160,6 +161,24 @@ serve(async (req) => {
       
       try {
         console.log(`Attempting to download video file from storage: ${parsedPath.bucketName}/${parsedPath.filePath}`);
+        
+        // First check if the file exists
+        const { data: fileExists, error: listError } = await supabaseClient.storage
+          .from(parsedPath.bucketName)
+          .list(parsedPath.filePath.split('/').slice(0, -1).join('/') || '');
+          
+        if (listError) {
+          console.error(`Error listing files: ${JSON.stringify(listError)}`);
+          throw new Error(`Storage listing error: ${listError.message}`);
+        }
+        
+        const fileName = parsedPath.filePath.split('/').pop();
+        const fileFound = fileExists?.some(file => file.name === fileName);
+        
+        if (!fileFound) {
+          console.error(`File not found in storage: ${parsedPath.bucketName}/${parsedPath.filePath}`);
+          throw new Error("File not found in storage");
+        }
         
         // Download the video file from storage
         const { data: fileData, error: downloadError } = await supabaseClient.storage

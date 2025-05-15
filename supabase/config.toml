@@ -1,49 +1,56 @@
 
-# This file was generated with the command:
-# supabase init --project-id=bjzvlatqgrqaefnwihjj
 project_id = "bjzvlatqgrqaefnwihjj"
 
 [api]
 enabled = true
 port = 54321
 schemas = ["public", "storage", "graphql_public"]
-extra_search_path = ["public", "extensions"]
-max_rows = 1000
 
 [db]
 port = 54322
 shadow_port = 54320
 major_version = 15
 
-[db.pooler]
-enabled = false
-port = 54329
-pool_mode = "transaction"
-default_pool_size = 20
-max_client_conn = 100
-
-[realtime]
-enabled = false
-
 [studio]
 enabled = true
 port = 54323
-api_url = "https://api.supabase.com"
+api_url = "http://localhost:54321"
 
-[auth]
-enabled = true
-port = 54325
+[functions.init-storage]
+verify_jwt = true
+
+[functions.init-storage-buckets]
+verify_jwt = true
+
+[functions.transcribe-video]
+verify_jwt = true
+
+[functions.extract-frames]
+verify_jwt = true
+
+[functions.generate-slides]
+verify_jwt = true
+
+[functions.sync-storage-usage]
+verify_jwt = true
+
+[functions.cleanup-orphaned-files]
+verify_jwt = true
+
+[functions.usage-stats-service]
+verify_jwt = true
+
+[functions.video-chunker]
+verify_jwt = true
 
 [inbucket]
 enabled = true
 port = 54324
-smtp_port = 54326
-pop3_port = 54327
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
 
 [storage]
 enabled = true
-port = 54328
-
-[edge-functions]
-enabled = true
-port = 54330
+file_size_limit = "50MiB"

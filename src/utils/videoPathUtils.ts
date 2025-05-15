@@ -1,12 +1,12 @@
 
+import { supabase } from "@/integrations/supabase/client";
+
 /**
- * Helper function to parse a storage path into bucket name and file path
- * @param fullPath The full path to the file
- * @returns An object containing the bucket name and file path 
+ * Parses a storage path into bucket name and file path
+ * @param fullPath The full storage path
+ * @returns Object containing bucketName and filePath
  */
-export const parseStoragePath = (
-  fullPath: string
-): { bucketName: string; filePath: string } => {
+export const parseStoragePath = (fullPath: string | null): { bucketName: string, filePath: string } => {
   if (!fullPath) {
     return { bucketName: 'video_uploads', filePath: '' };
   }
@@ -14,24 +14,11 @@ export const parseStoragePath = (
   // Remove any leading slashes
   const cleanPath = fullPath.startsWith('/') ? fullPath.substring(1) : fullPath;
 
-  // Check if path starts with a specific bucket prefix
-  const knownBuckets = ['video_uploads', 'slide_stills'];
-  for (const bucket of knownBuckets) {
-    if (cleanPath.startsWith(`${bucket}/`)) {
-      return { 
-        bucketName: bucket, 
-        filePath: cleanPath.replace(`${bucket}/`, '')
-      };
-    }
-  }
-  
-  // Check if path is for a chunked video
-  if (cleanPath.includes('/chunks/') || cleanPath.includes('_chunk_')) {
-    console.log("Detected chunked video path:", cleanPath);
-    // Use video_uploads bucket for chunked videos
+  // Check if path starts with 'video_uploads/' prefix
+  if (cleanPath.startsWith('video_uploads/')) {
     return { 
       bucketName: 'video_uploads', 
-      filePath: cleanPath
+      filePath: cleanPath.replace('video_uploads/', '')
     };
   }
   
@@ -40,6 +27,14 @@ export const parseStoragePath = (
     return { 
       bucketName: 'video_uploads', 
       filePath: cleanPath
+    };
+  }
+  
+  // Check if path starts with 'chunks/' prefix (for chunked videos)
+  if (cleanPath.startsWith('chunks/')) {
+    return {
+      bucketName: 'chunks',
+      filePath: cleanPath.replace('chunks/', '')
     };
   }
 
@@ -63,48 +58,40 @@ export const parseStoragePath = (
 };
 
 /**
- * Creates a signed URL for a video file stored in Supabase Storage
- * @param videoPath Path to the video file
- * @param expirySeconds Number of seconds until the URL expires (default: 3600)
- * @returns A promise that resolves to the signed URL or null if it fails
+ * Checks if a file exists in Supabase storage
+ * @param fullPath The full storage path
+ * @returns Promise resolving to a boolean indicating if the file exists
  */
-export const createSignedVideoUrl = async (
-  videoPath: string,
-  expirySeconds: number = 3600
-): Promise<string | null> => {
+export const checkFileExists = async (fullPath: string | null): Promise<boolean> => {
+  if (!fullPath) return false;
+  
   try {
-    if (!videoPath) {
-      console.error("No video path provided for signed URL creation");
-      return null;
-    }
+    const { bucketName, filePath } = parseStoragePath(fullPath);
     
-    // Import supabase client
-    const { supabase } = await import('@/integrations/supabase/client');
+    // Get the directory path and filename
+    const pathParts = filePath.split('/');
+    const fileName = pathParts.pop() || '';
+    const directoryPath = pathParts.join('/');
     
-    // Parse the path to get bucket and file path
-    const { bucketName, filePath } = parseStoragePath(videoPath);
-    
-    if (!filePath) {
-      console.error("Invalid file path for signed URL creation");
-      return null;
-    }
-    
-    console.log(`Creating signed URL for ${bucketName}/${filePath} with ${expirySeconds}s expiry`);
-    
-    // Create a signed URL with the specified expiration
-    const { data, error } = await supabase.storage
+    // List files in the directory to check if our file exists
+    const { data, error } = await supabase
+      .storage
       .from(bucketName)
-      .createSignedUrl(filePath, expirySeconds);
-    
+      .list(directoryPath, {
+        limit: 100,
+        offset: 0,
+        sortBy: { column: 'name', order: 'asc' },
+      });
+      
     if (error) {
-      console.error("Error creating signed URL:", error);
-      return null;
+      console.error("Error checking file existence:", error);
+      return false;
     }
     
-    return data.signedUrl;
+    // Check if our file is in the list
+    return data?.some(item => item.name === fileName) || false;
   } catch (error) {
-    console.error("Failed to create signed video URL:", error);
-    return null;
+    console.error("Error in checkFileExists:", error);
+    return false;
   }
 };
-

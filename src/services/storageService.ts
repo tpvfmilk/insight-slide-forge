@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -6,8 +7,8 @@ let storageInitialized = false;
 
 /**
  * Initializes the Supabase storage buckets required by the application
- * Creates video_uploads and slide_stills buckets if they don't exist
- * Sets video_uploads bucket to public
+ * Creates video_uploads, chunks, and slide_stills buckets if they don't exist
+ * Sets buckets to public
  * @returns Promise resolving to a success/failure status
  */
 export const initializeStorage = async (): Promise<boolean> => {
@@ -27,7 +28,8 @@ export const initializeStorage = async (): Promise<boolean> => {
       return false;
     }
     
-    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/init-storage', {
+    // Call our edge function to init the buckets with proper permissions
+    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/init-storage-buckets', {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -49,13 +51,16 @@ export const initializeStorage = async (): Promise<boolean> => {
     if (data.success) {
       storageInitialized = true;
       
-      // Check specifically if the video_uploads bucket is public
+      // Check specifically if the required buckets are properly configured
       const videoUploadsResult = data.results.find(r => r.bucket === 'video_uploads');
-      if (videoUploadsResult && videoUploadsResult.status !== 'error') {
-        console.log("Video uploads bucket is properly configured");
+      const chunksResult = data.results.find(r => r.bucket === 'chunks');
+      
+      if (videoUploadsResult && videoUploadsResult.status !== 'error' && 
+          chunksResult && chunksResult.status !== 'error') {
+        console.log("All required buckets are properly configured");
       } else {
-        console.warn("Video uploads bucket might not be properly configured");
-        toast.warning("Video uploads storage might not be configured correctly. Video frame extraction may not work properly.");
+        console.warn("One or more buckets might not be properly configured");
+        toast.warning("Storage might not be configured correctly. Video processing may not work properly.");
       }
     }
     
