@@ -1,6 +1,11 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { ChunkingInfo, ExtendedVideoMetadata, Json } from "@/types/videoChunking";
+import { ChunkingInfo, ExtendedVideoMetadata, Json, ChunkMetadata } from "@/types/videoChunking";
+
+// Define constants for chunking
+export const MAX_CHUNK_SIZE_MB = 50;
+export const MIN_CHUNK_DURATION = 30; // Minimum 30 seconds per chunk
+export const MAX_CHUNK_DURATION = 300; // Maximum 5 minutes per chunk
 
 /**
  * Analyzes a video file to determine if chunking is needed
@@ -59,7 +64,43 @@ export const analyzeVideoForChunking = async (videoFile: File): Promise<Extended
  */
 export const videoNeedsChunking = (fileSize: number): boolean => {
   // If file is larger than 50MB, it should be chunked
-  return fileSize > 50 * 1024 * 1024;
+  return fileSize > MAX_CHUNK_SIZE_MB * 1024 * 1024;
+};
+
+/**
+ * Gets an array of chunk start times from video metadata
+ * @param metadata ExtendedVideoMetadata with chunking information
+ * @returns Array of chunk start times in seconds
+ */
+export const getChunkTimemarks = (metadata: ExtendedVideoMetadata | null): number[] => {
+  if (!metadata?.chunking?.chunks) {
+    return [];
+  }
+  
+  return metadata.chunking.chunks.map(chunk => chunk.startTime);
+};
+
+/**
+ * Gets information about which chunk contains a specific time
+ * @param currentTime Time in seconds
+ * @param metadata ExtendedVideoMetadata with chunking information
+ * @returns String with chunk information or null
+ */
+export const getChunkInfoAtTime = (currentTime: number, metadata: ExtendedVideoMetadata | null): string | null => {
+  if (!metadata?.chunking?.chunks || metadata.chunking.chunks.length === 0) {
+    return null;
+  }
+  
+  // Find which chunk contains the current time
+  const currentChunk = metadata.chunking.chunks.find(
+    chunk => currentTime >= chunk.startTime && currentTime < chunk.endTime
+  );
+  
+  if (currentChunk) {
+    return `Chunk ${currentChunk.index + 1} (${Math.floor(currentChunk.startTime / 60)}:${String(Math.floor(currentChunk.startTime % 60)).padStart(2, '0')} - ${Math.floor(currentChunk.endTime / 60)}:${String(Math.floor(currentChunk.endTime % 60)).padStart(2, '0')})`;
+  }
+  
+  return null;
 };
 
 /**

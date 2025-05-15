@@ -115,7 +115,7 @@ export const createProjectFromVideo = async (
       onProgress?.(80, "chunking");
       console.log("[DEBUG] Initiating server-side chunking process");
       
-      // FIX: Remove the third argument that's causing the TypeScript error
+      // Fixed: Removed the third argument to match the function signature
       const chunkingResult = await initiateServerSideChunking(project.id, filePath);
       
       if (!chunkingResult.success) {
@@ -253,7 +253,7 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
           console.log("[DEBUG] Successfully forced chunking metadata update");
         }
         
-        // FIX: Remove the third argument that's causing the TypeScript error
+        // Fixed: Removed the third argument to match the function signature
         const chunkingResult = await initiateServerSideChunking(
           projectId, 
           project.source_file_path
