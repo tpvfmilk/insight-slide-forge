@@ -281,7 +281,7 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
 
     toast.success("Video transcribed successfully!", { id: "transcribe-video" });
     return { success: true, transcript: transcript };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error transcribing video:", error);
     toast.error("Failed to transcribe video", { id: "transcribe-video" });
     return { 
