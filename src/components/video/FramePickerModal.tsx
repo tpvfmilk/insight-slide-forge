@@ -1,10 +1,11 @@
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Import our new components and hooks
 import { VideoPlayer } from "./VideoPlayer";
@@ -12,6 +13,7 @@ import { FrameLibraryGrid } from "./FrameLibraryGrid";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { useFrameCapture } from "@/hooks/useFrameCapture";
 import { useFrameLibrary } from "@/hooks/useFrameLibrary";
+import { useProject } from "@/hooks/useProject";
 
 export interface FramePickerModalProps {
   open: boolean;
@@ -32,6 +34,17 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
   allExtractedFrames = [],
   existingFrames = []
 }) => {
+  // Get project to access video metadata
+  const { project } = useProject(projectId);
+  const [videoMetadata, setVideoMetadata] = useState<any>(null);
+  
+  // Set video metadata when project loads
+  useEffect(() => {
+    if (project?.video_metadata) {
+      setVideoMetadata(project.video_metadata);
+    }
+  }, [project]);
+  
   // Use our custom hooks
   const videoPlayer = useVideoPlayer({ videoPath, projectId });
   const { videoRef, videoUrl, duration, isLoadingVideo, isVideoLoaded, formatTime } = videoPlayer;
@@ -100,50 +113,55 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
         <DialogTitle className="mb-4">Frame Library</DialogTitle>
         
         {/* Main content container - fixed distribution with flex */}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Video player section - increased fixed height */}
-          <div className="flex justify-center mb-4" style={{ height: "400px", minHeight: "400px" }}>
-            <VideoPlayer
-              videoPath={videoPath}
-              projectId={projectId}
-              capturedTimemarks={frameCapture.capturedTimemarks}
-              isCapturingFrame={frameCapture.isCapturingFrame}
-              onCaptureFrame={frameCapture.captureFrame}
-              width={640}
-              height={360}
-            />
-          </div>
-          
-          <Separator className="mb-4" />
-          
-          {/* Frame library section - flexible but with minimum height */}
-          <div className="flex flex-col flex-grow overflow-hidden min-h-[200px]">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium">Frame Library</h3>
-              <div className="text-sm text-muted-foreground">
-                {frameLibrary.selectedFramesCount} frame{frameLibrary.selectedFramesCount !== 1 ? 's' : ''} selected
+        <ScrollArea className="flex-1 overflow-hidden">
+          <div className="flex flex-col flex-1">
+            {/* Video player section - increased fixed height */}
+            <div className="flex justify-center mb-4" style={{ height: "400px", minHeight: "400px" }}>
+              <VideoPlayer
+                videoPath={videoPath}
+                projectId={projectId}
+                videoMetadata={videoMetadata}
+                capturedTimemarks={frameCapture.capturedTimemarks}
+                isCapturingFrame={frameCapture.isCapturingFrame}
+                onCaptureFrame={frameCapture.captureFrame}
+                width={640}
+                height={360}
+              />
+            </div>
+            
+            <Separator className="mb-4" />
+            
+            {/* Frame library section - flexible but with minimum height */}
+            <div className="flex flex-col min-h-[200px]">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium">Frame Library</h3>
+                <div className="text-sm text-muted-foreground">
+                  {frameLibrary.selectedFramesCount} frame{frameLibrary.selectedFramesCount !== 1 ? 's' : ''} selected
+                </div>
+              </div>
+              
+              {/* This is the scrollable container */}
+              <div className="bg-muted/30 rounded-md overflow-hidden" style={{ minHeight: "200px", maxHeight: "300px" }}>
+                <ScrollArea className="h-full max-h-[300px]">
+                  <FrameLibraryGrid 
+                    libraryFrames={frameLibrary.libraryFrames}
+                    selectedFrames={frameLibrary.selectedFrames}
+                    toggleFrameSelection={frameLibrary.toggleFrameSelection}
+                    removeFrame={handleFrameRemove}
+                  />
+                </ScrollArea>
               </div>
             </div>
             
-            {/* This is the scrollable container */}
-            <div className="flex-grow bg-muted/30 rounded-md overflow-hidden">
-              <FrameLibraryGrid 
-                libraryFrames={frameLibrary.libraryFrames}
-                selectedFrames={frameLibrary.selectedFrames}
-                toggleFrameSelection={frameLibrary.toggleFrameSelection}
-                removeFrame={handleFrameRemove}
-              />
-            </div>
+            {/* Hidden canvas for frame capture */}
+            <canvas 
+              ref={frameCapture.canvasRef} 
+              className="hidden"
+              width="1280"
+              height="720"
+            />
           </div>
-          
-          {/* Hidden canvas for frame capture */}
-          <canvas 
-            ref={frameCapture.canvasRef} 
-            className="hidden"
-            width="1280"
-            height="720"
-          />
-        </div>
+        </ScrollArea>
         
         <div className="flex justify-between items-center pt-4 border-t mt-4">
           <Button variant="outline" onClick={onClose}>

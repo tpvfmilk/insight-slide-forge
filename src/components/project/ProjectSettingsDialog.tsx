@@ -8,6 +8,7 @@ import { Settings } from "lucide-react";
 import { Project } from "@/services/projectService";
 import { TranscriptDialog } from "@/components/project/TranscriptDialog";
 import { ContextDialog } from "@/components/project/ContextDialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ProjectSettingsDialogProps {
   project: Project | null;
@@ -40,45 +41,47 @@ export const ProjectSettingsDialog = ({
           Project Settings
         </Button>
       </DialogTrigger>
-      <SafeDialogContent className="max-w-4xl">
+      <SafeDialogContent className="max-w-4xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>Project Settings</DialogTitle>
         </DialogHeader>
         
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
-          <TabsList className="grid grid-cols-2 mb-4">
-            <TabsTrigger value="transcript">Transcript</TabsTrigger>
-            <TabsTrigger value="context">Context</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="transcript" className="focus:outline-none">
-            <TranscriptDialog 
-              project={project}
-              transcript={transcript}
-              setTranscript={setTranscript}
-              isOpen={activeTab === "transcript"}
-              onOpenChange={(open) => {
-                if (!open) {
-                  handleClose();
-                }
-              }}
-            />
-          </TabsContent>
-          
-          <TabsContent value="context" className="focus:outline-none">
-            <ContextDialog 
-              project={project}
-              contextPrompt={contextPrompt}
-              setContextPrompt={setContextPrompt}
-              isOpen={activeTab === "context"}
-              onOpenChange={(open) => {
-                if (!open) {
-                  handleClose();
-                }
-              }}
-            />
-          </TabsContent>
-        </Tabs>
+        <ScrollArea className="flex-1 overflow-hidden max-h-[calc(90vh-10rem)]">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
+            <TabsList className="grid grid-cols-2 mb-4">
+              <TabsTrigger value="transcript">Transcript</TabsTrigger>
+              <TabsTrigger value="context">Context</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="transcript" className="focus:outline-none">
+              <TranscriptDialog 
+                project={project}
+                transcript={transcript}
+                setTranscript={setTranscript}
+                isOpen={activeTab === "transcript"}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    handleClose();
+                  }
+                }}
+              />
+            </TabsContent>
+            
+            <TabsContent value="context" className="focus:outline-none">
+              <ContextDialog 
+                project={project}
+                contextPrompt={contextPrompt}
+                setContextPrompt={setContextPrompt}
+                isOpen={activeTab === "context"}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    handleClose();
+                  }
+                }}
+              />
+            </TabsContent>
+          </Tabs>
+        </ScrollArea>
       </SafeDialogContent>
     </SafeDialog>
   );

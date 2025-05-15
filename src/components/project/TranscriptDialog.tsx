@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TranscriptDialogProps {
   project: Project | null;
@@ -197,22 +198,24 @@ export const TranscriptDialog = ({
             </Button>
           </div>
           
-          <Textarea 
-            value={editedTranscript}
-            onChange={(e) => setEditedTranscript(e.target.value)}
-            placeholder="Enter or edit the transcript here..."
-            className="min-h-[350px] font-mono text-sm"
-            wrap="off"
-          />
+          <ScrollArea className="h-[350px]">
+            <Textarea 
+              value={editedTranscript}
+              onChange={(e) => setEditedTranscript(e.target.value)}
+              placeholder="Enter or edit the transcript here..."
+              className="min-h-[350px] font-mono text-sm"
+              wrap="off"
+            />
+          </ScrollArea>
         </>
       ) : (
-        <div className="border rounded-md p-4 min-h-[350px] bg-muted/10 overflow-y-auto">
+        <ScrollArea className="h-[350px] border rounded-md p-4 bg-muted/10">
           <TranscriptRenderer 
             transcript={editedTranscript} 
             showTimestamps={showTimestamps}
             highlightSpeakers={highlightSpeakers}
           />
-        </div>
+        </ScrollArea>
       )}
       
       <div className="flex justify-end mt-4 space-x-2">
@@ -248,13 +251,15 @@ export const TranscriptDialog = ({
             {project?.transcript ? "Edit Transcript" : "Add Transcript"}
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Video Transcript</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <TabContent />
-          </div>
+          <ScrollArea className="flex-1 max-h-[calc(90vh-10rem)]">
+            <div className="py-4">
+              <TabContent />
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     );

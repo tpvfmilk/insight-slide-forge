@@ -8,10 +8,71 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL");
-const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const openAIKey = Deno.env.get("OPENAI_API_KEY");
-const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+// Add this helper function to better handle chunked video transcription
+async function processChunkedVideo(video, useSpeakerDetection) {
+  console.log(`Processing chunked video with ${video.video_metadata.chunked_video_metadata.chunks.length} chunks`);
+  
+  const chunks = video.video_metadata.chunked_video_metadata.chunks;
+  const chunksCount = chunks.length;
+  const chunkTranscripts = [];
+  
+  for (let j = 0; j < chunks.length; j++) {
+    const chunk = chunks[j];
+    console.log(`Processing chunk ${j + 1}/${chunksCount}: ${chunk.chunkPath}`);
+    
+    try {
+      // Download the chunk file from storage
+      const { data: chunkData, error: chunkError } = await supabase
+        .storage
+        .from('video_uploads')
+        .download(chunk.chunkPath);
+        
+      if (chunkError || !chunkData) {
+        console.error(`Failed to download chunk ${j + 1}:`, chunkError);
+        continue; // Skip this chunk but continue with others
+      }
+      
+      // Process this chunk with retries
+      let attempts = 0;
+      let chunkTranscript = null;
+      let success = false;
+      
+      while (attempts < 3 && !success) {
+        try {
+          console.log(`Attempt ${attempts + 1} to transcribe chunk ${j + 1}`);
+          chunkTranscript = await transcribeVideoFile(chunkData, useSpeakerDetection);
+          success = true;
+        } catch (error) {
+          console.error(`Attempt ${attempts + 1} failed for chunk ${j + 1}:`, error);
+          attempts++;
+          // Short pause before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      if (chunkTranscript) {
+        // Add to the chunk transcripts with timestamp information
+        const formattedStartTime = formatTimestamp(chunk.startTime);
+        const chunkHeader = `\n\n## Part ${j + 1} [${formattedStartTime}]\n\n`;
+        chunkTranscripts.push(chunkHeader + chunkTranscript);
+        console.log(`Successfully transcribed chunk ${j + 1}/${chunksCount}`);
+      } else {
+        console.error(`Failed to transcribe chunk ${j + 1} after ${attempts} attempts`);
+      }
+    } catch (error) {
+      console.error(`Error processing chunk ${j + 1}:`, error);
+    }
+  }
+  
+  // Return the combined transcripts
+  if (chunkTranscripts.length === 0) {
+    return null;
+  }
+  
+  const videoTitle = video.title || "Video";
+  const videoHeader = `\n\n# ${videoTitle}\n\n`;
+  return videoHeader + chunkTranscripts.join("\n\n");
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -29,7 +90,7 @@ serve(async (req) => {
       useSpeakerDetection = false, 
       isTranscriptOnly = false,
       projectVideos = [],
-      processChunks = false
+      processChunks = true
     } = await req.json();
 
     console.log(`Processing request: projectId=${projectId}, useSpeakerDetection=${useSpeakerDetection}, isTranscriptOnly=${isTranscriptOnly}, processChunks=${processChunks}`);
@@ -134,46 +195,11 @@ serve(async (req) => {
           const isChunkedVideo = video.video_metadata?.chunked_video_metadata?.isChunked === true;
           
           if (isChunkedVideo && processChunks) {
-            console.log("Processing chunked video");
-            const chunks = video.video_metadata.chunked_video_metadata.chunks;
-            const chunksCount = chunks.length;
-            console.log(`This video has ${chunksCount} chunks to process`);
+            // Use our improved chunk processing function
+            const chunkedTranscript = await processChunkedVideo(video, useSpeakerDetection);
             
-            // Process each chunk separately
-            const chunkTranscripts = [];
-            
-            for (let j = 0; j < chunks.length; j++) {
-              const chunk = chunks[j];
-              console.log(`Processing chunk ${j + 1}/${chunksCount}: ${chunk.chunkPath}`);
-              
-              // Download the chunk file from storage
-              const { data: chunkData, error: chunkError } = await supabase
-                .storage
-                .from('video_uploads')
-                .download(chunk.chunkPath);
-                
-              if (chunkError || !chunkData) {
-                console.error(`Failed to download chunk ${j + 1}:`, chunkError);
-                continue; // Skip this chunk but continue with others
-              }
-              
-              // Process this chunk
-              const chunkTitle = `${video.title || "Video"} (Part ${j + 1})`;
-              const chunkTranscript = await transcribeVideoFile(chunkData, useSpeakerDetection);
-              
-              if (chunkTranscript) {
-                // Add to the chunk transcripts with timestamp information
-                const formattedStartTime = formatTimestamp(chunk.startTime);
-                const chunkHeader = `\n\n## ${chunkTitle} [${formattedStartTime}]\n\n`;
-                chunkTranscripts.push(chunkHeader + chunkTranscript);
-              }
-            }
-            
-            // Combine all chunks of this video
-            if (chunkTranscripts.length > 0) {
-              const videoTitle = video.title || `Video ${i + 1}`;
-              const videoHeader = `\n\n# ${videoTitle}\n\n`;
-              transcripts.push(videoHeader + chunkTranscripts.join("\n\n"));
+            if (chunkedTranscript) {
+              transcripts.push(chunkedTranscript);
             }
           } else {
             // Process as a regular video (non-chunked)

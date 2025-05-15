@@ -1,15 +1,16 @@
 
 // Use existing imports and add our new hook
-import React from "react";
+import React, { useEffect } from "react";
 import { useVideoPlayer } from "@/hooks/useVideoPlayer";
 import { useChunkedVideoPlayer } from "@/hooks/useChunkedVideoPlayer";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { 
   Play, Pause, SkipBack, SkipForward, 
-  RefreshCw, AlertCircle, LoaderCircle
+  RefreshCw, AlertCircle, LoaderCircle, Camera
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface VideoPlayerProps {
   videoPath: string;
@@ -37,8 +38,8 @@ export const VideoPlayer = ({
   className = "",
   autoPlay = false,
   showControls = true,
-  capturedTimemarks,
-  isCapturingFrame,
+  capturedTimemarks = [],
+  isCapturingFrame = false,
   onCaptureFrame
 }: VideoPlayerProps) => {
   // Check if the video is chunked from metadata
@@ -56,11 +57,33 @@ export const VideoPlayer = ({
   const player = isChunkedVideo ? chunkedPlayer : standardPlayer;
   
   // Report time updates to parent if needed
-  React.useEffect(() => {
+  useEffect(() => {
     if (onTimeUpdate && !player.isSeeking) {
       onTimeUpdate(player.currentTime);
     }
   }, [player.currentTime, player.isSeeking, onTimeUpdate]);
+
+  // Render timemark indicators for captured frames
+  const renderTimemarks = () => {
+    if (!capturedTimemarks || capturedTimemarks.length === 0 || !player.duration) {
+      return null;
+    }
+
+    return (
+      <div className="relative w-full h-1 mb-2">
+        {capturedTimemarks.map((time, index) => {
+          const position = (time / player.duration) * 100;
+          return (
+            <div 
+              key={`mark-${index}`}
+              className="absolute w-0.5 h-2 bg-primary rounded-full -translate-x-1/2" 
+              style={{ left: `${position}%` }}
+            />
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className={`flex flex-col w-full max-w-full ${className}`}>
@@ -89,120 +112,126 @@ export const VideoPlayer = ({
             </Button>
           </div>
         ) : (
-          <video
-            ref={player.videoRef}
-            className={`w-full h-full object-contain ${player.isVideoLoaded ? 'block' : 'hidden'}`}
-            src={isChunkedVideo ? chunkedPlayer.activeChunkUrl : standardPlayer.videoUrl || undefined}
-            onLoadedData={player.handleVideoLoaded}
-            onError={player.handleVideoError}
-            playsInline
-            autoPlay={autoPlay}
-            muted={autoPlay}
-            controls={false}
-            onClick={() => showControls && player.togglePlayPause()}
-          />
-        )}
-        
-        {!player.isVideoLoaded && !player.videoError && !player.isLoadingVideo && (
-          <Skeleton className="w-full h-full absolute inset-0" />
-        )}
-
-        {/* Add UI for frame capturing if enabled */}
-        {capturedTimemarks && onCaptureFrame && (
-          <div className="absolute bottom-2 right-2">
-            <Button 
-              size="sm" 
-              className="bg-primary/80 hover:bg-primary"
-              disabled={isCapturingFrame}
-              onClick={onCaptureFrame}
-            >
-              {isCapturingFrame ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                "Capture Frame"
-              )}
-            </Button>
-          </div>
-        )}
-
-        {/* Timemarks indicators */}
-        {capturedTimemarks && capturedTimemarks.length > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 h-1 bg-transparent">
-            {capturedTimemarks.map((time, index) => (
-              <div 
-                key={index}
-                className="absolute h-2 w-1 bg-yellow-400" 
-                style={{ 
-                  left: `${(time / player.duration) * 100}%`,
-                  transform: 'translateX(-50%)',
-                  bottom: 0
-                }}
-              />
-            ))}
-          </div>
+          <>
+            <video
+              ref={player.videoRef}
+              className={`w-full h-full object-contain ${player.isVideoLoaded ? 'block' : 'hidden'}`}
+              src={isChunkedVideo ? chunkedPlayer.activeChunkUrl : standardPlayer.videoUrl || undefined}
+              onLoadedData={player.handleVideoLoaded}
+              onError={player.handleVideoError}
+              playsInline
+              autoPlay={autoPlay}
+              muted={autoPlay}
+              controls={false}
+            />
+            {onCaptureFrame && (
+              <Button 
+                size="sm"
+                variant="secondary"
+                className="absolute top-2 right-2 z-10 opacity-80 hover:opacity-100"
+                onClick={onCaptureFrame}
+                disabled={isCapturingFrame}
+              >
+                {isCapturingFrame ? (
+                  <RefreshCw className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <Camera className="h-4 w-4 mr-1" />
+                )}
+                Capture Frame
+              </Button>
+            )}
+          </>
         )}
       </div>
-      
+
       {/* Video controls */}
       {showControls && player.isVideoLoaded && (
-        <div className="mt-2 bg-muted/50 p-2 rounded-md">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm text-muted-foreground">
+        <div className="mt-2 space-y-2">
+          {/* Timemarks */}
+          {renderTimemarks()}
+          
+          {/* Progress bar */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-mono w-12">
               {player.formatTime(player.currentTime)}
             </span>
+            <Slider 
+              min={0} 
+              max={player.duration || 100}
+              step={0.01}
+              value={[player.seekingValue !== null ? player.seekingValue : player.currentTime]}
+              onValueChange={(vals) => player.handleSeekChange(vals[0])}
+              onValueCommit={(vals) => player.handleSeekCommit(vals[0])}
+              className="flex-1"
+            />
+            <span className="text-xs text-muted-foreground font-mono w-12">
+              {player.formatTime(player.duration)}
+            </span>
+          </div>
+          
+          {/* Playback controls */}
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full"
-                onClick={player.seekBack}
+                className="h-8 w-8"
+                onClick={() => player.skipBackward(10)}
+                disabled={player.isLoadingVideo}
               >
                 <SkipBack className="h-4 w-4" />
               </Button>
               
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon"
-                className="h-8 w-8 rounded-full"
-                onClick={player.togglePlayPause}
+                className="h-9 w-9 rounded-full"
+                onClick={player.togglePlayback}
+                disabled={player.isLoadingVideo}
               >
                 {player.isPlaying ? (
                   <Pause className="h-4 w-4" />
                 ) : (
-                  <Play className="h-4 w-4" />
+                  <Play className="h-4 w-4 ml-0.5" />
                 )}
               </Button>
               
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full"
-                onClick={player.seekForward}
+                className="h-8 w-8"
+                onClick={() => player.skipForward(10)}
+                disabled={player.isLoadingVideo}
               >
                 <SkipForward className="h-4 w-4" />
               </Button>
             </div>
-            <span className="text-sm text-muted-foreground">
-              {player.formatTime(player.duration)}
-            </span>
+            
+            {isChunkedVideo && (
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Chunk {chunkedPlayer.currentChunkIndex + 1}/{chunkedPlayer.chunks?.length || 1}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <div className="flex flex-wrap gap-1 p-2 bg-muted/20 rounded-md max-w-xs">
+                    {chunkedPlayer.chunks?.map((_, index) => (
+                      <Button
+                        key={`chunk-${index}`}
+                        variant={index === chunkedPlayer.currentChunkIndex ? "default" : "outline"}
+                        size="sm"
+                        className="w-8 h-8 p-0"
+                        onClick={() => chunkedPlayer.loadChunk(index)}
+                      >
+                        {index + 1}
+                      </Button>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
           </div>
-          
-          <Slider
-            min={0}
-            max={player.duration}
-            step={0.01}
-            value={[player.seekingValue]}
-            onValueChange={player.handleSeekChange}
-            onValueCommit={() => player.handleSeekEnd()}
-            className="cursor-pointer"
-          />
-          
-          {/* Display chunk information when playing chunked videos */}
-          {isChunkedVideo && chunkedPlayer.isChunked && (
-            <div className="text-xs text-muted-foreground mt-1">
-              Part {chunkedPlayer.activeChunkIndex + 1} of {videoMetadata.chunked_video_metadata.chunks.length}
-            </div>
-          )}
         </div>
       )}
     </div>
