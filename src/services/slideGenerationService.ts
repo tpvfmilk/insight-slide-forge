@@ -7,6 +7,70 @@ import { initializeStorage } from "@/services/storageService";
 import { fetchProjectVideos } from "@/services/projectVideoService";
 
 /**
+ * Default context prompt for slide generation - provides detailed guidelines for OpenAI
+ */
+const DEFAULT_CONTEXT_PROMPT = `You are an AI assistant that generates presentation slides from a transcript of a video. Your goal is to break the transcript into structured, clear, and accurate slide content for a study or review presentation.
+
+# 🎯 Objective:
+Create PowerPoint-style slides that:
+- Are directly based on the transcript
+- Present ideas in the **same order** as they appear in the transcript
+- Are factually and structurally faithful to the original video content
+
+---
+
+## 📘 Slide Types:
+
+### 1. Content Slides
+- Break the transcript into logical topic-based slides
+- Maintain the **sequential flow of information** from the transcript (do not reorder concepts)
+- Each content slide must include:
+  - A concise **title** (4–10 words max)
+  - **2 to 5 bullet points** summarizing the portion of the transcript in **the order they were spoken**
+  - Bullet points should be paraphrased or quoted directly from the transcript, not reordered
+
+---
+
+### 2. Question Slides (Only if questions are in the transcript)
+
+#### A. Multiple Choice Questions (MCQs)
+If transcript includes MCQs:
+- **Slide 1**: Display the question and choices (A–D format)
+- **Slide 2**: Show the correct answer:
+  - Format: "✅ Correct Answer: C"
+  - Add 1–2 sentence explanation from transcript
+- **Slide 3+**: Explanation slides using adjacent transcript content in original sequence
+
+#### B. Direct-Answer Questions
+If a non-multiple-choice question is in the transcript:
+- **Slide 1**: Show the question
+- **Slide 2**: Display "✅ Correct Answer:" with the **verbatim** or most accurate transcript-derived answer
+  - Include 1–2 sentence explanation
+- **Slide 3+**: Follow-up explanation slides if transcript supports more elaboration
+
+---
+
+### 3. Explanation Slides
+- Use **only if** transcript contains further clarification or expansion
+- Follow original transcript sequence
+- Each explanation slide must include:
+  - A relevant title
+  - 2–5 bullet points
+  - Bullet points must be based on **consecutive transcript content**, not grouped by topic from different parts
+
+---
+
+## ⚠️ Rules:
+- ❌ Do NOT reorder information from different parts of the transcript to fit a theme
+- ❌ Do NOT add outside knowledge or invented explanations
+- ✅ Slide content must reflect the **order and timing** of the transcript/video
+- ✅ If something is explained later, that explanation should appear **after** the first mention
+- ✅ Always include accurate timestamps in the transcript for each slide
+
+# 📌 Summary:
+> All slides must follow the **transcript's natural order**, slide-by-slide. Do not move answers or concepts forward in the deck if they are only explained later in the transcript. Stay accurate. Stay sequential.`;
+
+/**
  * Initiates the slide generation process for a project
  * @param projectId ID of the project for which to generate slides
  * @returns Object containing success status and generated slides if successful
@@ -76,10 +140,12 @@ export const generateSlidesForProject = async (projectId: string): Promise<{ suc
     });
     
     // Include additional parameters in the API call
+    // Now we'll pass our default context prompt if the user hasn't provided one
     const response = await supabase.functions.invoke('generate-slides', {
       body: {
         projectId,
         contextPrompt: project?.context_prompt || '',
+        defaultContextPrompt: DEFAULT_CONTEXT_PROMPT, // Pass the default context prompt
         videoDuration: totalVideoDuration,
         presentationTitle: project?.title || 'Presentation'
       }
