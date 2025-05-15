@@ -130,41 +130,66 @@ async function generateSlidesFromTranscript(
 ): Promise<any[] | null> {
   try {
     // Prepare the system prompt with instructions for professional study slides
-    const systemPrompt = `You are an AI assistant that creates professional-quality study slides from a structured video transcript and chapter metadata. The slides are for professionals studying for licensure exams.
+    const systemPrompt = `You are an AI assistant that generates presentation slides from a transcript of a video. Your goal is to break the transcript into structured, clear, and accurate slide content for a study or review presentation.
 
-# Slide Creation Rules:
+# 🎯 Objective:
+Create PowerPoint-style slides that:
+- Are directly based on the transcript
+- Present ideas in the **same order** as they appear in the transcript
+- Are factually and structurally faithful to the original video content
 
-1. **Content Slides**:
-   - Break the transcript into slides using logical topic breaks or chapter changes
-   - Each slide must include:
-     - A short, clear **title**
-     - 2–5 **bullet points** with concise transcript-based information
+---
 
-2. **Question Slides**:
-   Detect and handle both styles of questions:
+## 📘 Slide Types:
 
-   **A. Multiple Choice Questions (MCQs)**  
-   - Slide 1: Present the question clearly with answer choices (A–D format if applicable)
-   - Slide 2: "Correct Answer" with:
-     - The correct letter (e.g., **Correct Answer: C**)  
-     - 1–2 sentence explanation
-   - Follow with **Explanation Slides** that elaborate on the concept using transcript content
+### 1. Content Slides
+- Break the transcript into logical topic-based slides
+- Maintain the **sequential flow of information** from the transcript (do not reorder concepts)
+- Each content slide must include:
+  - A concise **title** (4–10 words max)
+  - **2 to 5 bullet points** summarizing the portion of the transcript in **the order they were spoken**
+  - Bullet points should be paraphrased or quoted directly from the transcript, not reordered
 
-   **B. Direct-Answer Questions (No A–D choices)**  
-   - Slide 1: Present the question text and leave space for the user to consider the answer  
-   - Slide 2: "Correct Answer" box with the exact answer provided in the video (verbatim if possible)  
-     - Include 1–2 sentence explanation  
-   - Follow with **Explanation Slides** from the related portion of the transcript
+---
 
-3. **Explanation Slides**:
-   - Only use **verbatim or paraphrased content from the transcript**
-   - Break into multiple slides as needed
+### 2. Question Slides (Only if questions are in the transcript)
 
-4. **Important Guidelines**:
-   - Do not add your own knowledge
-   - Do not skip explanations
-   - Do not fabricate options or answers
-   - All content must come directly from the transcript`;
+#### A. Multiple Choice Questions (MCQs)
+If transcript includes MCQs:
+- **Slide 1**: Display the question and choices (A–D format)
+- **Slide 2**: Show the correct answer:
+  - Format: "✅ Correct Answer: C"
+  - Add 1–2 sentence explanation from transcript
+- **Slide 3+**: Explanation slides using adjacent transcript content in original sequence
+
+#### B. Direct-Answer Questions
+If a non-multiple-choice question is in the transcript:
+- **Slide 1**: Show the question
+- **Slide 2**: Display "✅ Correct Answer:" with the **verbatim** or most accurate transcript-derived answer
+  - Include 1–2 sentence explanation
+- **Slide 3+**: Follow-up explanation slides if transcript supports more elaboration
+
+---
+
+### 3. Explanation Slides
+- Use **only if** transcript contains further clarification or expansion
+- Follow original transcript sequence
+- Each explanation slide must include:
+  - A relevant title
+  - 2–5 bullet points
+  - Bullet points must be based on **consecutive transcript content**, not grouped by topic from different parts
+
+---
+
+## ⚠️ Rules:
+- ❌ Do NOT reorder information from different parts of the transcript to fit a theme
+- ❌ Do NOT add outside knowledge or invented explanations
+- ✅ Slide content must reflect the **order and timing** of the transcript/video
+- ✅ If something is explained later, that explanation should appear **after** the first mention
+- ✅ Always include accurate timestamps in the transcript for each slide
+
+# 📌 Summary:
+> All slides must follow the **transcript's natural order**, slide-by-slide. Do not move answers or concepts forward in the deck if they are only explained later in the transcript. Stay accurate. Stay sequential.`;
 
     // Prepare the user prompt
     let userPrompt = `Based on this transcript, create a presentation titled "${presentationTitle}":`;
@@ -213,7 +238,9 @@ Expected JSON format:
     "timestamp": "07:10",
     "transcriptTimestamps": ["07:10"]
   }
-]`;
+]
+
+Remember to preserve the sequential ordering of the transcript in your slides and include precise timestamps for each slide where available.`;
     
     // Call OpenAI API to generate the slides
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -228,7 +255,7 @@ Expected JSON format:
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.5,
+        temperature: 0.3, // Reduced from 0.5 to make output more deterministic
         max_tokens: 3500
       })
     });
@@ -270,15 +297,22 @@ Expected JSON format:
         throw new Error("Response is not a valid array");
       }
       
-      // Ensure each slide has required properties
+      // Ensure each slide has required properties and verify sequential ordering
       slides = slides.map((slide, index) => ({
         id: slide.id || `slide-${index + 1}`,
         title: slide.title || `Slide ${index + 1}`,
         content: slide.content || "",
         timestamp: slide.timestamp || null,
         transcriptTimestamps: Array.isArray(slide.transcriptTimestamps) ? slide.transcriptTimestamps : 
-                              (slide.timestamp ? [slide.timestamp] : [])
+                              (slide.timestamp ? [slide.timestamp] : []),
+        sequenceIndex: index // Add sequence index to ensure slides remain in order
       }));
+
+      // Sort slides by sequence index to maintain the order they were generated
+      slides.sort((a, b) => a.sequenceIndex - b.sequenceIndex);
+      
+      // Remove the sequence index property as it's not needed for storage
+      slides = slides.map(({ sequenceIndex, ...rest }) => rest);
     } catch (error) {
       console.error("Failed to parse slides:", error);
       throw new Error("Failed to parse slides from API response");
