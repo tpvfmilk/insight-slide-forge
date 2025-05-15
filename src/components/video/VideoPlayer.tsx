@@ -1,195 +1,168 @@
 
+// Use existing imports and add our new hook
 import React from "react";
-import { Button } from "@/components/ui/button";
+import { useVideoPlayer } from "@/hooks/useVideoPlayer";
+import { useChunkedVideoPlayer } from "@/hooks/useChunkedVideoPlayer";
 import { Slider } from "@/components/ui/slider";
-import { Play, Pause, Rewind, FastForward, Camera, RefreshCw, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { 
+  Play, Pause, SkipBack, SkipForward, 
+  RefreshCw, AlertCircle, LoaderCircle
+} from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface VideoPlayerProps {
-  videoRef: React.RefObject<HTMLVideoElement>;
-  videoUrl: string | null;
-  isPlaying: boolean;
-  currentTime: number;
-  duration: number;
-  seekingValue: number;
-  isVideoLoaded: boolean;
-  isLoadingVideo: boolean;
-  videoError: string | null;
-  capturedTimemarks: number[];
-  isCapturingFrame: boolean;
-  formatTime: (seconds: number) => string;
-  togglePlayPause: () => void;
-  seekBack: () => void;
-  seekForward: () => void;
-  handleSeekStart: () => void;
-  handleSeekChange: (value: number[]) => void;
-  handleSeekEnd: () => void;
-  retryLoadVideo: () => void;
-  handleVideoLoaded: () => void;
-  handleVideoError: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
-  onCaptureFrame: () => void;
+  videoPath: string;
+  projectId: string;
+  videoMetadata?: any;
+  onTimeUpdate?: (time: number) => void;
+  width?: number;
+  height?: number;
+  className?: string;
+  autoPlay?: boolean;
+  showControls?: boolean;
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({
-  videoRef,
-  videoUrl,
-  isPlaying,
-  currentTime,
-  duration,
-  seekingValue,
-  isVideoLoaded,
-  isLoadingVideo,
-  videoError,
-  capturedTimemarks,
-  isCapturingFrame,
-  formatTime,
-  togglePlayPause,
-  seekBack,
-  seekForward,
-  handleSeekStart,
-  handleSeekChange,
-  handleSeekEnd,
-  retryLoadVideo,
-  handleVideoLoaded,
-  handleVideoError,
-  onCaptureFrame
-}) => {
-  // Custom render for slider with captured frame markers
-  const renderSliderWithMarkers = () => {
-    return (
-      <div className="relative w-full">
-        <Slider 
-          value={[seekingValue]} 
-          min={0} 
-          max={duration || 100}
-          step={0.01}
-          onValueChange={handleSeekChange}
-          onValueCommit={handleSeekEnd}
-          onPointerDown={handleSeekStart}
-          className="z-10"
-        />
-        
-        {/* Timemark indicators - Make indicators more visible */}
-        {capturedTimemarks.map((time, index) => (
-          <div 
-            key={index}
-            className="absolute top-1/2 w-1 h-4 bg-green-500 rounded-full transform -translate-y-1/2 z-0"
-            style={{ 
-              left: `${(time / (duration || 100)) * 100}%`,
-              marginLeft: -2 // Center the marker
-            }}
-            title={`Captured frame at ${formatTime(time)}`}
-          />
-        ))}
-      </div>
-    );
-  };
+export const VideoPlayer = ({ 
+  videoPath, 
+  projectId, 
+  videoMetadata,
+  onTimeUpdate,
+  width = 640,
+  height = 360,
+  className = "",
+  autoPlay = false,
+  showControls = true
+}: VideoPlayerProps) => {
+  // Check if the video is chunked from metadata
+  const isChunkedVideo = videoMetadata?.chunked_video_metadata?.isChunked === true;
+  
+  // Use either standard or chunked video player based on metadata
+  const standardPlayer = useVideoPlayer({ videoPath, projectId });
+  const chunkedPlayer = useChunkedVideoPlayer({ 
+    videoMetadata, 
+    projectId,
+    normalVideoPath: videoPath
+  });
+  
+  // Use the appropriate player
+  const player = isChunkedVideo ? chunkedPlayer : standardPlayer;
+  
+  // Report time updates to parent if needed
+  React.useEffect(() => {
+    if (onTimeUpdate && !player.isSeeking) {
+      onTimeUpdate(player.currentTime);
+    }
+  }, [player.currentTime, player.isSeeking, onTimeUpdate]);
 
   return (
-    <div className="relative bg-black rounded-md overflow-hidden" style={{ width: "640px", height: "360px" }}>
-      {/* Loading state */}
-      {isLoadingVideo ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
-          <RefreshCw className="h-8 w-8 animate-spin mr-2" />
-          <span>Loading video...</span>
-        </div>
-      ) : null}
-      
-      {/* Error state */}
-      {videoError ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
-          <div>
-            <AlertCircle className="h-10 w-10 mb-2 mx-auto text-destructive" />
-            <p className="mb-4">{videoError}</p>
-            <Button 
-              variant="secondary" 
-              onClick={retryLoadVideo}
+    <div className={`flex flex-col w-full max-w-full ${className}`}>
+      {/* Video element */}
+      <div 
+        className={`relative bg-black rounded-md overflow-hidden ${player.isLoadingVideo ? 'flex items-center justify-center' : ''}`}
+        style={{ width: width || '100%', height: height || 'auto' }}
+      >
+        {player.isLoadingVideo ? (
+          <div className="flex flex-col items-center gap-2 text-white bg-black/70 p-4 rounded-md">
+            <LoaderCircle className="h-6 w-6 animate-spin" />
+            <span className="text-sm">Loading video...</span>
+          </div>
+        ) : player.videoError ? (
+          <div className="flex flex-col items-center justify-center h-full text-white bg-black/90 p-4">
+            <AlertCircle className="h-10 w-10 text-red-500 mb-2" />
+            <p className="text-center text-sm max-w-[80%]">{player.videoError}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={isChunkedVideo ? () => chunkedPlayer.loadVideos() : standardPlayer.retryLoadVideo}
             >
               <RefreshCw className="h-4 w-4 mr-2" />
-              Retry Loading Video
+              Try Again
             </Button>
           </div>
-        </div>
-      ) : null}
+        ) : (
+          <video
+            ref={player.videoRef}
+            className={`w-full h-full object-contain ${player.isVideoLoaded ? 'block' : 'hidden'}`}
+            src={isChunkedVideo ? chunkedPlayer.activeChunkUrl : standardPlayer.videoUrl || undefined}
+            onLoadedData={player.handleVideoLoaded}
+            onError={player.handleVideoError}
+            playsInline
+            autoPlay={autoPlay}
+            muted={autoPlay}
+            controls={false}
+            onClick={() => showControls && player.togglePlayPause()}
+          />
+        )}
+        
+        {!player.isVideoLoaded && !player.videoError && !player.isLoadingVideo && (
+          <Skeleton className="w-full h-full absolute inset-0" />
+        )}
+      </div>
       
-      {/* Video element */}
-      <video
-        ref={videoRef}
-        src={videoUrl || undefined}
-        className="w-full h-full object-contain"
-        crossOrigin="anonymous"
-        onLoadedData={handleVideoLoaded}
-        onLoadedMetadata={handleVideoLoaded}
-        onError={handleVideoError}
-        playsInline
-        preload="auto"
-      >
-        Your browser does not support the video tag.
-      </video>
-      
-      {/* Video controls overlay */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
-        <div className="flex items-center space-x-4 w-full">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={seekBack}
-            className="text-white hover:bg-white/20"
-            disabled={!isVideoLoaded}
-          >
-            <Rewind className="h-5 w-5" />
-          </Button>
-
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={togglePlayPause}
-            className="text-white hover:bg-white/20"
-            disabled={!isVideoLoaded}
-          >
-            {isPlaying ? (
-              <Pause className="h-5 w-5" />
-            ) : (
-              <Play className="h-5 w-5" />
-            )}
-          </Button>
-          
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={seekForward}
-            className="text-white hover:bg-white/20"
-            disabled={!isVideoLoaded}
-          >
-            <FastForward className="h-5 w-5" />
-          </Button>
-          
-          <div className="text-white text-sm">
-            {formatTime(currentTime)} / {formatTime(duration)}
+      {/* Video controls */}
+      {showControls && player.isVideoLoaded && (
+        <div className="mt-2 bg-muted/50 p-2 rounded-md">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm text-muted-foreground">
+              {player.formatTime(player.currentTime)}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                onClick={player.seekBack}
+              >
+                <SkipBack className="h-4 w-4" />
+              </Button>
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                onClick={player.togglePlayPause}
+              >
+                {player.isPlaying ? (
+                  <Pause className="h-4 w-4" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+              </Button>
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                onClick={player.seekForward}
+              >
+                <SkipForward className="h-4 w-4" />
+              </Button>
+            </div>
+            <span className="text-sm text-muted-foreground">
+              {player.formatTime(player.duration)}
+            </span>
           </div>
           
-          <div className="flex-1"></div>
+          <Slider
+            min={0}
+            max={player.duration}
+            step={0.01}
+            value={[player.seekingValue]}
+            onValueChange={player.handleSeekChange}
+            onValueCommit={() => player.handleSeekEnd()}
+            className="cursor-pointer"
+          />
           
-          <Button 
-            variant="secondary" 
-            size="sm"
-            onClick={onCaptureFrame}
-            className="flex items-center space-x-1"
-            disabled={!isVideoLoaded || isCapturingFrame}
-          >
-            {isCapturingFrame ? (
-              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Camera className="h-4 w-4 mr-1" />
-            )}
-            {isCapturingFrame ? 'Capturing...' : 'Capture Frame'}
-          </Button>
+          {/* Display chunk information when playing chunked videos */}
+          {isChunkedVideo && chunkedPlayer.isChunked && (
+            <div className="text-xs text-muted-foreground mt-1">
+              Part {chunkedPlayer.activeChunkIndex + 1} of {videoMetadata.chunked_video_metadata.chunks.length}
+            </div>
+          )}
         </div>
-        
-        {/* Video seek slider with markers */}
-        <div className="px-1">
-          {renderSliderWithMarkers()}
-        </div>
-      </div>
+      )}
     </div>
   );
 };

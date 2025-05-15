@@ -28,10 +28,11 @@ serve(async (req) => {
       audioData, 
       useSpeakerDetection = false, 
       isTranscriptOnly = false,
-      projectVideos = [] 
+      projectVideos = [],
+      processChunks = false
     } = await req.json();
 
-    console.log(`Processing request: projectId=${projectId}, useSpeakerDetection=${useSpeakerDetection}, isTranscriptOnly=${isTranscriptOnly}`);
+    console.log(`Processing request: projectId=${projectId}, useSpeakerDetection=${useSpeakerDetection}, isTranscriptOnly=${isTranscriptOnly}, processChunks=${processChunks}`);
     console.log(`Has audioData: ${Boolean(audioData)}, audioData length: ${audioData ? audioData.length : 0}`);
     console.log(`Project videos provided: ${projectVideos.length}`);
 
@@ -129,28 +130,76 @@ serve(async (req) => {
         console.log(`Processing video ${i + 1}/${videosToProcess.length}: ${video.source_file_path}`);
         
         try {
-          // Download the video file from storage
-          console.log("Downloading video file from storage:", video.source_file_path);
-          const { data: videoData, error: fileError } = await supabase
-            .storage
-            .from('video_uploads')
-            .download(video.source_file_path);
+          // Check if the video is chunked
+          const isChunkedVideo = video.video_metadata?.chunked_video_metadata?.isChunked === true;
           
-          if (fileError || !videoData) {
-            console.error("Failed to download video file:", fileError);
-            continue; // Skip this video but continue with others
-          }
-          
-          console.log("Video file downloaded successfully");
-          
-          // Process this video file
-          const videoTitle = video.title || `Video ${i + 1}`;
-          const videoTranscript = await transcribeVideoFile(videoData, useSpeakerDetection);
-          
-          if (videoTranscript) {
-            // Add a header with the video title - use ## for consistency
-            const videoHeader = `\n\n## ${videoTitle}\n\n`;
-            transcripts.push(videoHeader + videoTranscript);
+          if (isChunkedVideo && processChunks) {
+            console.log("Processing chunked video");
+            const chunks = video.video_metadata.chunked_video_metadata.chunks;
+            const chunksCount = chunks.length;
+            console.log(`This video has ${chunksCount} chunks to process`);
+            
+            // Process each chunk separately
+            const chunkTranscripts = [];
+            
+            for (let j = 0; j < chunks.length; j++) {
+              const chunk = chunks[j];
+              console.log(`Processing chunk ${j + 1}/${chunksCount}: ${chunk.chunkPath}`);
+              
+              // Download the chunk file from storage
+              const { data: chunkData, error: chunkError } = await supabase
+                .storage
+                .from('video_uploads')
+                .download(chunk.chunkPath);
+                
+              if (chunkError || !chunkData) {
+                console.error(`Failed to download chunk ${j + 1}:`, chunkError);
+                continue; // Skip this chunk but continue with others
+              }
+              
+              // Process this chunk
+              const chunkTitle = `${video.title || "Video"} (Part ${j + 1})`;
+              const chunkTranscript = await transcribeVideoFile(chunkData, useSpeakerDetection);
+              
+              if (chunkTranscript) {
+                // Add to the chunk transcripts with timestamp information
+                const formattedStartTime = formatTimestamp(chunk.startTime);
+                const chunkHeader = `\n\n## ${chunkTitle} [${formattedStartTime}]\n\n`;
+                chunkTranscripts.push(chunkHeader + chunkTranscript);
+              }
+            }
+            
+            // Combine all chunks of this video
+            if (chunkTranscripts.length > 0) {
+              const videoTitle = video.title || `Video ${i + 1}`;
+              const videoHeader = `\n\n# ${videoTitle}\n\n`;
+              transcripts.push(videoHeader + chunkTranscripts.join("\n\n"));
+            }
+          } else {
+            // Process as a regular video (non-chunked)
+            // Download the video file from storage
+            console.log("Downloading video file from storage:", video.source_file_path);
+            const { data: videoData, error: fileError } = await supabase
+              .storage
+              .from('video_uploads')
+              .download(video.source_file_path);
+            
+            if (fileError || !videoData) {
+              console.error("Failed to download video file:", fileError);
+              continue; // Skip this video but continue with others
+            }
+            
+            console.log("Video file downloaded successfully");
+            
+            // Process this video file
+            const videoTitle = video.title || `Video ${i + 1}`;
+            const videoTranscript = await transcribeVideoFile(videoData, useSpeakerDetection);
+            
+            if (videoTranscript) {
+              // Add a header with the video title - use ## for consistency
+              const videoHeader = `\n\n## ${videoTitle}\n\n`;
+              transcripts.push(videoHeader + videoTranscript);
+            }
           }
         } catch (error) {
           console.error(`Error processing video ${i + 1}:`, error);
@@ -169,7 +218,7 @@ serve(async (req) => {
         );
       }
       
-      console.log(`Generated combined transcript with ${combinedTranscript.length} chars from ${transcripts.length} videos`);
+      console.log(`Generated combined transcript with ${combinedTranscript.length} chars from ${transcripts.length} videos or chunks`);
       console.log("First 200 chars of transcript:", combinedTranscript.substring(0, 200));
     }
 
@@ -529,4 +578,13 @@ function processSpeakerSegments(speaker, segments) {
   });
   
   return text;
+}
+
+/**
+ * Format a timestamp from seconds to MM:SS format
+ */
+function formatTimestamp(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
