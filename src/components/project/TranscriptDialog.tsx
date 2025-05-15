@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { fetchProjectVideos, ProjectVideo } from "@/services/projectVideoService";
+import { transcribeVideo, updateProject } from "@/services/uploadService";
 
 interface TranscriptDialogProps {
   project: Project | null;
@@ -33,6 +34,7 @@ export const TranscriptDialog = ({
 }: TranscriptDialogProps) => {
   const [isTranscriptDialogOpen, setIsTranscriptDialogOpen] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isReTranscribing, setIsReTranscribing] = useState<boolean>(false);
   const [editedTranscript, setEditedTranscript] = useState<string>("");
   const [originalTranscript, setOriginalTranscript] = useState<string>("");
   const [previewMode, setPreviewMode] = useState<boolean>(true);
@@ -166,6 +168,44 @@ export const TranscriptDialog = ({
     toast.success("Transcript formatted");
   };
 
+  // New function to handle re-transcription
+  const handleReTranscribe = async () => {
+    if (!project?.id) return;
+    
+    try {
+      setIsReTranscribing(true);
+      const toastId = "retranscribe";
+      toast.loading("Re-transcribing video...", { id: toastId });
+      
+      // Fetch project videos to ensure we have all videos
+      const projectVideos = await fetchProjectVideos(project.id);
+      
+      console.log(`Re-transcribing project ${project.id} with ${projectVideos.length} videos`);
+      
+      // Call the transcribe video service
+      const result = await transcribeVideo(project.id, projectVideos);
+      
+      if (result.success && result.transcript) {
+        // Update the local state
+        setEditedTranscript(result.transcript);
+        setTranscript(result.transcript);
+        
+        // Reload all transcripts to get the updated combined version
+        await loadAllProjectTranscripts();
+        
+        toast.success("Video successfully re-transcribed!", { id: toastId });
+      } else {
+        console.error("Transcription failed:", result.error);
+        toast.error(`Failed to re-transcribe video: ${result.error || "Unknown error"}`, { id: toastId });
+      }
+    } catch (error) {
+      console.error("Error re-transcribing video:", error);
+      toast.error("Failed to re-transcribe video");
+    } finally {
+      setIsReTranscribing(false);
+    }
+  };
+
   // Content for the component when used in tab mode
   const TabContent = () => (
     <>
@@ -290,25 +330,47 @@ export const TranscriptDialog = ({
         </div>
       )}
       
-      <div className="flex justify-end mt-4 space-x-2">
-        <Button 
-          variant="outline" 
-          onClick={() => isOpen ? null : setOpen(false)}
-          disabled={isSaving}
+      <div className="flex justify-between mt-4">
+        {/* Add Re-Transcribe Button */}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleReTranscribe}
+          disabled={isReTranscribing || !project?.source_file_path}
         >
-          Cancel
-        </Button>
-        <Button 
-          onClick={handleSaveTranscript}
-          disabled={isSaving}
-        >
-          {isSaving ? (
+          {isReTranscribing ? (
             <>
               <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-              Saving...
+              Re-transcribing...
             </>
-          ) : "Save Transcript"}
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Re-Transcribe Video
+            </>
+          )}
         </Button>
+        
+        <div className="flex space-x-2">
+          <Button 
+            variant="outline" 
+            onClick={() => isOpen ? null : setOpen(false)}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSaveTranscript}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                Saving...
+              </>
+            ) : "Save Transcript"}
+          </Button>
+        </div>
       </div>
     </>
   );
