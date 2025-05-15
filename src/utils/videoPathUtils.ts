@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -29,7 +30,7 @@ export const parseStoragePath = (fullPath: string | null): { bucketName: string,
     };
   }
   
-  // Handle 'chunks/' paths explicitly
+  // Handle 'chunks/' paths explicitly - this is important for chunked videos
   if (cleanPath.startsWith('chunks/')) {
     return {
       bucketName: 'chunks',

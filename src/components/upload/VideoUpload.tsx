@@ -13,10 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { videoNeedsChunking, MAX_CHUNK_SIZE_MB } from "@/services/videoChunkingService";
 import { formatFileSize } from "@/utils/formatUtils";
+import { processVideoForChunking } from "@/services/clientVideoChunkingService";
 
 export const VideoUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [progressMessage, setProgressMessage] = useState<string>("Preparing...");
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>("");
@@ -79,40 +81,52 @@ export const VideoUpload = () => {
     // Start uploading
     setIsUploading(true);
     setUploadProgress(0);
-    
-    // Simulate progress while actual upload happens
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        const newProgress = prev + 5;
-        if (newProgress >= 90) {
-          clearInterval(interval);
-          return 90;
-        }
-        return newProgress;
-      });
-    }, 300);
+    setProgressMessage("Preparing to upload...");
     
     try {
-      console.log("[DEBUG] Creating project from video file:", videoFile.name);
+      console.log("[DEBUG] Processing video file:", videoFile.name);
       console.log(`[DEBUG] Video size: ${(videoFile.size / (1024 * 1024)).toFixed(2)} MB`);
       
       // Display slightly different message for large files
       if (isLargeFile) {
-        toast.loading("Uploading and preparing large video for chunked processing...", { id: "video-upload" });
+        toast.loading("Processing and uploading large video file...", { id: "video-upload" });
       } else {
         toast.loading("Uploading video...", { id: "video-upload" });
       }
       
-      // Create project from the single video file
+      // Process the video for chunking if needed
+      const processResult = await processVideoForChunking(videoFile, (progress, message) => {
+        setUploadProgress(Math.floor(progress * 0.5)); // First half of progress is for chunking
+        setProgressMessage(message);
+      });
+      
+      // If chunking was needed and successful, we'll upload the chunks
+      if (processResult.needsChunking && processResult.chunkFiles.length > 0) {
+        console.log(`[DEBUG] Video was chunked into ${processResult.chunkFiles.length} segments`);
+        setProgressMessage(`Uploading ${processResult.chunkFiles.length} video chunks...`);
+      } else {
+        console.log("[DEBUG] Video will be uploaded as a single file");
+        setProgressMessage("Uploading video file...");
+      }
+      
+      // Create project from the processed video files
       const project = await createProjectFromVideo(
-        videoFile, 
+        processResult.originalFile, 
         title, 
         contextPrompt,
-        "" // No transcript
+        "", // No transcript
+        processResult.needsChunking,
+        processResult.chunkFiles,
+        processResult.chunkMetadata,
+        (progress) => {
+          // Second half of progress is for upload
+          setUploadProgress(50 + Math.floor(progress * 0.5));
+          setProgressMessage(`Uploading: ${Math.round(progress)}%`);
+        }
       );
       
-      clearInterval(interval);
       setUploadProgress(100);
+      setProgressMessage("Upload complete!");
       toast.success("Upload complete!", { id: "video-upload" });
       
       setTimeout(() => {
@@ -122,7 +136,7 @@ export const VideoUpload = () => {
           console.log("[DEBUG] Project created successfully:", project.id);
           
           if (isLargeFile) {
-            toast.message("Large video will be automatically processed in chunks for better transcription", { duration: 6000 });
+            toast.message("Large video has been automatically processed in chunks for better transcription", { duration: 6000 });
           }
           
           toast.success("Redirecting to slide editor...");
@@ -130,7 +144,6 @@ export const VideoUpload = () => {
         }
       }, 500);
     } catch (error) {
-      clearInterval(interval);
       setIsUploading(false);
       toast.error("Failed to upload video", { id: "video-upload" });
       console.error("[DEBUG] Upload error:", error);
@@ -180,7 +193,7 @@ export const VideoUpload = () => {
             <AlertTitle>Large Video File</AlertTitle>
             <AlertDescription>
               <p>This video ({formatFileSize(videoFile.size)}) is larger than {MAX_CHUNK_SIZE_MB}MB and will be automatically processed in chunks for optimal transcription.</p>
-              <p className="mt-1">Each chunk will be transcribed separately and the results will be combined. The chunking process happens automatically when you click the "Re-Transcribe Video" button in the project settings.</p>
+              <p className="mt-1">Each chunk will be transcribed separately and the results will be combined.</p>
             </AlertDescription>
           </Alert>
         )}
@@ -197,7 +210,7 @@ export const VideoUpload = () => {
       {isUploading ? (
         <div className="w-full mt-6 space-y-2">
           <div className="flex justify-between text-sm mb-1">
-            <span>Uploading...</span>
+            <span>{progressMessage}</span>
             <span>{uploadProgress}%</span>
           </div>
           <Progress value={uploadProgress} />

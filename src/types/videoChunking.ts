@@ -47,3 +47,20 @@ export type JsonSafeChunkMetadata = {
   title?: string;
   status?: string;
 };
+
+/**
+ * Type for JSON-safe extended video metadata for database storage
+ */
+export type JsonSafeVideoMetadata = {
+  duration?: number;
+  original_file_name?: string;
+  file_type?: string;
+  file_size?: number;
+  chunking?: {
+    isChunked: boolean;
+    totalDuration?: number;
+    chunks: JsonSafeChunkMetadata[];
+    status?: string;
+    processedAt?: string;
+  };
+};
