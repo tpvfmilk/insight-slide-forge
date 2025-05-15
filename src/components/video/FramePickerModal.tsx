@@ -1,6 +1,5 @@
 // At the top of the file, import our new hook and types
 import { useChunkedVideoPlayer } from "@/hooks/useChunkedVideoPlayer";
-import { getChunkTimemarksFromProject } from "@/services/videoChunkingService";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { Project } from "@/services/projectService";
 import { supabase } from "@/integrations/supabase/client";

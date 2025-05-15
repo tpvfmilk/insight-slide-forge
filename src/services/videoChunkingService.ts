@@ -227,3 +227,61 @@ export const createVideoChunks = async (
     return null;
   }
 };
+
+/**
+ * Extract chunk timemarks from a project's video metadata
+ * @param project Project object that may contain chunked video metadata
+ * @returns Array of timemarks (in seconds) where chunks start
+ */
+export const getChunkTimemarksFromProject = (project: any): number[] => {
+  if (!project || !project.video_metadata || !project.video_metadata.chunking) {
+    return [];
+  }
+  
+  const metadata = project.video_metadata;
+  
+  if (!metadata.chunking.isChunked || !metadata.chunking.chunks || metadata.chunking.chunks.length === 0) {
+    return [];
+  }
+  
+  // Extract start times from chunks
+  return metadata.chunking.chunks.map((chunk: ChunkMetadata) => chunk.startTime);
+};
+
+/**
+ * Get all timemarks from a video's chunking info
+ * @param metadata The video metadata containing chunking information
+ * @returns Array of timemarks (in seconds) where chunks start
+ */
+export const getChunkTimemarks = (metadata: ExtendedVideoMetadata | null): number[] => {
+  if (!metadata || !metadata.chunking || !metadata.chunking.isChunked || !metadata.chunking.chunks) {
+    return [];
+  }
+  
+  // Extract start times from chunks
+  return metadata.chunking.chunks.map(chunk => chunk.startTime);
+};
+
+/**
+ * Get chunk info for a specific time in the video
+ * @param time Time in seconds
+ * @param metadata The video metadata containing chunking information
+ * @returns Human-readable description of the chunk or null if not found
+ */
+export const getChunkInfoAtTime = (time: number, metadata: ExtendedVideoMetadata | null): string | null => {
+  if (!metadata || !metadata.chunking || !metadata.chunking.isChunked || !metadata.chunking.chunks) {
+    return null;
+  }
+  
+  // Find the chunk that contains this time
+  const chunk = metadata.chunking.chunks.find(
+    chunk => time >= chunk.startTime && time < (chunk.endTime || Infinity)
+  );
+  
+  if (!chunk) {
+    return null;
+  }
+  
+  return `Chunk ${chunk.index + 1} (${Math.floor(chunk.duration || 0)}s)`;
+};
+

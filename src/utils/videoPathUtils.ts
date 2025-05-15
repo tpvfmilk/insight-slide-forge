@@ -61,3 +61,50 @@ export const parseStoragePath = (
     filePath: cleanPath
   };
 };
+
+/**
+ * Creates a signed URL for a video file stored in Supabase Storage
+ * @param videoPath Path to the video file
+ * @param expirySeconds Number of seconds until the URL expires (default: 3600)
+ * @returns A promise that resolves to the signed URL or null if it fails
+ */
+export const createSignedVideoUrl = async (
+  videoPath: string,
+  expirySeconds: number = 3600
+): Promise<string | null> => {
+  try {
+    if (!videoPath) {
+      console.error("No video path provided for signed URL creation");
+      return null;
+    }
+    
+    // Import supabase client
+    const { supabase } = await import('@/integrations/supabase/client');
+    
+    // Parse the path to get bucket and file path
+    const { bucketName, filePath } = parseStoragePath(videoPath);
+    
+    if (!filePath) {
+      console.error("Invalid file path for signed URL creation");
+      return null;
+    }
+    
+    console.log(`Creating signed URL for ${bucketName}/${filePath} with ${expirySeconds}s expiry`);
+    
+    // Create a signed URL with the specified expiration
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .createSignedUrl(filePath, expirySeconds);
+    
+    if (error) {
+      console.error("Error creating signed URL:", error);
+      return null;
+    }
+    
+    return data.signedUrl;
+  } catch (error) {
+    console.error("Failed to create signed video URL:", error);
+    return null;
+  }
+};
+

@@ -72,6 +72,7 @@ export const createProjectFromVideo = async (
     }
     
     // Create a new project in the database
+    // Need to cast the videoMetadata to any to avoid type issues with Supabase's Json type
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
@@ -81,7 +82,7 @@ export const createProjectFromVideo = async (
         source_file_path: filePath,
         context_prompt: contextPrompt,
         transcript: transcript,
-        video_metadata: videoMetadata,
+        video_metadata: videoMetadata as any,
       })
       .select()
       .single();
