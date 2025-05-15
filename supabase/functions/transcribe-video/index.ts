@@ -47,11 +47,19 @@ serve(async (req) => {
       });
     }
     
+    // Enhanced debug logging for project data
+    const chunking = project.video_metadata?.chunking || null;
     console.log(`Project data: ${JSON.stringify({
       id: project.id,
       source_type: project.source_type,
       source_file_path: project.source_file_path,
-      has_chunking: project.video_metadata?.chunking?.isChunked ? "Yes" : "No"
+      has_chunking: chunking?.isChunked ? "Yes" : "No",
+      chunks_count: chunking?.chunks?.length || 0,
+      chunks_status: chunking?.status || "none",
+      file_size: project.video_metadata?.file_size ? 
+        `${(project.video_metadata?.file_size / (1024 * 1024)).toFixed(2)} MB` : "Unknown",
+      duration: project.video_metadata?.duration ? 
+        `${project.video_metadata?.duration.toFixed(1)}s` : "Unknown"
     })}`);
     
     // Variables to store our videos for transcription
@@ -61,6 +69,12 @@ serve(async (req) => {
     if (projectVideos && projectVideos.length > 0) {
       console.log("Using provided project videos for transcription");
       videosToTranscribe = projectVideos;
+      
+      // Additional logging for chunked videos
+      console.log(`Received ${projectVideos.length} video chunks:`);
+      projectVideos.forEach((video, index) => {
+        console.log(`Chunk ${index+1}: path=${video.source_file_path}, title=${video.title || 'Untitled'}`);
+      });
     }
     // Otherwise use the main project video
     else {
@@ -89,7 +103,8 @@ serve(async (req) => {
       console.log(`Resolved storage path - Bucket: ${parsedPath.bucketName}, File path: ${parsedPath.filePath}`);
       
       // For large videos, check if this is a chunked video
-      const isChunkedVideo = project.video_metadata?.chunking?.isChunked || false;
+      const isChunkedVideo = chunking?.isChunked || false;
+      console.log(`This video ${isChunkedVideo ? 'is' : 'is not'} marked for chunking`);
       
       try {
         console.log(`Attempting to download video file from storage: ${parsedPath.bucketName}/${parsedPath.filePath}`);
@@ -162,6 +177,7 @@ serve(async (req) => {
         }
       } catch (error) {
         console.error(`Error processing video ${i+1}: ${error.message}`);
+        console.error(`Stack trace: ${error.stack}`);
         
         // If this is a chunked video, try to continue with other chunks
         if (isChunkedVideo && videosToTranscribe.length > 1) {
@@ -217,6 +233,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error(`Error in transcribe video function: ${error}`);
+    console.error(`Full stack trace: ${error.stack}`);
     
     return new Response(JSON.stringify({
       error: `Transcription failed: ${error.message}`

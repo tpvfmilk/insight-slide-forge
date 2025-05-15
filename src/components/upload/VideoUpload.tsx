@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { FileVideo, Upload, AlertTriangle, Info } from "lucide-react";
@@ -92,7 +93,8 @@ export const VideoUpload = () => {
     }, 300);
     
     try {
-      console.log("Creating project from video file:", videoFile.name);
+      console.log("[DEBUG] Creating project from video file:", videoFile.name);
+      console.log(`[DEBUG] Video size: ${(videoFile.size / (1024 * 1024)).toFixed(2)} MB`);
       
       // Display slightly different message for large files
       if (isLargeFile) {
@@ -117,10 +119,10 @@ export const VideoUpload = () => {
         setIsUploading(false);
         
         if (project) {
-          console.log("Project created successfully:", project.id);
+          console.log("[DEBUG] Project created successfully:", project.id);
           
           if (isLargeFile) {
-            toast("Large video will be automatically processed in chunks for better transcription", { duration: 6000 });
+            toast.message("Large video will be automatically processed in chunks for better transcription", { duration: 6000 });
           }
           
           toast.success("Redirecting to slide editor...");
@@ -131,7 +133,7 @@ export const VideoUpload = () => {
       clearInterval(interval);
       setIsUploading(false);
       toast.error("Failed to upload video", { id: "video-upload" });
-      console.error("Upload error:", error);
+      console.error("[DEBUG] Upload error:", error);
     }
   };
 
@@ -173,7 +175,7 @@ export const VideoUpload = () => {
         </div>
         
         {isLargeFile && videoFile && (
-          <Alert>
+          <Alert variant="default">
             <Info className="h-4 w-4" />
             <AlertTitle>Large Video File</AlertTitle>
             <AlertDescription>

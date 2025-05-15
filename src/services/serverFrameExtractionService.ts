@@ -23,6 +23,10 @@ export async function serverSideExtractFrames(
   toast.dismiss('server-extract-frames');
   
   try {
+    console.log(`[DEBUG] Server-side frame extraction for project ${projectId}`);
+    console.log(`[DEBUG] Video path: ${videoPath}`);
+    console.log(`[DEBUG] Timestamps to extract: ${timestamps.join(', ')}`);
+
     // Check if this is a chunked video
     const { data: project } = await supabase
       .from('projects')
@@ -30,8 +34,13 @@ export async function serverSideExtractFrames(
       .eq('id', projectId)
       .single();
       
+    console.log(`[DEBUG] Project metadata retrieved:`, project?.video_metadata);
+      
     // Need to cast video_metadata to ExtendedVideoMetadata to access chunking property
     const videoMetadata = project?.video_metadata as ExtendedVideoMetadata | null;
+    
+    console.log(`[DEBUG] Is chunked video: ${videoMetadata?.chunking?.isChunked || false}`);
+    console.log(`[DEBUG] Chunk count: ${videoMetadata?.chunking?.chunks?.length || 0}`);
 
     if (videoMetadata?.chunking?.isChunked) {
       // For chunked videos, we map timestamps to chunk references
@@ -49,6 +58,8 @@ export async function serverSideExtractFrames(
           parseFloat(timestamp) >= chunk.startTime && 
           parseFloat(timestamp) < (chunk.endTime || Infinity)
         );
+        
+        console.log(`[DEBUG] Timestamp ${timestamp} maps to chunk index ${chunkIndex}`);
         
         return {
           id: `chunk-frame-${index}`,
@@ -68,14 +79,14 @@ export async function serverSideExtractFrames(
     }
     
     // For non-chunked videos, show the disabled message
-    toast.error("Server-side frame extraction has been disabled. Please use client-side extraction only.", { id: "server-extract-frames" });
+    toast.warning("Server-side frame extraction has been disabled. Please use client-side extraction only.", { id: "server-extract-frames" });
     
     return {
       success: false,
       error: "Server-side frame extraction has been disabled for regular videos"
     };
   } catch (error) {
-    console.error("Error in server-side frame extraction:", error);
+    console.error("[DEBUG] Error in server-side frame extraction:", error);
     toast.error("Failed to extract frames from the server", { id: "server-extract-frames" });
     
     return {

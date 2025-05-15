@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,8 @@ export const TranscriptDialog = ({
   const [hasMultipleSections, setHasMultipleSections] = useState<boolean>(false);
   const [isLoadingTranscript, setIsLoadingTranscript] = useState<boolean>(false);
   const [combinedTranscript, setCombinedTranscript] = useState<string>("");
+  // Add debug toggle for logging
+  const [debugMode, setDebugMode] = useState<boolean>(false);
 
   // For standalone use
   const open = isOpen !== undefined ? isOpen : isTranscriptDialogOpen;
@@ -166,7 +169,7 @@ export const TranscriptDialog = ({
     toast.success("Transcript formatted");
   };
 
-  // New function to handle re-transcription
+  // Enhanced re-transcription with detailed logging
   const handleReTranscribe = async () => {
     if (!project?.id) return;
     
@@ -175,15 +178,49 @@ export const TranscriptDialog = ({
       const toastId = "retranscribe";
       toast.loading("Re-transcribing video...", { id: toastId });
       
+      // Debug logging - enhanced to track chunking process
+      console.log(`[DEBUG] Re-transcribing project ${project.id}`);
+      console.log(`[DEBUG] Project details:`, {
+        id: project.id,
+        title: project.title,
+        source_type: project.source_type,
+        source_file_path: project.source_file_path,
+        has_video_metadata: !!project.video_metadata,
+      });
+      
+      if (project.video_metadata) {
+        try {
+          console.log(`[DEBUG] Video metadata:`, {
+            duration: project.video_metadata.duration,
+            file_size: project.video_metadata.file_size,
+            isChunked: project.video_metadata.chunking?.isChunked || false,
+            chunkCount: project.video_metadata.chunking?.chunks?.length || 0
+          });
+        } catch (e) {
+          console.log(`[DEBUG] Error parsing video metadata:`, e);
+        }
+      }
+      
       // Fetch project videos to ensure we have all videos
       const projectVideos = await fetchProjectVideos(project.id);
       
-      console.log(`Re-transcribing project ${project.id} with ${projectVideos.length} videos`);
+      console.log(`[DEBUG] Re-transcribing project ${project.id} with ${projectVideos.length} videos`);
+      
+      if (projectVideos && projectVideos.length > 0) {
+        console.log(`[DEBUG] Project videos:`, projectVideos.map(v => ({
+          id: v.id,
+          title: v.title,
+          path: v.source_file_path,
+          hasMetadata: !!v.video_metadata
+        })));
+      }
       
       // Call the transcribe video service
       const result = await transcribeVideo(project.id, projectVideos);
       
       if (result.success && result.transcript) {
+        console.log(`[DEBUG] Transcription succeeded. Transcript length: ${result.transcript.length} chars`);
+        
         // Update the local state
         setEditedTranscript(result.transcript);
         setTranscript(result.transcript);
@@ -193,11 +230,21 @@ export const TranscriptDialog = ({
         
         toast.success("Video successfully re-transcribed!", { id: toastId });
       } else {
-        console.error("Transcription failed:", result.error);
+        console.error(`[DEBUG] Transcription failed:`, result.error);
         toast.error(`Failed to re-transcribe video: ${result.error || "Unknown error"}`, { id: toastId });
+        
+        // Show extended error details
+        if (debugMode) {
+          console.log(`[DEBUG] Extended error details for transcription failure:`, {
+            project_id: project.id,
+            error: result.error,
+            videosCount: projectVideos.length,
+            source_file_exists: !!project.source_file_path
+          });
+        }
       }
     } catch (error) {
-      console.error("Error re-transcribing video:", error);
+      console.error("[DEBUG] Error re-transcribing video:", error);
       toast.error("Failed to re-transcribe video");
     } finally {
       setIsReTranscribing(false);
@@ -236,6 +283,16 @@ export const TranscriptDialog = ({
               </div>
             </>
           )}
+          
+          {/* Add debug mode toggle for advanced users */}
+          <div className="flex items-center space-x-2">
+            <Switch 
+              id="debug-mode" 
+              checked={debugMode} 
+              onCheckedChange={setDebugMode}
+            />
+            <Label htmlFor="debug-mode" className="text-sm text-muted-foreground">Debug</Label>
+          </div>
         </div>
       </div>
 
@@ -329,6 +386,14 @@ export const TranscriptDialog = ({
       )}
       
       <div className="flex justify-between mt-4">
+        {debugMode && (
+          <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-muted-foreground max-w-[350px]">
+            <p>Debug Info: {project?.video_metadata?.chunking?.isChunked ? "Video is chunked" : "Not chunked"}</p>
+            <p>File size: {project?.video_metadata?.file_size ? `${(project?.video_metadata?.file_size / (1024 * 1024)).toFixed(2)} MB` : "Unknown"}</p>
+            <p>Duration: {project?.video_metadata?.duration ? `${project?.video_metadata?.duration.toFixed(1)}s` : "Unknown"}</p>
+          </div>
+        )}
+        
         {/* Add Re-Transcribe Button */}
         <Button
           variant="secondary"

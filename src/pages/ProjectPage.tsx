@@ -12,6 +12,9 @@ import { useProjectModals } from "@/hooks/useProjectModals";
 import { hasValidSlides } from "@/services/slideGenerationService";
 import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { ExtendedVideoMetadata } from "@/types/videoChunking";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
+import { forceUpdateChunkingMetadata } from "@/services/videoChunkingService";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -47,7 +50,7 @@ const ProjectPage = () => {
       toast.error("No video available");
       return;
     }
-    console.log("Opening frame picker modal with", extractedFrames?.length || 0, "extracted frames");
+    console.log("[DEBUG] Opening frame picker modal with", extractedFrames?.length || 0, "extracted frames");
     modals.openFramePickerModal();
     
     // Force reload project to ensure we have the latest frames
@@ -56,7 +59,7 @@ const ProjectPage = () => {
   
   // Handler for when frames are selected in the frame picker
   const handleFrameSelection = async (selectedFrames) => {
-    console.log(`Frame selection complete with ${selectedFrames.length} frames`);
+    console.log(`[DEBUG] Frame selection complete with ${selectedFrames.length} frames`);
     const toastId = "frame-processing";
     
     try {
@@ -81,7 +84,7 @@ const ProjectPage = () => {
         toast.error("Failed to apply frames to slide", { id: toastId });
       }
     } catch (error) {
-      console.error("Error processing frames:", error);
+      console.error("[DEBUG] Error processing frames:", error);
       toast.error("An error occurred while processing frames", { id: toastId });
     }
   };
@@ -92,6 +95,43 @@ const ProjectPage = () => {
     extendedMetadata?.chunking?.isChunked ||
     (project?.video_metadata as ExtendedVideoMetadata | null)?.chunking?.isChunked
   );
+  
+  // Check if the video is large and might need chunking
+  const isLargeVideo = Boolean(
+    extendedMetadata?.file_size && (extendedMetadata.file_size / (1024 * 1024)) > 24
+  );
+  
+  // Check if we have a "too large" transcript error message
+  const hasTooLargeTranscriptError = transcript?.includes("too large for direct transcription");
+  
+  // Function to handle force-chunking a video
+  const handleForceChunking = async () => {
+    if (!projectId) return;
+    
+    const toastId = "force-chunking";
+    toast.loading("Preparing video for chunked processing...", { id: toastId });
+    
+    try {
+      const result = await forceUpdateChunkingMetadata(projectId);
+      
+      if (result.success) {
+        toast.success("Video prepared for chunked processing", { id: toastId });
+        
+        // Re-load project data to get updated metadata
+        await loadProject();
+        
+        // Show a guidance message about next steps
+        toast.message("You can now use the Re-Transcribe button to process this video", {
+          duration: 6000
+        });
+      } else {
+        toast.error(`Failed to prepare video: ${result.error}`, { id: toastId });
+      }
+    } catch (error) {
+      toast.error("An error occurred while preparing the video", { id: toastId });
+      console.error("[DEBUG] Error in handleForceChunking:", error);
+    }
+  };
   
   return (
     <InsightLayout>
@@ -144,6 +184,24 @@ const ProjectPage = () => {
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-4"></div>
                 <p className="text-sm text-muted-foreground">Loading project...</p>
               </div>
+            </div>
+          ) : hasTooLargeTranscriptError && !hasChunkedVideo && isLargeVideo ? (
+            <div className="flex flex-col items-center justify-center p-8">
+              <Alert variant="destructive" className="max-w-xl">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Video is too large for direct transcription</AlertTitle>
+                <AlertDescription className="space-y-2 mt-2">
+                  <p>This video file is too large for direct transcription and needs to be processed in chunks.</p>
+                  <div className="mt-4">
+                    <button
+                      onClick={handleForceChunking}
+                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                    >
+                      Prepare for Chunked Processing
+                    </button>
+                  </div>
+                </AlertDescription>
+              </Alert>
             </div>
           ) : isTranscriptOnlyProject && !hasValidSlides(project) ? (
             <TranscriptView 
