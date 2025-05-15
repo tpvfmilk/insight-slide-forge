@@ -16,7 +16,7 @@ export interface ExtendedVideoMetadata {
 export interface ChunkingInfo {
   isChunked: boolean;
   totalDuration?: number;
-  chunks: ChunkMetadata[];
+  chunks: ChunkMetadata[] | JsonSafeChunkMetadata[];
   status?: "prepared" | "processing" | "complete" | "error"; // Status of the chunking process
   processedAt?: string; // Timestamp when chunking was completed
 }
