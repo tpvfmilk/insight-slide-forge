@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
+import { parseStoragePath } from "@/utils/videoPathUtils";
 
 // Update this function to remove the slides per minute parameter
 export const createProjectFromVideo = async (
@@ -132,18 +133,20 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
 
     if (response.error) {
       console.error("Error from transcribe-video edge function:", response.error);
-      throw new Error(response.error.message || "Failed to transcribe video");
+      toast.error(`Failed to transcribe video: ${response.error.message || "Error calling transcription service"}`, { id: "transcribe-video" });
+      return { success: false };
     }
 
     const { transcript } = response.data || {};
 
     if (!transcript) {
-      throw new Error("No transcript was generated");
+      toast.error("No transcript was generated", { id: "transcribe-video" });
+      return { success: false };
     }
 
     toast.success("Video transcribed successfully!", { id: "transcribe-video" });
     return { success: true, transcript: transcript };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error transcribing video:", error);
     toast.error(`Failed to transcribe video: ${error.message}`, { id: "transcribe-video" });
     return { success: false };

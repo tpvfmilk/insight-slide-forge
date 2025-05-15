@@ -10,6 +10,14 @@ export function parseStoragePath(fullPath: string): { bucketName: string; filePa
     return { bucketName: 'video_uploads', filePath: fullPath };
   }
 
+  // Check if path starts with 'video_uploads/' prefix
+  if (fullPath.startsWith('video_uploads/')) {
+    return { 
+      bucketName: 'video_uploads', 
+      filePath: fullPath.replace('video_uploads/', '')
+    };
+  }
+
   // Check if path has a bucket prefix (bucket/path format)
   if (fullPath.includes('/')) {
     const parts = fullPath.split('/');
@@ -45,6 +53,8 @@ export async function createSignedVideoUrl(
   try {
     // Parse the path to get bucket and file path
     const { bucketName, filePath } = parseStoragePath(videoPath);
+    
+    console.log(`Creating signed URL for ${bucketName}/${filePath}`);
     
     // Create a signed URL with an expiration
     const { data, error } = await supabase.storage

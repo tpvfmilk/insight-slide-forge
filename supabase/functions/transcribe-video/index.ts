@@ -664,6 +664,14 @@ function parseStoragePath(fullPath: string): { bucketName: string; filePath: str
     return { bucketName: 'video_uploads', filePath: fullPath };
   }
 
+  // Check if path starts with 'video_uploads/' prefix
+  if (fullPath.startsWith('video_uploads/')) {
+    return { 
+      bucketName: 'video_uploads', 
+      filePath: fullPath.replace('video_uploads/', '')
+    };
+  }
+
   // Check if path has a bucket prefix (bucket/path format)
   if (fullPath.includes('/')) {
     const parts = fullPath.split('/');
