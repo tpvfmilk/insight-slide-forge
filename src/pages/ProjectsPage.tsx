@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { InsightLayout } from "@/components/layout/InsightLayout";
@@ -11,7 +12,7 @@ import { FolderList } from "@/components/folders/FolderList";
 import { FolderDialog } from "@/components/folders/FolderDialog";
 import { Folder as FolderIcon, AlertCircle } from "lucide-react";
 import { Folder as FolderType, createFolder, deleteFolder, fetchFolders } from "@/services/folderService";
-import { syncStorageUsage } from "@/services/storageService";
+import { syncStorageUsage } from "@/services/storageUsageService";
 import { EmptyProjectsMessage } from "@/components/projects/EmptyProjectsMessage";
 
 const ProjectsPage = () => {
