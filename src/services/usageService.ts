@@ -20,7 +20,8 @@ export interface StorageInfo {
   tierName: string;
   percentageUsed: number;
   tierPrice: number;
-  breakdown?: StorageBreakdown;
+  storage_breakdown?: any; // Include the storage_breakdown field from the database
+  breakdown?: StorageBreakdown; // Processed breakdown for frontend use
 }
 
 export interface StorageBreakdown {
@@ -140,21 +141,11 @@ export const fetchStorageInfo = async (): Promise<StorageInfo | null> => {
   // The data comes as an array with a single row, so we need to extract the first element
   const storageData = Array.isArray(data) ? data[0] : data;
 
-  // Get storage breakdown data
+  // Process the storage breakdown data if available
   let breakdown: StorageBreakdown | undefined;
   
-  try {
-    const { data: userData } = await supabase
-      .from('user_storage')
-      .select('storage_breakdown')
-      .maybeSingle();
-    
-    if (userData && userData.storage_breakdown) {
-      breakdown = userData.storage_breakdown as StorageBreakdown;
-    }
-  } catch (breakdownError) {
-    console.warn('Error fetching storage breakdown:', breakdownError);
-    // Continue without breakdown data
+  if (storageData.storage_breakdown) {
+    breakdown = storageData.storage_breakdown as StorageBreakdown;
   }
 
   return {

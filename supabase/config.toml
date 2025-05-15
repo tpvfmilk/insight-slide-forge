@@ -8,7 +8,7 @@ project_id = "bjzvlatqgrqaefnwihjj"
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. public and storage are always included.
-schemas = ["public", "storage", "graphql_public"]
+schemas = ["public", "storage"]
 # Extra schemas to add to the search_path of every request. public is always included.
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
@@ -59,9 +59,9 @@ double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = false
 
-# Use an external OAuth provider. The full list of providers are: `apple`, `azure`, `bitbucket`,
-# `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin`, `notion`, `twitch`,
-# `twitter`, `slack`, `spotify`, `workos`, `zoom`.
+# Use an external OAuth provider. The full list of providers are: "apple", "azure", "bitbucket",
+# "discord", "facebook", "github", "gitlab", "google", "keycloak", "linkedin", "notion", "twitch",
+# "twitter", "slack", "spotify", "workos", "zoom".
 [auth.external.apple]
 enabled = false
 client_id = ""
@@ -77,17 +77,12 @@ enabled = false
 port = 54327
 vector_port = 54328
 # Setup BigQuery project to enable log viewer on local development stack.
-# See: https://supabase.com/docs/guides/getting-started/local-development#enabling-local-logging
+# See: https://logflare.app/guides/bigquery-setup
 gcp_project_id = ""
 gcp_project_number = ""
 gcp_jwt_path = "supabase/gcloud.json"
 
-[experimental]
-[experimental.functions]
-port = 54329
-
+# End of file. This comment is necessary to add an edge function with presets
 [functions.get-storage-breakdown]
 verify_jwt = true
 
-[functions.sync-storage-usage]
-verify_jwt = true

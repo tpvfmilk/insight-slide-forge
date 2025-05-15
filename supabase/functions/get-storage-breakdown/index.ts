@@ -1,4 +1,5 @@
 
+// Edge function to calculate storage breakdown by file type
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -7,148 +8,120 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface StorageBreakdown {
+  videos: number;
+  slides: number;
+  frames: number;
+  other: number;
+  total: number;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
-  
+
   try {
-    // Get the user ID from the request body or auth header
-    let userId;
-    try {
-      const body = await req.json();
-      userId = body.userId;
-    } catch (error) {
-      // If no body or invalid JSON, try to get the user from auth
-      const authHeader = req.headers.get('Authorization');
-      if (!authHeader) {
-        return new Response(
-          JSON.stringify({ error: 'No authorization header and no userId in body' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      const supabaseClient = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
-      
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-      
-      if (authError || !user) {
-        return new Response(
-          JSON.stringify({ error: 'Unauthorized', details: authError }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      userId = user.id;
-    }
-    
-    if (!userId) {
+    // Extract auth token from request
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'No user ID provided' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'No authorization header provided' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    console.log(`Calculating storage breakdown for user ${userId}`);
-    
-    // Create a Supabase client with the admin key
+
+    // Initialize Supabase client with admin role
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-    
-    // Storage breakdown categories
-    const breakdown = {
+
+    // Initialize Supabase client with user token
+    const token = authHeader.replace('Bearer ', '');
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+
+    // Get the user ID from the token
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid token', details: authError }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = user.id;
+
+    // Initialize storage breakdown
+    const breakdown: StorageBreakdown = {
       videos: 0,
       slides: 0,
       frames: 0,
       other: 0,
       total: 0
     };
+
+    // Get all objects from storage for this user
+    const { data: storageObjects, error: storageError } = await supabaseAdmin
+      .from('storage.objects')
+      .select('name, metadata')
+      .eq('owner', userId);
     
-    // Storage buckets to check
-    const buckets = ['video_uploads', 'slide_stills'];
-    
-    for (const bucket of buckets) {
-      // List files in user's directory
-      const { data: files, error: listError } = await supabaseAdmin
-        .storage
-        .from(bucket)
-        .list(undefined, {
-          limit: 10000, // Get a large number of files
-        });
-      
-      if (listError) {
-        console.error(`Error listing files in bucket ${bucket}:`, listError);
-        continue;
-      }
-      
-      if (!files || files.length === 0) {
-        console.log(`No files found in bucket ${bucket}`);
-        continue;
-      }
-      
-      // Filter files belonging to this user
-      const userFiles = files.filter(file => 
-        file.name.startsWith(`${userId}/`) || 
-        file.name.includes(`project_`)
-      );
-      
-      for (const file of userFiles) {
-        if (file.metadata && file.metadata.size) {
-          const size = parseInt(file.metadata.size);
-          breakdown.total += size;
-          
-          // Categorize by file type
-          if (bucket === 'video_uploads' || file.name.toLowerCase().match(/\.(mp4|mov|avi|wmv|flv|webm)$/)) {
-            breakdown.videos += size;
-          } else if (file.name.toLowerCase().includes('frame') || file.name.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp)$/)) {
-            breakdown.frames += size;
-          } else if (file.name.toLowerCase().match(/\.(pdf|ppt|pptx|doc|docx|txt|md)$/)) {
-            breakdown.slides += size;
-          } else {
-            breakdown.other += size;
-          }
-        }
-      }
+    if (storageError) {
+      throw new Error(`Error fetching storage objects: ${storageError.message}`);
     }
-    
-    // Query for slide content data size (from project slides)
-    try {
-      const { data: projects, error: projectsError } = await supabaseAdmin
-        .from('projects')
-        .select('id, slides')
-        .eq('user_id', userId);
+
+    // Process each object to categorize by file type
+    if (storageObjects) {
+      for (const obj of storageObjects) {
+        const size = obj.metadata?.size ? parseInt(obj.metadata.size) : 0;
         
-      if (projectsError) {
-        console.error('Error fetching projects:', projectsError);
-      } else if (projects && projects.length > 0) {
-        for (const project of projects) {
-          if (project.slides) {
-            // Estimate size of slides JSON data
-            const slidesString = JSON.stringify(project.slides);
-            const slideSize = new TextEncoder().encode(slidesString).length;
-            breakdown.slides += slideSize;
-            breakdown.total += slideSize;
-          }
+        // Skip objects with no size
+        if (!size) continue;
+
+        // Add to total size
+        breakdown.total += size;
+        
+        // Categorize by file type based on path or extension
+        const name = obj.name.toLowerCase();
+        
+        if (name.includes('/videos/') || name.endsWith('.mp4') || name.endsWith('.webm') || name.endsWith('.mov')) {
+          breakdown.videos += size;
+        } else if (name.includes('/slides/') || name.endsWith('.pdf') || name.endsWith('.pptx')) {
+          breakdown.slides += size;
+        } else if (name.includes('/frames/') || name.includes('_frame_') || name.endsWith('.jpg') || name.endsWith('.png')) {
+          breakdown.frames += size;
+        } else {
+          breakdown.other += size;
         }
       }
-    } catch (error) {
-      console.error('Error calculating slides size:', error);
     }
-    
-    console.log(`Storage breakdown for user ${userId}:`, breakdown);
-    
+
+    // Update the user_storage record with the calculated breakdown
+    try {
+      await supabaseAdmin.rpc('update_user_storage_with_breakdown', {
+        user_id_param: userId,
+        new_storage_value: breakdown.total,
+        videos_size: breakdown.videos,
+        slides_size: breakdown.slides,
+        frames_size: breakdown.frames,
+        other_size: breakdown.other
+      });
+    } catch (updateError) {
+      console.error('Failed to update storage breakdown:', updateError);
+      // Continue even if update fails - we can still return the calculated breakdown
+    }
+
     return new Response(
-      JSON.stringify({
-        success: true,
+      JSON.stringify({ 
+        success: true, 
         userId: userId,
-        breakdown: breakdown
+        breakdown: breakdown 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
