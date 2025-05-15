@@ -25,6 +25,7 @@ export const SlideEditorStyles: React.FC = () => {
           flex-grow: 1;
           width: 100%;
           overscroll-behavior-x: contain;
+          padding-bottom: 0.25rem;
         }
         
         /* Fix frame scrolling */
@@ -36,9 +37,11 @@ export const SlideEditorStyles: React.FC = () => {
 
         /* Make currently selected slide more prominent */
         [data-slide-index].border-primary {
-          box-shadow: 0 0 0 2px var(--primary);
+          box-shadow: 0 0 0 2px hsl(var(--primary));
           position: relative;
           z-index: 10;
+          transform: scale(1.02);
+          transition: transform 0.2s ease;
         }
         
         /* Ensure modal content can scroll properly */
@@ -47,19 +50,6 @@ export const SlideEditorStyles: React.FC = () => {
           flex-direction: column;
           height: 100%;
           overflow: hidden;
-        }
-        
-        /* Force library containers to scroll */
-        .frame-library-scrollable {
-          overflow-y: auto !important;
-          flex-grow: 1;
-        }
-
-        /* Prevent horizontal scroll on main containers */
-        .layout-container, 
-        .editor-container {
-          overflow-x: hidden !important;
-          max-width: 100vw;
         }
       `}
     </style>

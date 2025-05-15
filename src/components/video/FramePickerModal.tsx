@@ -129,19 +129,20 @@ export function FramePickerModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Frame Picker</DialogTitle>
         </DialogHeader>
         
-        <div className="flex flex-col md:flex-row gap-4 flex-1 overflow-hidden">
-          <div className="flex-1">
+        <div className="flex flex-col gap-4 flex-1 overflow-hidden">
+          {/* Video Player - Now takes full width */}
+          <div className="w-full">
             <VideoPlayer
               videoPath={videoPath}
               projectId={projectId}
               width={640}
               height={360}
-              className="mb-4"
+              className="mx-auto mb-4"
               onTimeUpdate={handleTimeUpdate}
               capturedTimemarks={capturedTimemarks}
               isCapturingFrame={isCapturing}
@@ -161,11 +162,12 @@ export function FramePickerModal({
             </div>
           </div>
           
-          <div className="w-full md:w-64 flex flex-col border-t md:border-t-0 md:border-l p-2">
+          {/* Frame Library - Now below video, with more columns */}
+          <div className="border-t pt-4">
             <h4 className="text-sm font-medium mb-2">Selected Frames ({capturedFrames.length})</h4>
             
-            <ScrollArea className="flex-1 max-h-[400px]">
-              <div className="grid grid-cols-2 gap-2">
+            <ScrollArea className="h-[180px]">
+              <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
                 {capturedFrames.map((frame, index) => (
                   <div key={`captured-${index}`} className="relative group">
                     <img
@@ -184,27 +186,25 @@ export function FramePickerModal({
                     </button>
                   </div>
                 ))}
+                
+                {capturedFrames.length === 0 && (
+                  <div className="col-span-full text-center text-muted-foreground text-sm p-4">
+                    No frames captured yet. Use the video player to navigate to the desired position and click "Capture Current Frame".
+                  </div>
+                )}
               </div>
-              
-              {capturedFrames.length === 0 && (
-                <div className="text-center text-muted-foreground text-sm p-4">
-                  No frames captured yet. Use the video player to navigate to the desired position and click "Capture Current Frame".
-                </div>
-              )}
             </ScrollArea>
             
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1"
                 onClick={onClose}
               >
                 Cancel
               </Button>
               <Button
                 size="sm"
-                className="flex-1"
                 onClick={handleSaveFrames}
                 disabled={capturedFrames.length === 0}
               >

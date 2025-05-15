@@ -60,18 +60,18 @@ export const TranscriptDialog = ({
   };
   
   return (
-    <div className="flex flex-col h-full max-h-[calc(90vh-10rem)]">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+    <div className="flex flex-col h-[600px] max-h-[80vh]">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full">
         <TabsList className="grid grid-cols-2 mb-4">
           <TabsTrigger value="edit">Edit</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="edit" className="flex-1">
+        <TabsContent value="edit" className="flex-1 flex flex-col h-full">
           <Textarea
             value={localTranscript}
             onChange={handleTranscriptChange}
-            className="min-h-[400px] max-h-[70vh] h-full"
+            className="flex-1 min-h-[400px]"
             placeholder="Enter or edit the transcript here..."
           />
           <div className="flex justify-end mt-4">
@@ -85,8 +85,8 @@ export const TranscriptDialog = ({
           </div>
         </TabsContent>
         
-        <TabsContent value="preview" className="flex-1">
-          <ScrollArea className="h-[400px] max-h-[70vh] border rounded-md p-4 whitespace-pre-wrap">
+        <TabsContent value="preview" className="h-full flex flex-col">
+          <ScrollArea className="flex-1 border rounded-md p-4 whitespace-pre-wrap">
             {localTranscript || "No transcript available."}
           </ScrollArea>
         </TabsContent>

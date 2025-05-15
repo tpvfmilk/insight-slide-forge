@@ -77,11 +77,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   
   return (
     <div 
-      className={`flex flex-col overflow-hidden rounded-lg border bg-background ${className}`}
+      className={`flex flex-col overflow-hidden rounded-lg ${className}`}
       style={{ width: width }}
     >
       <div 
-        className="relative bg-black"
+        className="relative bg-black rounded-t-lg"
         style={{ height: height }}
       >
         {/* Video loading skeleton */}
@@ -122,7 +122,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       </div>
       
       {/* Video controls */}
-      <div className="flex flex-col p-2">
+      <div className="flex flex-col bg-muted/20 p-2 rounded-b-lg">
         {/* Time slider */}
         <div className="relative mb-2">
           <Slider
@@ -141,7 +141,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               if (isChunked) {
                 chunkedPlayer.handleSeekCommit(values[0]);
               } else {
-                // Fix: Pass the first item in the array to handleSeekEnd
                 standardPlayer.handleSeekEnd();
               }
             }}
@@ -181,6 +180,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 }
               }}
               disabled={player.isLoadingVideo || !!player.videoError}
+              className="h-8 w-8"
             >
               {player.isPlaying ? (
                 <PauseCircle className="h-5 w-5" />
@@ -200,6 +200,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 }
               }}
               disabled={player.isLoadingVideo || !!player.videoError}
+              className="h-8 w-8"
             >
               <SkipBack className="h-4 w-4" />
             </Button>
@@ -215,19 +216,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 }
               }}
               disabled={player.isLoadingVideo || !!player.videoError}
+              className="h-8 w-8"
             >
               <SkipForward className="h-4 w-4" />
             </Button>
             
             {onCaptureFrame && (
               <Button
-                variant="ghost"
-                size="icon"
+                variant="outline"
+                size="sm"
                 onClick={onCaptureFrame}
                 disabled={player.isLoadingVideo || !!player.videoError || isCapturingFrame}
-                className="ml-2"
+                className="ml-2 h-8"
               >
-                <Camera className="h-4 w-4" />
+                <Camera className="h-4 w-4 mr-1" />
+                Capture
               </Button>
             )}
           </div>
