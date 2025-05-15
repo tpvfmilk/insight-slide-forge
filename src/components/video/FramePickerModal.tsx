@@ -1,4 +1,3 @@
-
 // At the top of the file, import our new hook and types
 import { useChunkedVideoPlayer } from "@/hooks/useChunkedVideoPlayer";
 import { getChunkTimemarksFromProject } from "@/services/videoChunkingService";
@@ -31,27 +30,27 @@ import { RefreshCw, X, Trash2, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-interface FramePickerModalProps {
+export interface FramePickerModalProps {
   open: boolean;
   onClose: () => void;
-  videoPath: string;
+  videoPath?: string;
   projectId: string;
-  onFramesSelected: (frames: ExtractedFrame[]) => void;
-  allExtractedFrames: ExtractedFrame[];
-  existingFrames: ExtractedFrame[];
-  hasChunkedVideo?: boolean; // Added this prop
+  onFramesSelected: (selectedFrames: ExtractedFrame[]) => void;
+  allExtractedFrames?: ExtractedFrame[];
+  existingFrames?: ExtractedFrame[];
+  hasChunkedVideo?: boolean;
 }
 
-export const FramePickerModal: React.FC<FramePickerModalProps> = ({
+export function FramePickerModal({
   open,
   onClose,
   videoPath,
   projectId,
   onFramesSelected,
-  allExtractedFrames,
-  existingFrames,
-  hasChunkedVideo = false // Added with default value
-}) => {
+  allExtractedFrames = [],
+  existingFrames = [],
+  hasChunkedVideo = false
+}: FramePickerModalProps) {
   // Get metadata for the project to extract chunk information
   const [project, setProject] = useState<Project | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -382,4 +381,4 @@ export const FramePickerModal: React.FC<FramePickerModalProps> = ({
       </AlertDialog>
     </Dialog>
   );
-};
+}

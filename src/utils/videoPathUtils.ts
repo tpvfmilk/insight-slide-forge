@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
  */
 export function parseStoragePath(fullPath: string): { bucketName: string; filePath: string } {
   if (!fullPath) {
-    return { bucketName: 'video_uploads', filePath: fullPath };
+    return { bucketName: 'video_uploads', filePath: '' };
   }
 
   // Remove any leading slashes

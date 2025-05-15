@@ -111,13 +111,13 @@ export const createProjectFromTranscript = async (
   }
 };
 
-export const transcribeVideo = async (projectId: string, projectVideos: any[] = []): Promise<{ success: boolean; transcript?: string }> => {
+export const transcribeVideo = async (projectId: string, projectVideos: any[] = []): Promise<{ success: boolean; transcript?: string; error?: string }> => {
   try {
     // Verify user is authenticated
     const { data: session } = await supabase.auth.getSession();
     if (!session?.session?.access_token) {
       toast.error("You need to be logged in to transcribe a video");
-      return { success: false };
+      return { success: false, error: "Authentication required" };
     }
 
     toast.loading("Transcribing video...", { id: "transcribe-video" });
@@ -139,17 +139,31 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
         const { bucketName, filePath } = parseStoragePath(project.source_file_path);
         console.log(`Checking file existence at ${bucketName}/${filePath}`);
         
-        // Verify the file exists
-        const { data } = await supabase.storage
-          .from(bucketName)
-          .list(filePath.split('/').slice(0, -1).join('/') || undefined, {
-            limit: 100,
-            offset: 0,
-            search: filePath.split('/').pop(),
-          });
+        try {
+          // Verify the file exists by attempting to get its metadata
+          const { data: fileData, error: fileError } = await supabase.storage
+            .from(bucketName)
+            .getPublicUrl(filePath);
+            
+          console.log(`Storage public URL check: ${fileData ? 'URL available' : 'No URL available'}`);
           
-        console.log(`Storage check results: ${data ? data.length : 'No data'} items found`);
+          if (fileError) {
+            console.warn("Warning when checking file:", fileError);
+          }
+        } catch (e) {
+          console.warn("Error checking file existence:", e);
+        }
       }
+    }
+
+    // Additional debugging info for project videos
+    if (projectVideos && projectVideos.length > 0) {
+      console.log(`Video details for ${projectVideos.length} videos:`);
+      projectVideos.forEach((video, i) => {
+        console.log(`Video ${i+1}: ${video.title || 'Untitled'}`);
+        console.log(`- Path: ${video.source_file_path}`);
+        console.log(`- Has metadata: ${video.video_metadata ? 'Yes' : 'No'}`);
+      });
     }
 
     // Call the edge function to transcribe the video
@@ -167,23 +181,37 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
 
     if (response.error) {
       console.error("Error from transcribe-video edge function:", response.error);
-      toast.error(`Failed to transcribe video: ${response.error.message || "Error calling transcription service"}`, { id: "transcribe-video" });
-      return { success: false };
+      return { 
+        success: false, 
+        error: response.error?.message || "Error calling transcription service" 
+      };
     }
 
-    const { transcript } = response.data || {};
+    const { transcript, error } = response.data || {};
+
+    if (error) {
+      console.error("Error in transcription response:", error);
+      return { 
+        success: false, 
+        error: error 
+      };
+    }
 
     if (!transcript) {
-      toast.error("No transcript was generated", { id: "transcribe-video" });
-      return { success: false };
+      return { 
+        success: false, 
+        error: "No transcript was generated" 
+      };
     }
 
     toast.success("Video transcribed successfully!", { id: "transcribe-video" });
     return { success: true, transcript: transcript };
   } catch (error: any) {
     console.error("Error transcribing video:", error);
-    toast.error(`Failed to transcribe video: ${error.message}`, { id: "transcribe-video" });
-    return { success: false };
+    return { 
+      success: false, 
+      error: error.message || "An unexpected error occurred" 
+    };
   }
 };
 

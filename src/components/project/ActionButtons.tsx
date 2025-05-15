@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Project } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -11,37 +10,43 @@ import {
   Film
 } from "lucide-react";
 
-interface ActionButtonsProps {
+export interface ActionButtonsProps {
   project: Project | null;
-  needsFrameExtraction: boolean;
-  isExtractingFrames: boolean;
-  handleExtractFrames: () => void;
-  needsTranscription: boolean;
-  isTranscribing: boolean;
-  handleTranscribeVideo: () => void;
-  isGenerating: boolean;
-  handleGenerateSlides: () => void;
-  handleOpenManualFramePicker: () => void;
-  extractedFrames: ExtractedFrame[] | null;
-  isTranscriptOnlyProject: boolean;
-  refreshProject: () => void;
+  needsFrameExtraction?: boolean;
+  isExtractingFrames?: boolean;
+  handleExtractFrames: () => Promise<void>;
+  needsTranscription?: boolean;
+  isTranscribing?: boolean;
+  handleTranscribeVideo: () => Promise<void>;
+  isGenerating?: boolean;
+  handleGenerateSlides: () => Promise<void>;
+  handleOpenManualFramePicker?: () => void;
+  extractedFrames?: ExtractedFrame[];
+  isTranscriptOnlyProject?: boolean;
+  refreshProject?: () => void;
   totalDuration?: number;
   hideSelectFrames?: boolean;
-  hasChunkedVideo?: boolean; // Added this prop
+  hasChunkedVideo?: boolean;
 }
 
-export const ActionButtons = ({
+export function ActionButtons({
   project,
+  needsFrameExtraction,
+  isExtractingFrames,
+  handleExtractFrames,
   needsTranscription,
   isTranscribing,
   handleTranscribeVideo,
   isGenerating,
   handleGenerateSlides,
   handleOpenManualFramePicker,
+  extractedFrames,
   isTranscriptOnlyProject,
-  hideSelectFrames = false,
-  hasChunkedVideo = false, // Added default value
-}: ActionButtonsProps) => {
+  refreshProject,
+  totalDuration,
+  hideSelectFrames,
+  hasChunkedVideo
+}: ActionButtonsProps) {
   return (
     <>
       {needsTranscription && (
@@ -94,4 +99,4 @@ export const ActionButtons = ({
       </Button>
     </>
   );
-};
+}

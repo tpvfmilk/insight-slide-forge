@@ -86,10 +86,11 @@ const ProjectPage = () => {
     }
   };
   
-  // Check if this project has chunked video content - with proper type assertion
+  // Check if this project has chunked video content - with proper type safety
+  const extendedMetadata = videoMetadata as ExtendedVideoMetadata | null;
   const hasChunkedVideo = Boolean(
-    (project?.video_metadata as ExtendedVideoMetadata)?.chunking?.isChunked || 
-    (videoMetadata as ExtendedVideoMetadata)?.chunking?.isChunked
+    extendedMetadata?.chunking?.isChunked ||
+    (project?.video_metadata as ExtendedVideoMetadata | null)?.chunking?.isChunked
   );
   
   return (

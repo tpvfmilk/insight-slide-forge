@@ -220,13 +220,29 @@ export const useProjectState = (projectId: string | undefined) => {
     }
   };
 
+  // Improved transcription function with better debugging
   const handleTranscribeVideo = async () => {
     if (!projectId || isTranscribing) return;
     
     setIsTranscribing(true);
+    const toastId = "transcribe-video";
     
     try {
+      toast.loading("Transcribing video...", { id: toastId });
       console.log(`Transcribing videos for project ${projectId}`, projectVideos);
+      
+      // Debug logging before making the API call
+      if (projectVideos.length > 0) {
+        console.log("Video paths being processed:");
+        projectVideos.forEach((video, index) => {
+          console.log(`Video ${index + 1}: ${video.source_file_path}`);
+        });
+      } else if (project?.source_file_path) {
+        console.log(`Main video path: ${project.source_file_path}`);
+      } else {
+        console.log("No video paths available for transcription");
+      }
+      
       // Now we pass all videos in the project to be transcribed
       const result = await transcribeVideo(projectId, projectVideos);
       
@@ -243,6 +259,7 @@ export const useProjectState = (projectId: string | undefined) => {
         });
         
         setTranscript(result.transcript);
+        toast.success("Video transcribed successfully!", { id: toastId });
         
         // Once transcription is complete, generate slides if none exist
         if (!hasValidSlides(project)) {
@@ -250,9 +267,11 @@ export const useProjectState = (projectId: string | undefined) => {
         }
       } else {
         console.error("Transcription failed or returned empty transcript");
+        toast.error(`Failed to transcribe video: ${result.error || "No transcript was generated"}`, { id: toastId });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error in handleTranscribeVideo:", error);
+      toast.error(`Failed to transcribe video: ${error.message || "Unknown error"}`, { id: toastId });
     } finally {
       setIsTranscribing(false);
     }

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -63,10 +62,10 @@ serve(async (req) => {
     else {
       console.log("Processing project with ID:", projectId);
       
-      // Get project details from database
+      // Get project details from database - use explicit column names to avoid ambiguity
       const { data: projectData, error: projectError } = await supabase
         .from('projects')
-        .select('*')
+        .select('id, user_id, title, source_type, source_file_path, video_metadata, transcript, context_prompt')
         .eq('id', projectId)
         .maybeSingle();
 
@@ -107,14 +106,18 @@ serve(async (req) => {
         } else {
           // Try to get videos from project_videos table as another fallback
           console.log("Fetching videos from project_videos table");
+          // Fix ambiguous column reference by using aliases and qualified names
           const { data: projectVideosData, error: projectVideosError } = await supabase
             .from('project_videos')
-            .select('*')
+            .select('id, source_file_path, title, video_metadata, display_order')
             .eq('project_id', projectId)
             .order('display_order', { ascending: true });
             
           if (!projectVideosError && projectVideosData && projectVideosData.length > 0) {
-            videosToProcess = projectVideosData;
+            videosToProcess = projectVideosData.map(video => ({
+              ...video,
+              project_id: projectId // Explicitly add project_id to avoid ambiguity
+            }));
             console.log(`Found ${projectVideosData.length} videos in project_videos table`);
           }
         }
@@ -278,7 +281,7 @@ serve(async (req) => {
         const estimatedTokens = totalAudioMinutes * 1000;
         const estimatedCost = totalAudioMinutes * 0.006; // $0.006 per minute for whisper-1
 
-        // Insert usage data into openai_usage table
+        // Insert usage data into openai_usage table with explicit column names
         console.log(`Recording usage data for ${totalAudioMinutes} minutes of audio`);
         const { error: usageError } = await supabase
           .from('openai_usage')
@@ -702,7 +705,7 @@ function processSpeakerSegments(speaker, segments) {
  */
 function parseStoragePath(fullPath: string): { bucketName: string; filePath: string } {
   if (!fullPath) {
-    return { bucketName: 'video_uploads', filePath: fullPath };
+    return { bucketName: 'video_uploads', filePath: '' };
   }
 
   // Remove any leading slashes
