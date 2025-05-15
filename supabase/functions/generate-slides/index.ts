@@ -50,22 +50,36 @@ serve(async (req) => {
       );
     }
     
-    // We'll let OpenAI decide on the number of slides based on content
     console.log(`Using video duration: ${videoDuration}s`);
-    
     console.log(`Using transcript from project: ${project.transcript.substring(0, 100)}...`);
     
     // Use the provided presentation title or fall back to project title
     const finalPresentationTitle = presentationTitle || project.title || "Presentation";
     console.log(`Using presentation title: ${finalPresentationTitle}`);
     
-    // Generate the slides using OpenAI
-    const slides = await generateSlidesFromTranscript(
-      project.transcript, 
-      contextPrompt,
-      finalPresentationTitle,
-      videoDuration
-    );
+    // Check if transcript has multiple video sections (using ## markers)
+    const hasMultipleVideoSections = /^##\s+.+$/m.test(project.transcript);
+    console.log(`Transcript has multiple video sections: ${hasMultipleVideoSections}`);
+    
+    let slides;
+    
+    if (hasMultipleVideoSections) {
+      // Generate slides per section to avoid OpenAI token limits
+      slides = await generateSlidesBySections(
+        project.transcript,
+        contextPrompt,
+        finalPresentationTitle,
+        videoDuration
+      );
+    } else {
+      // Use the standard approach for single transcripts
+      slides = await generateSlidesFromTranscript(
+        project.transcript,
+        contextPrompt,
+        finalPresentationTitle,
+        videoDuration
+      );
+    }
     
     if (!slides) {
       return new Response(
@@ -209,7 +223,7 @@ Expected JSON format:
         "Authorization": `Bearer ${openAIKey}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o-mini", // Using the mini model to save tokens
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -273,6 +287,95 @@ Expected JSON format:
     return slides;
   } catch (error) {
     console.error("Error generating slides:", error);
+    return null;
+  }
+}
+
+/**
+ * Generate slides by processing transcript sections separately and combining the results
+ */
+async function generateSlidesBySections(
+  transcript: string,
+  contextPrompt: string = "",
+  presentationTitle: string = "Presentation",
+  videoDuration: number = 0
+): Promise<any[] | null> {
+  try {
+    console.log("Using section-based generation to handle large transcript");
+    
+    // Split transcript into sections based on ## headings
+    const sectionRegex = /^(##\s+.+)$([\s\S]*?)(?=##\s+|$)/gm;
+    let match;
+    const sections = [];
+    let slideIdCounter = 1;
+    
+    // Extract all sections
+    while ((match = sectionRegex.exec(transcript)) !== null) {
+      const title = match[1].trim().replace(/^##\s+/, '');
+      const content = match[2].trim();
+      sections.push({ title, content });
+    }
+    
+    // If no sections found, treat the entire transcript as one section
+    if (sections.length === 0) {
+      sections.push({ title: presentationTitle, content: transcript });
+    }
+    
+    console.log(`Found ${sections.length} sections in the transcript`);
+    
+    let allSlides: any[] = [];
+    
+    // Process each section separately to avoid token limits
+    for (let i = 0; i < sections.length; i++) {
+      const section = sections[i];
+      console.log(`Processing section ${i + 1} of ${sections.length}: "${section.title}"`);
+      
+      // Calculate an approximate chunk duration based on the total duration
+      let sectionDuration = 0;
+      if (sections.length > 0 && videoDuration > 0) {
+        sectionDuration = Math.round(videoDuration / sections.length);
+      }
+      
+      // Add a section title slide
+      const sectionTitleSlide = {
+        id: `slide-${slideIdCounter++}`,
+        title: "Video Section",
+        content: `# ${section.title}`,
+        timestamp: null,
+        transcriptTimestamps: [],
+        isSection: true
+      };
+      
+      allSlides.push(sectionTitleSlide);
+      
+      // Generate slides for this section
+      const sectionSlides = await generateSlidesFromTranscript(
+        section.content,
+        contextPrompt,
+        section.title,
+        sectionDuration
+      );
+      
+      if (sectionSlides) {
+        // Update slide IDs to ensure they're unique across all sections
+        const processedSlides = sectionSlides.map(slide => ({
+          ...slide,
+          id: `slide-${slideIdCounter++}`,
+          sectionTitle: section.title
+        }));
+        
+        allSlides = [...allSlides, ...processedSlides];
+        console.log(`Added ${processedSlides.length} slides from section "${section.title}"`);
+      } else {
+        console.warn(`Failed to generate slides for section "${section.title}"`);
+      }
+    }
+    
+    console.log(`Generated a total of ${allSlides.length} slides from ${sections.length} sections`);
+    
+    return allSlides;
+  } catch (error) {
+    console.error("Error in section-based slide generation:", error);
     return null;
   }
 }
