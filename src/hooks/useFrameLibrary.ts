@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { mergeAndSaveFrames } from "@/utils/frameUtils";
 import { supabase } from "@/integrations/supabase/client";
@@ -207,6 +208,7 @@ export function useFrameLibrary({
         
       if (error) {
         console.error("Error removing frames from project:", error);
+        toast.error("Failed to delete selected frames");
         return;
       }
       
@@ -220,9 +222,12 @@ export function useFrameLibrary({
         return updated;
       });
       
+      // Show success message
+      toast.success(`Deleted ${frameIds.length} frames from library`);
       console.log(`Removed ${frameIds.length} frames from project database`);
     } catch (error) {
       console.error("Error in deleteMultipleFrames:", error);
+      toast.error("Failed to delete selected frames");
     }
   };
   
@@ -239,6 +244,7 @@ export function useFrameLibrary({
     });
     
     if (sortedFrames.length === 0) {
+      toast.error("Please select at least one frame to add to the slide");
       return;
     }
     
@@ -254,8 +260,14 @@ export function useFrameLibrary({
         const invalidFrames = sortedFrames.length - validFrames.length;
         console.warn(`${invalidFrames} frames have temporary URLs and will be skipped`);
         if (validFrames.length === 0) {
+          toast.error("All frames must have permanent URLs");
           setIsUploadingFrames(false);
           return;
+        } else {
+          // Fix: Use Sonner's format instead of variant which isn't supported
+          toast("Some frames will be skipped", {
+            description: `${invalidFrames} frames have invalid URLs`,
+          });
         }
       }
       
@@ -264,6 +276,7 @@ export function useFrameLibrary({
       await onFramesSelected(validFrames);
     } catch (error) {
       console.error("Error in handleApplyFrames:", error);
+      toast.error(error instanceof Error ? error.message : "Unknown error");
     } finally {
       setIsUploadingFrames(false);
     }

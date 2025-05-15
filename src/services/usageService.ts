@@ -20,16 +20,6 @@ export interface StorageInfo {
   tierName: string;
   percentageUsed: number;
   tierPrice: number;
-  storage_breakdown?: any; // Include the storage_breakdown field from the database
-  breakdown?: StorageBreakdown; // Processed breakdown for frontend use
-}
-
-export interface StorageBreakdown {
-  videos: number;
-  slides: number;
-  frames: number;
-  other: number;
-  total: number;
 }
 
 /**
@@ -141,75 +131,11 @@ export const fetchStorageInfo = async (): Promise<StorageInfo | null> => {
   // The data comes as an array with a single row, so we need to extract the first element
   const storageData = Array.isArray(data) ? data[0] : data;
 
-  // Process the storage breakdown data if available
-  let breakdown: StorageBreakdown | undefined;
-  
-  if (storageData.storage_breakdown) {
-    // Safely convert the JSON data to our expected type
-    const breakdownData = storageData.storage_breakdown as Record<string, number>;
-    
-    breakdown = {
-      videos: breakdownData.videos || 0,
-      slides: breakdownData.slides || 0,
-      frames: breakdownData.frames || 0,
-      other: breakdownData.other || 0,
-      total: breakdownData.total || 0
-    };
-  }
-
   return {
     storageUsed: storageData.storage_used || 0,
     storageLimit: storageData.storage_limit || 0,
     tierName: storageData.tier_name || 'Free',
     percentageUsed: storageData.percentage_used || 0,
     tierPrice: storageData.tier_price || 0,
-    breakdown
   };
-};
-
-/**
- * Fetches storage breakdown data for the current user
- */
-export const fetchStorageBreakdown = async (): Promise<StorageBreakdown | null> => {
-  try {
-    const { data: session } = await supabase.auth.getSession();
-    if (!session?.session) {
-      return null;
-    }
-    
-    // First check if we have the breakdown in user_storage
-    const { data: userData } = await supabase
-      .from('user_storage')
-      .select('storage_breakdown')
-      .maybeSingle();
-    
-    if (userData && userData.storage_breakdown) {
-      // Safely convert the JSON data to our expected type
-      const breakdownData = userData.storage_breakdown as Record<string, number>;
-      
-      return {
-        videos: breakdownData.videos || 0,
-        slides: breakdownData.slides || 0,
-        frames: breakdownData.frames || 0,
-        other: breakdownData.other || 0,
-        total: breakdownData.total || 0
-      };
-    }
-    
-    // If not available, call the edge function to calculate it
-    const response = await supabase.functions.invoke('get-storage-breakdown');
-    
-    if (response.error) {
-      throw new Error(`Failed to get storage breakdown: ${response.error.message || 'Unknown error'}`);
-    }
-    
-    if (response.data && response.data.breakdown) {
-      return response.data.breakdown as StorageBreakdown;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error fetching storage breakdown:', error);
-    return null;
-  }
 };

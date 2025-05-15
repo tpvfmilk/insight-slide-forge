@@ -41,124 +41,125 @@ export const TranscriptView = ({ project, isGenerating, handleGenerateSlides, op
   };
   
   return (
-    <div className="h-full flex items-center justify-center p-6">
-      <Card className="max-w-3xl w-full shadow-md">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center">
-              <FileText className="h-5 w-5 mr-2" />
-              Extracted Transcript
-            </CardTitle>
+    <div className="h-full flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center">
+                <FileText className="h-5 w-5 mr-2" />
+                Extracted Transcript
+              </CardTitle>
+              
+              {project?.transcript && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopyTranscript}
+                  className={cn("flex items-center gap-1", isCopied && "text-green-500")}
+                >
+                  {isCopied ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+            <CardDescription>
+              This is the transcript extracted from your {project?.transcript?.includes('##') ? 'videos' : 'video'}
+            </CardDescription>
             
             {project?.transcript && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopyTranscript}
-                className={cn("flex items-center gap-1", isCopied && "text-green-500")}
-              >
-                {isCopied ? (
-                  <>
-                    <Check className="h-4 w-4" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" />
-                    Copy
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
-          <CardDescription>
-            This is the transcript extracted from your {project?.transcript?.includes('##') ? 'videos' : 'video'}
-          </CardDescription>
-          
-          {project?.transcript && (
-            <div className="flex flex-wrap gap-4 mt-2">
-              <div className="flex items-center space-x-2">
-                <Switch 
-                  id="show-timestamps" 
-                  checked={showTimestamps} 
-                  onCheckedChange={setShowTimestamps}
-                />
-                <Label htmlFor="show-timestamps">Show timestamps</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch 
-                  id="highlight-speakers" 
-                  checked={highlightSpeakers} 
-                  onCheckedChange={setHighlightSpeakers}
-                />
-                <Label htmlFor="highlight-speakers">Highlight speakers</Label>
-              </div>
-              {project?.transcript?.includes('##') && (
+              <div className="flex flex-wrap gap-4 mt-2">
                 <div className="flex items-center space-x-2">
                   <Switch 
-                    id="show-video-separators" 
-                    checked={showVideoSeparators} 
-                    onCheckedChange={setShowVideoSeparators}
+                    id="show-timestamps" 
+                    checked={showTimestamps} 
+                    onCheckedChange={setShowTimestamps}
                   />
-                  <Label htmlFor="show-video-separators">Show video separators</Label>
+                  <Label htmlFor="show-timestamps">Show timestamps</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    id="highlight-speakers" 
+                    checked={highlightSpeakers} 
+                    onCheckedChange={setHighlightSpeakers}
+                  />
+                  <Label htmlFor="highlight-speakers">Highlight speakers</Label>
+                </div>
+                {project?.transcript?.includes('##') && (
+                  <div className="flex items-center space-x-2">
+                    <Switch 
+                      id="show-video-separators" 
+                      checked={showVideoSeparators} 
+                      onCheckedChange={setShowVideoSeparators}
+                    />
+                    <Label htmlFor="show-video-separators">Show video separators</Label>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardHeader>
+          <CardContent>
+            <div className="border rounded-md p-4 bg-muted/20 max-h-[60vh] overflow-y-auto">
+              {project?.transcript ? (
+                <TranscriptRenderer 
+                  transcript={project.transcript}
+                  showTimestamps={showTimestamps}
+                  highlightSpeakers={highlightSpeakers}
+                  showVideoSeparators={showVideoSeparators}
+                />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>No transcript available. There might have been an issue with the transcription process.</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="mt-4"
+                    onClick={openTranscriptDialog}
+                  >
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Add Transcript Manually
+                  </Button>
                 </div>
               )}
             </div>
-          )}
-        </CardHeader>
-        <CardContent>
-          <div className="border rounded-md p-4 bg-muted/20 h-[350px] overflow-y-auto">
-            {project?.transcript ? (
-              <TranscriptRenderer 
-                transcript={project.transcript}
-                showTimestamps={showTimestamps}
-                highlightSpeakers={highlightSpeakers}
-                showVideoSeparators={showVideoSeparators}
-              />
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No transcript available. There might have been an issue with the transcription process.</p>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="mt-4"
-                  onClick={openTranscriptDialog}
-                >
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Add Transcript Manually
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          <Button 
-            variant="outline" 
-            onClick={openTranscriptDialog}
-            className="border-solid"
-          >
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit Transcript
-          </Button>
-          <Button 
-            onClick={handleGenerateSlides}
-            disabled={isGenerating || !project?.transcript}
-          >
-            {isGenerating ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Generating Slides...
-              </>
-            ) : (
-              <>
-                <SlidersIcon className="h-4 w-4 mr-2" />
-                Generate Slides
-              </>
-            )}
-          </Button>
-        </CardFooter>
-      </Card>
+          </CardContent>
+          <CardFooter className="flex justify-between">
+            <Button 
+              variant="outline" 
+              onClick={openTranscriptDialog}
+            >
+              <Edit2 className="h-4 w-4 mr-2" />
+              Edit Transcript
+            </Button>
+            <Button 
+              onClick={handleGenerateSlides}
+              disabled={isGenerating || !project?.transcript}
+            >
+              {isGenerating ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Generating Slides...
+                </>
+              ) : (
+                <>
+                  <SlidersIcon className="h-4 w-4 mr-2" />
+                  Generate Slides
+                </>
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
     </div>
   );
 };

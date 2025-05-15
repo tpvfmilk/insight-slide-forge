@@ -1,14 +1,13 @@
-
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
-import { Slide } from "@/components/slides/editor/SlideEditorTypes";
+import { SlideData } from "@/components/slides/SlidePreview";
 
 // Helper function to convert base64 image to data URL if needed
 const prepareImage = (imageUrl: string) => {
   return imageUrl;
 };
 
-export const exportToPDF = async (slides: Slide[], projectTitle: string): Promise<Blob> => {
+export const exportToPDF = async (slides: SlideData[], projectTitle: string): Promise<Blob> => {
   const doc = new jsPDF();
   const title = projectTitle || "Presentation";
   
@@ -59,7 +58,7 @@ export const exportToPDF = async (slides: Slide[], projectTitle: string): Promis
   return doc.output("blob");
 };
 
-export const exportToCSV = (slides: Slide[], projectTitle: string): Blob => {
+export const exportToCSV = (slides: SlideData[], projectTitle: string): Blob => {
   let csvContent = "Slide Number,Title,Content\n";
   
   slides.forEach((slide, index) => {
@@ -73,7 +72,7 @@ export const exportToCSV = (slides: Slide[], projectTitle: string): Blob => {
   return new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
 };
 
-export const exportToAnki = (slides: Slide[], projectTitle: string): Blob => {
+export const exportToAnki = (slides: SlideData[], projectTitle: string): Blob => {
   // For simplicity, we'll export as a CSV that can be imported into Anki
   // Anki expects a specific format: front,back
   

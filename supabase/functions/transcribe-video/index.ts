@@ -3,84 +3,15 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Initialize the Supabase client
-const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const openAIKey = Deno.env.get('OPENAI_API_KEY') || '';
-
-// Create the Supabase client
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Add this helper function to better handle chunked video transcription
-async function processChunkedVideo(video, useSpeakerDetection) {
-  console.log(`Processing chunked video with ${video.video_metadata.chunked_video_metadata.chunks.length} chunks`);
-  
-  const chunks = video.video_metadata.chunked_video_metadata.chunks;
-  const chunksCount = chunks.length;
-  const chunkTranscripts = [];
-  
-  for (let j = 0; j < chunks.length; j++) {
-    const chunk = chunks[j];
-    console.log(`Processing chunk ${j + 1}/${chunksCount}: ${chunk.chunkPath}`);
-    
-    try {
-      // Download the chunk file from storage
-      const { data: chunkData, error: chunkError } = await supabase
-        .storage
-        .from('video_uploads')
-        .download(chunk.chunkPath);
-        
-      if (chunkError || !chunkData) {
-        console.error(`Failed to download chunk ${j + 1}:`, chunkError);
-        continue; // Skip this chunk but continue with others
-      }
-      
-      // Process this chunk with retries
-      let attempts = 0;
-      let chunkTranscript = null;
-      let success = false;
-      
-      while (attempts < 3 && !success) {
-        try {
-          console.log(`Attempt ${attempts + 1} to transcribe chunk ${j + 1}`);
-          chunkTranscript = await transcribeVideoFile(chunkData, useSpeakerDetection);
-          success = true;
-        } catch (error) {
-          console.error(`Attempt ${attempts + 1} failed for chunk ${j + 1}:`, error);
-          attempts++;
-          // Short pause before retry
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-      
-      if (chunkTranscript) {
-        // Add to the chunk transcripts with timestamp information
-        const formattedStartTime = formatTimestamp(chunk.startTime);
-        const chunkHeader = `\n\n## Part ${j + 1} [${formattedStartTime}]\n\n`;
-        chunkTranscripts.push(chunkHeader + chunkTranscript);
-        console.log(`Successfully transcribed chunk ${j + 1}/${chunksCount}`);
-      } else {
-        console.error(`Failed to transcribe chunk ${j + 1} after ${attempts} attempts`);
-      }
-    } catch (error) {
-      console.error(`Error processing chunk ${j + 1}:`, error);
-    }
-  }
-  
-  // Return the combined transcripts
-  if (chunkTranscripts.length === 0) {
-    return null;
-  }
-  
-  const videoTitle = video.title || "Video";
-  const videoHeader = `\n\n# ${videoTitle}\n\n`;
-  return videoHeader + chunkTranscripts.join("\n\n");
-}
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const openAIKey = Deno.env.get("OPENAI_API_KEY");
+const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -97,11 +28,10 @@ serve(async (req) => {
       audioData, 
       useSpeakerDetection = false, 
       isTranscriptOnly = false,
-      projectVideos = [],
-      processChunks = true
+      projectVideos = [] 
     } = await req.json();
 
-    console.log(`Processing request: projectId=${projectId}, useSpeakerDetection=${useSpeakerDetection}, isTranscriptOnly=${isTranscriptOnly}, processChunks=${processChunks}`);
+    console.log(`Processing request: projectId=${projectId}, useSpeakerDetection=${useSpeakerDetection}, isTranscriptOnly=${isTranscriptOnly}`);
     console.log(`Has audioData: ${Boolean(audioData)}, audioData length: ${audioData ? audioData.length : 0}`);
     console.log(`Project videos provided: ${projectVideos.length}`);
 
@@ -199,41 +129,28 @@ serve(async (req) => {
         console.log(`Processing video ${i + 1}/${videosToProcess.length}: ${video.source_file_path}`);
         
         try {
-          // Check if the video is chunked
-          const isChunkedVideo = video.video_metadata?.chunked_video_metadata?.isChunked === true;
+          // Download the video file from storage
+          console.log("Downloading video file from storage:", video.source_file_path);
+          const { data: videoData, error: fileError } = await supabase
+            .storage
+            .from('video_uploads')
+            .download(video.source_file_path);
           
-          if (isChunkedVideo && processChunks) {
-            // Use our improved chunk processing function
-            const chunkedTranscript = await processChunkedVideo(video, useSpeakerDetection);
-            
-            if (chunkedTranscript) {
-              transcripts.push(chunkedTranscript);
-            }
-          } else {
-            // Process as a regular video (non-chunked)
-            // Download the video file from storage
-            console.log("Downloading video file from storage:", video.source_file_path);
-            const { data: videoData, error: fileError } = await supabase
-              .storage
-              .from('video_uploads')
-              .download(video.source_file_path);
-            
-            if (fileError || !videoData) {
-              console.error("Failed to download video file:", fileError);
-              continue; // Skip this video but continue with others
-            }
-            
-            console.log("Video file downloaded successfully");
-            
-            // Process this video file
-            const videoTitle = video.title || `Video ${i + 1}`;
-            const videoTranscript = await transcribeVideoFile(videoData, useSpeakerDetection);
-            
-            if (videoTranscript) {
-              // Add a header with the video title - use ## for consistency
-              const videoHeader = `\n\n## ${videoTitle}\n\n`;
-              transcripts.push(videoHeader + videoTranscript);
-            }
+          if (fileError || !videoData) {
+            console.error("Failed to download video file:", fileError);
+            continue; // Skip this video but continue with others
+          }
+          
+          console.log("Video file downloaded successfully");
+          
+          // Process this video file
+          const videoTitle = video.title || `Video ${i + 1}`;
+          const videoTranscript = await transcribeVideoFile(videoData, useSpeakerDetection);
+          
+          if (videoTranscript) {
+            // Add a header with the video title - use ## for consistency
+            const videoHeader = `\n\n## ${videoTitle}\n\n`;
+            transcripts.push(videoHeader + videoTranscript);
           }
         } catch (error) {
           console.error(`Error processing video ${i + 1}:`, error);
@@ -252,7 +169,7 @@ serve(async (req) => {
         );
       }
       
-      console.log(`Generated combined transcript with ${combinedTranscript.length} chars from ${transcripts.length} videos or chunks`);
+      console.log(`Generated combined transcript with ${combinedTranscript.length} chars from ${transcripts.length} videos`);
       console.log("First 200 chars of transcript:", combinedTranscript.substring(0, 200));
     }
 
@@ -612,13 +529,4 @@ function processSpeakerSegments(speaker, segments) {
   });
   
   return text;
-}
-
-/**
- * Format a timestamp from seconds to MM:SS format
- */
-function formatTimestamp(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }

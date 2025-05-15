@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
 import { Slide } from "@/utils/frameUtils";
-import { ScrollArea } from "@/components/ui/scroll-area"; 
 
 interface FrameSelectorProps {
   open: boolean;
@@ -83,7 +82,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
     });
   };
 
-  // Function to remove a frame from selection
+  // New function to remove a frame from selection
   const removeSelectedFrame = (e: React.MouseEvent, frame: ExtractedFrame) => {
     e.stopPropagation(); // Prevent triggering the toggle selection
     setLocalSelected(prev => prev.filter(f => f.id !== frame.id));
@@ -115,6 +114,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
     
     setIsPurgingFrames(true);
     
+    // Create a loading toast
     toast("Purging unused frames", {
       description: "Please wait while we clean up unused frames...",
     });
@@ -131,6 +131,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
         await onRefresh();
       }
       
+      // Success toast - Fix: Remove variant property which doesn't exist in Sonner
       toast("Success", {
         description: "Successfully purged unused frames",
       });
@@ -141,6 +142,7 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
       }
     } catch (error) {
       console.error("Error purging frames:", error);
+      // Show error toast - Fix: Use the Sonner error style
       toast.error("Failed to purge unused frames");
     } finally {
       setIsPurgingFrames(false);
@@ -224,53 +226,55 @@ export const FrameSelector: React.FC<FrameSelectorProps> = ({
           </Button>
         </div>
 
-        {/* Frame grid - Now with more columns */}
-        <ScrollArea className="flex-1" style={{ minHeight: "300px" }}>
+        {/* Fixed scrolling with proper height */}
+        <div className="flex-1 overflow-hidden" style={{ minHeight: "300px" }}>
           {filteredFrames.length === 0 ? (
             <div className="flex items-center justify-center h-64">
               <p className="text-muted-foreground">No frames match your search.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 px-1 py-2">
-              {filteredFrames.map((frame) => (
-                <div 
-                  key={frame.id || frame.timestamp}
-                  className={`relative rounded-md border overflow-hidden cursor-pointer transition-all group ${
-                    isSelected(frame) ? 'ring-2 ring-primary' : 'hover:opacity-90'
-                  }`}
-                  onClick={() => toggleFrameSelection(frame)}
-                >
-                  <img
-                    src={frame.imageUrl}
-                    alt={`Frame at ${frame.timestamp}`}
-                    className="w-full aspect-video object-cover"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm p-1 flex justify-between items-center">
-                    <span className="text-xs font-mono">{frame.timestamp}</span>
+            <div className="h-full overflow-y-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-1 py-2">
+                {filteredFrames.map((frame) => (
+                  <div 
+                    key={frame.id || frame.timestamp}
+                    className={`relative rounded-md border overflow-hidden cursor-pointer transition-all group ${
+                      isSelected(frame) ? 'ring-2 ring-primary' : 'hover:opacity-90'
+                    }`}
+                    onClick={() => toggleFrameSelection(frame)}
+                  >
+                    <img
+                      src={frame.imageUrl}
+                      alt={`Frame at ${frame.timestamp}`}
+                      className="w-full aspect-video object-cover"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm p-2 flex justify-between items-center">
+                      <span className="text-xs font-mono">{frame.timestamp}</span>
+                      {isSelected(frame) && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </div>
+                    
+                    {/* Add remove button that appears on hover if the frame is selected */}
                     {isSelected(frame) && (
-                      <Check className="h-3 w-3 text-primary" />
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button 
+                          variant="destructive" 
+                          size="icon" 
+                          className="h-7 w-7 rounded-full" 
+                          onClick={(e) => removeSelectedFrame(e, frame)}
+                        >
+                          <X className="h-4 w-4" />
+                          <span className="sr-only">Remove frame</span>
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  
-                  {/* Add remove button that appears on hover if the frame is selected */}
-                  {isSelected(frame) && (
-                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button 
-                        variant="destructive" 
-                        size="icon" 
-                        className="h-6 w-6 rounded-full" 
-                        onClick={(e) => removeSelectedFrame(e, frame)}
-                      >
-                        <X className="h-3 w-3" />
-                        <span className="sr-only">Remove frame</span>
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
-        </ScrollArea>
+        </div>
         
         <div className="flex justify-between items-center pt-2 border-t mt-2">
           <div className="text-sm text-muted-foreground">

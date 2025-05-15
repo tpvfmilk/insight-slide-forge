@@ -13,7 +13,8 @@ export const SlideContent: React.FC = () => {
     setEditedTitle,
     setEditedContent,
     startEditing,
-    saveChanges
+    saveChanges,
+    copyToClipboard
   } = useSlideEditor();
 
   if (!currentSlide) {
@@ -67,11 +68,22 @@ export const SlideContent: React.FC = () => {
         </div>
 
         {/* Slide action buttons */}
-        {isEditing && (
-          <div className="mt-auto pt-4 border-t">
-            <Button onClick={saveChanges}>Save Changes</Button>
+        <div className="mt-auto pt-4 border-t flex justify-between items-center">
+          <div>
+            {isEditing && (
+              <Button onClick={saveChanges}>Save Changes</Button>
+            )}
           </div>
-        )}
+          <div className="flex items-center gap-2 self-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyToClipboard}
+            >
+              Copy Content
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

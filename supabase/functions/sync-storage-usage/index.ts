@@ -1,5 +1,5 @@
 
-// Edge function to sync user storage usage stats
+// If this file doesn't exist, create it
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -15,97 +15,105 @@ serve(async (req) => {
   }
   
   try {
-    // Extract auth token from request
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Get the user ID from the request body
+    let userId;
+    try {
+      const body = await req.json();
+      userId = body.userId;
+    } catch (error) {
+      // If no body or invalid JSON, try to get the user from auth
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: 'No authorization header and no userId in body' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+      
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized', details: authError }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      userId = user.id;
+    }
+    
+    if (!userId) {
       return new Response(
-        JSON.stringify({ error: 'No authorization header provided', success: false }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'No user ID provided' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    // Initialize Supabase client with admin role for accessing storage breakdown
+    console.log(`Starting storage sync for user ${userId}`);
+    
+    // Create a Supabase client with the admin key
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
-    // Get the user ID from the token
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    // Calculate total storage used by the user
+    let totalStorage = 0;
     
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized', details: authError, success: false }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    // Storage buckets to check
+    const buckets = ['video_uploads', 'slide_stills'];
+    
+    for (const bucket of buckets) {
+      // List files in user's directory
+      const { data: files, error: listError } = await supabaseAdmin
+        .storage
+        .from(bucket)
+        .list(undefined, {
+          limit: 10000, // Get a large number of files
+        });
+      
+      if (listError) {
+        console.error(`Error listing files in bucket ${bucket}:`, listError);
+        continue;
+      }
+      
+      if (!files || files.length === 0) {
+        console.log(`No files found in bucket ${bucket}`);
+        continue;
+      }
+      
+      // Filter files belonging to this user
+      const userFiles = files.filter(file => 
+        file.name.startsWith(`${userId}/`) || 
+        // Projects created by this user
+        file.name.includes(`project_`)
       );
-    }
-
-    const userId = user.id;
-    
-    console.log(`Starting storage sync for user ${userId}`);
-    
-    // IMPORTANT FIX: Pass the Authorization header when calling get-storage-breakdown
-    const breakdownResponse = await supabaseAdmin.functions.invoke('get-storage-breakdown', {
-      body: { userId },
-      headers: { Authorization: authHeader } // Forward the original auth header
-    });
-    
-    if (breakdownResponse.error) {
-      throw new Error(`Failed to get storage breakdown: ${breakdownResponse.error.message || 'Unknown error'}`);
+      
+      for (const file of userFiles) {
+        if (file.metadata && file.metadata.size) {
+          totalStorage += parseInt(file.metadata.size);
+        }
+      }
     }
     
-    const breakdownData = breakdownResponse.data;
+    console.log(`Total storage used by user ${userId}: ${totalStorage} bytes`);
     
-    if (!breakdownData || !breakdownData.breakdown) {
-      throw new Error('No breakdown data returned from get-storage-breakdown function');
-    }
-    
-    const breakdown = breakdownData.breakdown;
-    
-    console.log(`Total storage used by user ${userId}: ${breakdown.total} bytes`);
-    
-    // Update the user's storage record with both total and breakdown data
+    // Update the user's storage record in the database
     const { data, error } = await supabaseAdmin.rpc(
-      'update_user_storage_with_breakdown',
+      'update_user_storage_with_value',
       { 
         user_id_param: userId, 
-        new_storage_value: breakdown.total,
-        videos_size: breakdown.videos,
-        slides_size: breakdown.slides,
-        frames_size: breakdown.frames,
-        other_size: breakdown.other
+        new_storage_value: totalStorage 
       }
     );
     
-    // If the RPC function doesn't exist yet, fall back to the original function
-    if (error && error.message && error.message.includes('function "update_user_storage_with_breakdown" does not exist')) {
-      console.log('Falling back to update_user_storage_with_value function');
-      
-      const { data: fallbackData, error: fallbackError } = await supabaseAdmin.rpc(
-        'update_user_storage_with_value',
-        { 
-          user_id_param: userId, 
-          new_storage_value: breakdown.total 
-        }
-      );
-      
-      if (fallbackError) {
-        throw new Error(`Error updating storage: ${fallbackError.message}`);
-      }
-      
-      return new Response(
-        JSON.stringify({
-          success: true,
-          userId: userId,
-          storageUsed: breakdown.total,
-          previousStorageSize: fallbackData[0]?.previous_size,
-          newStorageSize: fallbackData[0]?.new_size,
-          breakdown: breakdown
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    } else if (error) {
+    if (error) {
       throw new Error(`Error updating storage: ${error.message}`);
     }
     
@@ -113,10 +121,9 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         userId: userId,
-        storageUsed: breakdown.total,
-        previousStorageSize: data[0]?.previous_size,
-        newStorageSize: data[0]?.new_size,
-        breakdown: breakdown
+        storageUsed: totalStorage,
+        previousStorageSize: data[0].previous_size,
+        newStorageSize: data[0].new_size,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

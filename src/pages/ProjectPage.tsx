@@ -1,3 +1,4 @@
+
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -58,6 +59,13 @@ const ProjectPage = () => {
     const toastId = "frame-processing";
     
     try {
+      toast.loading("Processing selected frames...", { id: toastId });
+      
+      if (selectedFrames.length === 0) {
+        toast.error("No frames were selected", { id: toastId });
+        return;
+      }
+      
       // Pass the selected frames to be handled in the project state
       // Note: we're now only applying these frames to the current slide,
       // not removing them from the global library
@@ -66,13 +74,17 @@ const ProjectPage = () => {
       if (success) {
         // Close the modal
         modals.closeFramePickerModal();
+        toast.success(`Successfully applied ${selectedFrames.length} frames to slide`, { id: toastId });
         
         // After frames are processed, reload the project to reflect changes
         // This is crucial for keeping the frame library in sync
         await loadProject();
+      } else {
+        toast.error("Failed to apply frames to slide", { id: toastId });
       }
     } catch (error) {
       console.error("Error processing frames:", error);
+      toast.error("An error occurred while processing frames", { id: toastId });
     }
   };
   
@@ -97,7 +109,7 @@ const ProjectPage = () => {
               setContextPrompt={setContextPrompt}
             />
             
-            {/* Action buttons - passing hideSelectFrames=false to allow frame selection */}
+            {/* Action buttons - passing hideSelectFrames=true to hide the Select Frames button */}
             <ActionButtons 
               project={project}
               needsFrameExtraction={needsFrameExtraction}
@@ -113,7 +125,7 @@ const ProjectPage = () => {
               isTranscriptOnlyProject={isTranscriptOnlyProject}
               refreshProject={loadProject}
               totalDuration={totalVideoDuration}
-              hideSelectFrames={false} // Changed to show the Select Frames button
+              hideSelectFrames={true} // Add this prop to hide the Select Frames button
             />
           </div>
         </div>
@@ -153,7 +165,6 @@ const ProjectPage = () => {
           onFramesSelected={handleFrameSelection}
           allExtractedFrames={extractedFrames || []}
           existingFrames={[]} // This will be populated by the SlideEditor when needed
-          videoMetadata={project.video_metadata} // Pass the video metadata for chunked videos
         />
       )}
     </InsightLayout>

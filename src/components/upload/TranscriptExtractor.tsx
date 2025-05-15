@@ -8,21 +8,17 @@ import { FileUploader } from "@/components/ui/file-uploader";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "sonner"; // Updated import
 import { extractAudioFromVideo } from "@/services/audioExtractionService";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Mic, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Skeleton } from "@/components/ui/skeleton";
 
 // Maximum recommended file duration in seconds
 const MAX_RECOMMENDED_DURATION = 30 * 60; // 30 minutes
 // Maximum recommended file size in bytes
 const MAX_RECOMMENDED_SIZE = 50 * 1024 * 1024; // 50 MB
-// OpenAI's maximum file size limit
-const OPENAI_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 export const TranscriptExtractor = () => {
   const { user } = useAuth();
@@ -34,8 +30,6 @@ export const TranscriptExtractor = () => {
   const [showSizeWarning, setShowSizeWarning] = useState<boolean>(false);
   const [extractionProgress, setExtractionProgress] = useState<number>(0);
   const [processingStage, setProcessingStage] = useState<string>("");
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(false);
-  const [fileDuration, setFileDuration] = useState<number | null>(null);
 
   // Set default title from filename when a file is selected
   useEffect(() => {
@@ -60,7 +54,6 @@ export const TranscriptExtractor = () => {
     const video = document.createElement('video');
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
-      setFileDuration(video.duration);
       if (video.duration > MAX_RECOMMENDED_DURATION) {
         setShowSizeWarning(true);
       }
@@ -106,22 +99,17 @@ export const TranscriptExtractor = () => {
         };
         
         audioBlob = await extractAudioFromVideo(selectedFile, updateExtractionProgress);
-        
-        // Log the size of the extracted audio
-        const audioSizeMB = (audioBlob.size / (1024 * 1024)).toFixed(2);
-        console.log(`Extracted audio size: ${audioSizeMB}MB`);
-        
-        // Check if the audio is too large for OpenAI's API
-        if (audioBlob.size > OPENAI_MAX_FILE_SIZE) {
-          console.warn(`Audio size (${audioSizeMB}MB) exceeds OpenAI's limit of 25MB. Using compressed version.`);
-        }
-        
         toast.success("Audio extracted successfully", { id: "extract-audio" });
       } catch (extractionError: any) {
         console.error("Error during audio extraction:", extractionError);
         toast.error(`Audio extraction failed: ${extractionError.message || "Unknown error"}`, { id: "extract-audio" });
         setIsUploading(false);
         return;
+      }
+
+      // Check audio blob size
+      if (audioBlob.size > 10 * 1024 * 1024) { // 10MB limit for edge function
+        toast.warning("The extracted audio is quite large. Processing may take longer than expected.", { duration: 8000 });
       }
 
       // Create a project and process the audio for transcription
@@ -132,7 +120,7 @@ export const TranscriptExtractor = () => {
       const audioFile = new File([audioBlob], "extracted_audio.mp3", { type: "audio/mpeg" });
       
       // Create the project first
-      const project = await createProjectFromVideo(audioFile, title, contextPrompt, "");
+      const project = await createProjectFromVideo(audioFile, title, "", "");
 
       // Handle successful creation
       if (project && project.id) {
@@ -149,9 +137,6 @@ export const TranscriptExtractor = () => {
       setIsUploading(false);
     }
   };
-
-  // Default empty context prompt
-  const [contextPrompt, setContextPrompt] = useState<string>("");
 
   if (!user) {
     return (
@@ -198,18 +183,11 @@ export const TranscriptExtractor = () => {
               />
               
               {selectedFile && (
-                <div className="mt-4 text-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium">{selectedFile.name}</p>
-                    <p className="text-muted-foreground">
-                      {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
-                  </div>
-                  {fileDuration && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Duration: {Math.floor(fileDuration / 60)}m {Math.round(fileDuration % 60)}s
-                    </p>
-                  )}
+                <div className="mt-4 text-sm text-center">
+                  <p className="font-medium">{selectedFile.name}</p>
+                  <p className="text-muted-foreground">
+                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -221,57 +199,22 @@ export const TranscriptExtractor = () => {
             <AlertTriangle className="h-4 w-4 text-yellow-600" />
             <AlertDescription>
               This file is quite large. For best results, we recommend using videos under 30 minutes or 50MB.
-              {selectedFile && selectedFile.size > OPENAI_MAX_FILE_SIZE && (
-                <span className="block font-medium mt-1">
-                  Note: Files over 25MB will be automatically processed using our client-side audio extraction 
-                  to ensure compatibility with transcription services.
-                </span>
-              )}
+              Processing may take longer than expected.
             </AlertDescription>
           </Alert>
         )}
         
-        <Collapsible 
-          open={showAdvancedOptions} 
-          onOpenChange={setShowAdvancedOptions}
-          className="border rounded-md p-4"
-        >
-          <CollapsibleTrigger asChild>
-            <div className="flex items-center justify-between cursor-pointer">
-              <span className="font-medium">Advanced Options</span>
-              <Button variant="ghost" size="sm" type="button">
-                {showAdvancedOptions ? "Hide" : "Show"}
-              </Button>
-            </div>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="contextPrompt">Context Prompt (Optional)</Label>
-              <Input
-                id="contextPrompt"
-                value={contextPrompt}
-                onChange={e => setContextPrompt(e.target.value)}
-                placeholder="Add context about the video content to improve transcription"
-                disabled={isUploading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Provide context about the video topic, terminology, or speakers to enhance transcription accuracy.
-              </p>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="speakerDetection" 
-                checked={useSpeakerDetection} 
-                onCheckedChange={checked => setUseSpeakerDetection(checked as boolean)} 
-                disabled={isUploading} 
-              />
-              <Label htmlFor="speakerDetection" className="text-sm">
-                Use speaker detection and format transcript with line breaks
-              </Label>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+        <div className="flex items-center space-x-2">
+          <Checkbox 
+            id="speakerDetection" 
+            checked={useSpeakerDetection} 
+            onCheckedChange={checked => setUseSpeakerDetection(checked as boolean)} 
+            disabled={isUploading} 
+          />
+          <Label htmlFor="speakerDetection">
+            Use speaker detection and format transcript with line breaks
+          </Label>
+        </div>
       </div>
       
       {isUploading && (

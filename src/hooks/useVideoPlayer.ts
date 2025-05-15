@@ -126,25 +126,12 @@ export function useVideoPlayer({
     setIsPlaying(!isPlaying);
   };
 
-  // For consistency with chunked player
-  const togglePlayback = togglePlayPause;
-
   // Seek back 5 seconds
   const seekBack = () => {
     const video = videoRef.current;
     if (!video) return;
     
     video.currentTime = Math.max(0, video.currentTime - 5);
-    setCurrentTime(video.currentTime);
-    setSeekingValue(video.currentTime);
-  };
-
-  // For consistency with chunked player
-  const skipBackward = (seconds: number = 5) => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    video.currentTime = Math.max(0, video.currentTime - seconds);
     setCurrentTime(video.currentTime);
     setSeekingValue(video.currentTime);
   };
@@ -159,23 +146,13 @@ export function useVideoPlayer({
     setSeekingValue(video.currentTime);
   };
 
-  // For consistency with chunked player
-  const skipForward = (seconds: number = 5) => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    video.currentTime = Math.min(video.duration, video.currentTime + seconds);
-    setCurrentTime(video.currentTime);
-    setSeekingValue(video.currentTime);
-  };
-
   // Handle seeking via slider
   const handleSeekStart = () => {
     setIsSeeking(true);
   };
 
-  const handleSeekChange = (values: number[]) => {
-    setSeekingValue(values[0]);
+  const handleSeekChange = (value: number[]) => {
+    setSeekingValue(value[0]);
   };
 
   const handleSeekEnd = () => {
@@ -184,16 +161,6 @@ export function useVideoPlayer({
     
     video.currentTime = seekingValue;
     setCurrentTime(seekingValue);
-    setIsSeeking(false);
-  };
-
-  // Alias for consistency with chunked player
-  const handleSeekCommit = (value: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    video.currentTime = value;
-    setCurrentTime(value);
     setIsSeeking(false);
   };
 
@@ -293,15 +260,11 @@ export function useVideoPlayer({
     videoUrl,
     formatTime,
     togglePlayPause,
-    togglePlayback,
     seekBack,
     seekForward,
-    skipBackward,
-    skipForward,
     handleSeekStart,
     handleSeekChange,
     handleSeekEnd,
-    handleSeekCommit,
     retryLoadVideo,
     handleVideoLoaded,
     handleVideoError

@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProjectById } from "@/services/projectService";
@@ -12,7 +13,6 @@ import {
   ExportState
 } from "./SlideEditorTypes";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
-import { toast } from "sonner";
 
 interface SlideEditorContextProps {
   children: React.ReactNode;
@@ -241,6 +241,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
   // Handle frame selection
   const handleFrameSelection = (selectedFrames: LocalExtractedFrame[]) => {
     if (!selectedFrames.length) {
+      toast.info("No frames were selected");
       return;
     }
 
@@ -256,6 +257,13 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
 
     // Also update in the database
     updateSlidesInDatabase(updatedSlides);
+    
+    // Give feedback based on selection count
+    if (selectedFrames.length === 1) {
+      toast.success(`Applied 1 frame to slide`);
+    } else {
+      toast.success(`Applied ${selectedFrames.length} frames to slide`);
+    }
     
     // Update project size
     fetchProjectSize();
@@ -324,6 +332,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
   const copyToClipboard = () => {
     const slideText = `${currentSlide.title}\n\n${currentSlide.content}`;
     navigator.clipboard.writeText(slideText);
+    toast.success("Slide content copied to clipboard");
   };
   
   // Handle image upload
@@ -405,6 +414,7 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     
     setSlides(updatedSlides);
     updateSlidesInDatabase(updatedSlides);
+    toast.success("Image removed from slide");
   };
   
   // Delete slide from filmstrip
@@ -443,9 +453,12 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     // Update slides in database
     updateSlidesInDatabase(updatedSlides);
     
-    // Fix: Remove the incorrect toast usage with action property
-    // Instead, use regular toast with a descriptive message only
-    toast("Slide deleted");
+    toast.success("Slide deleted", {
+      action: {
+        label: "Undo",
+        onClick: undoDeleteSlide
+      }
+    });
   };
   
   // Delete current slide
@@ -479,6 +492,8 @@ export const SlideEditorProvider: React.FC<SlideEditorContextProps> = ({ childre
     
     // Update slides in database
     updateSlidesInDatabase(updatedSlides);
+    
+    toast.success("New slide added");
   };
   
   // Undo delete slide

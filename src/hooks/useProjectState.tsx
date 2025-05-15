@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Project, fetchProjectById } from "@/services/projectService";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
@@ -206,6 +205,11 @@ export const useProjectState = (projectId: string | undefined) => {
           // We will still check if frames are needed, but not automatically extract them
           if (prev.source_type === 'video') {
             setNeedsFrameExtraction(slidesNeedFrameExtraction(result.slides));
+            
+            // Inform the user that they need to manually select frames
+            if (slidesNeedFrameExtraction(result.slides)) {
+              toast.info("Slides have been generated. You can now manually select frames for your slides.");
+            }
           }
           
           return updatedProject;
@@ -264,6 +268,7 @@ export const useProjectState = (projectId: string | undefined) => {
     if (!projectId) return;
     
     if (frames.length === 0) {
+      toast.info("No frames were extracted");
       return;
     }
     
@@ -274,6 +279,7 @@ export const useProjectState = (projectId: string | undefined) => {
       // Reload the project to get the updated slides with images
       await loadProject();
       setNeedsFrameExtraction(false);
+      toast.success("Frame extraction completed successfully");
     }
   };
   
@@ -282,6 +288,7 @@ export const useProjectState = (projectId: string | undefined) => {
     if (!projectId) return false;
     
     if (!selectedFrames || selectedFrames.length === 0) {
+      toast.info("No frames were selected");
       return false;
     }
     
@@ -297,6 +304,7 @@ export const useProjectState = (projectId: string | undefined) => {
       
       if (invalidFrames.length > 0) {
         console.error("Cannot update slides with invalid URLs:", invalidFrames);
+        toast.error("Cannot save frames with temporary URLs. Please try capturing frames again.");
         return false;
       }
 
@@ -306,6 +314,7 @@ export const useProjectState = (projectId: string | undefined) => {
       
       if (!combinedFrames) {
         console.error("Failed to merge frames");
+        toast.error("Failed to store frames");
         return false;
       }
       
@@ -314,6 +323,7 @@ export const useProjectState = (projectId: string | undefined) => {
       
       if (!success) {
         console.error("Failed to update slides with frames");
+        toast.error("Failed to update slides with selected frames");
         return false;
       }
       
@@ -324,6 +334,7 @@ export const useProjectState = (projectId: string | undefined) => {
       return true;
     } catch (error) {
       console.error("Error in handleManualFrameSelectionComplete:", error);
+      toast.error("An error occurred while processing the selected frames");
       return false;
     }
   };

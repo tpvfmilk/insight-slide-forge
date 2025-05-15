@@ -10,8 +10,6 @@ import { ContextPromptInput } from "./ContextPromptInput";
 import { FileUploader } from "@/components/ui/file-uploader";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
 
 export const VideoUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -19,7 +17,6 @@ export const VideoUpload = () => {
   const [contextPrompt, setContextPrompt] = useState<string>("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>("");
-  const [isLargeFile, setIsLargeFile] = useState<boolean>(false);
   const navigate = useNavigate();
   
   // Set default title from filename when a file is selected
@@ -29,11 +26,6 @@ export const VideoUpload = () => {
       if (!title) {
         setTitle(filename);
       }
-      
-      // Check if this is a large file (>25MB)
-      setIsLargeFile(videoFile.size > 25 * 1024 * 1024);
-    } else {
-      setIsLargeFile(false);
     }
   }, [videoFile, title]);
   
@@ -48,9 +40,9 @@ export const VideoUpload = () => {
       return;
     }
     
-    // Check file size (limit to 500MB)
-    if (file.size > 500 * 1024 * 1024) {
-      toast.error(`${file.name} is too large (max 500MB allowed)`);
+    // Check file size (limit to 100MB)
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error(`${file.name} is too large (max 100MB allowed)`);
       return;
     }
     
@@ -59,7 +51,6 @@ export const VideoUpload = () => {
   
   const handleRemoveFile = () => {
     setVideoFile(null);
-    setIsLargeFile(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,14 +73,14 @@ export const VideoUpload = () => {
     // Simulate progress while actual upload happens
     const interval = setInterval(() => {
       setUploadProgress(prev => {
-        const newProgress = prev + 5;
+        const newProgress = prev + 10;
         if (newProgress >= 90) {
           clearInterval(interval);
           return 90;
         }
         return newProgress;
       });
-    }, 500);
+    }, 300);
     
     try {
       console.log("Creating project from video file:", videoFile.name);
@@ -142,7 +133,7 @@ export const VideoUpload = () => {
             <FileVideo className="h-8 w-8 text-muted-foreground mb-4" />
             <h3 className="font-medium mb-1">Upload a video file</h3>
             <p className="text-sm text-muted-foreground mb-4 text-center">
-              MP4 or WebM format, up to 500MB
+              MP4 or WebM format, up to 100MB
             </p>
             
             <FileUploader
@@ -150,7 +141,7 @@ export const VideoUpload = () => {
               selectedFiles={videoFile ? [videoFile] : []}
               onRemoveFile={handleRemoveFile}
               accept="video/*"
-              maxSize={500}
+              maxSize={100}
               multiple={false}
               className="w-full"
               showPreview={true}
@@ -158,16 +149,6 @@ export const VideoUpload = () => {
             />
           </div>
         </div>
-        
-        {isLargeFile && (
-          <Alert className="bg-blue-50 border-blue-200">
-            <AlertCircle className="h-4 w-4 text-blue-500" />
-            <AlertDescription className="text-blue-800">
-              This is a large video file. It will be automatically split into smaller chunks for efficient processing. 
-              This may take a few minutes, but the video will still appear as a single file in the editor.
-            </AlertDescription>
-          </Alert>
-        )}
         
         <div className="space-y-2">
           <Label className="mb-2 block">Add series or content context (optional)</Label>
@@ -181,7 +162,7 @@ export const VideoUpload = () => {
       {isUploading ? (
         <div className="w-full mt-6 space-y-2">
           <div className="flex justify-between text-sm mb-1">
-            <span>Uploading{isLargeFile ? " and processing" : ""}...</span>
+            <span>Uploading...</span>
             <span>{uploadProgress}%</span>
           </div>
           <Progress value={uploadProgress} />
