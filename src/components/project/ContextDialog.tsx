@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings2, RefreshCw, InfoCircle } from "lucide-react";
+import { Settings2, RefreshCw, Info } from "lucide-react";
 import { ContextPromptInput } from "@/components/upload/ContextPromptInput";
 import { Project } from "@/services/projectService";
 import { updateProject } from "@/services/uploadService";
@@ -66,7 +66,7 @@ export const ContextDialog = ({
     <>
       <div className="py-2">
         <Alert className="mb-4">
-          <InfoCircle className="h-4 w-4" />
+          <Info className="h-4 w-4" />
           <AlertDescription>
             A detailed default prompt is already configured to generate well-structured slides. Any text you add here will 
             be used as additional context to further customize slide generation.
