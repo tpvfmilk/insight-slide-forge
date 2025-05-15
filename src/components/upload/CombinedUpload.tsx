@@ -1,3 +1,4 @@
+
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,10 +70,12 @@ export const CombinedUpload = () => {
     
     try {
       // Create project from video, passing the transcript text
+      // Make sure to pass false as default value for needsChunking
       const project = await createProjectFromVideo(
         videoFile, 
         videoFileName || "Video Project",
-        contextPrompt
+        contextPrompt,
+        false // Pass boolean value for needsChunking
       );
       
       clearInterval(interval);

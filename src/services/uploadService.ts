@@ -13,7 +13,10 @@ import {
   ExtendedVideoMetadata, 
   ChunkMetadata, 
   JsonSafeChunkMetadata, 
-  JsonSafeVideoMetadata 
+  JsonSafeVideoMetadata,
+  toJsonSafe,
+  fromJsonSafe,
+  Json
 } from "@/types/videoChunking";
 
 // Update this function to handle large videos through chunking with the correct signature
@@ -145,42 +148,9 @@ export const createProjectFromVideo = async (
       }
     }
     
-    // Convert the ExtendedVideoMetadata to JsonSafeVideoMetadata to ensure it's JSON compatible
-    const jsonSafeMetadata: JsonSafeVideoMetadata = {
-      duration: videoMetadata.duration,
-      original_file_name: videoMetadata.original_file_name,
-      file_type: videoMetadata.file_type,
-      file_size: videoMetadata.file_size
-    };
-    
-    if (videoMetadata.chunking) {
-      // Convert chunks to JSON-safe format
-      const jsonSafeChunks: JsonSafeChunkMetadata[] = [];
-      
-      // Safely convert each chunk regardless of its original type
-      if (Array.isArray(videoMetadata.chunking.chunks)) {
-        videoMetadata.chunking.chunks.forEach((chunk) => {
-          const safeChunk: JsonSafeChunkMetadata = {
-            index: chunk.index,
-            startTime: chunk.startTime,
-            endTime: chunk.endTime,
-            duration: chunk.duration,
-            videoPath: chunk.videoPath,
-            title: chunk.title || `Chunk ${chunk.index + 1}`,
-            status: chunk.status || 'pending'
-          };
-          jsonSafeChunks.push(safeChunk);
-        });
-      }
-      
-      jsonSafeMetadata.chunking = {
-        isChunked: videoMetadata.chunking.isChunked,
-        totalDuration: videoMetadata.chunking.totalDuration,
-        chunks: jsonSafeChunks,
-        status: videoMetadata.chunking.status || "prepared",
-        processedAt: videoMetadata.chunking.processedAt || new Date().toISOString()
-      };
-    }
+    // Convert the ExtendedVideoMetadata to a JSON-compatible format
+    // using our helper function
+    const jsonSafeMetadata = toJsonSafe(videoMetadata);
     
     // Create a new project in the database
     const { data: project, error: projectError } = await supabase
