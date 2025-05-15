@@ -174,7 +174,7 @@ export const TranscriptDialog = ({
     
     try {
       setIsReTranscribing(true);
-      const toastId = "retranscribe";
+      const toastId = "retranscribe"; // Properly define toastId variable
       toast.loading("Re-transcribing video...", { id: toastId });
       
       // Debug logging - enhanced to track chunking process
@@ -271,6 +271,7 @@ export const TranscriptDialog = ({
       }
     } catch (error: any) {
       console.error("[DEBUG] Error in re-transcribe handler:", error);
+      const toastId = "retranscribe-error"; // Define a new toastId for the catch block
       toast.error(`Error preparing transcription: ${error?.message || "Unknown error"}`, { 
         id: toastId, 
         duration: 6000
