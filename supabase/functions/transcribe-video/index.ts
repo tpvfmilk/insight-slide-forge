@@ -81,6 +81,12 @@ serve(async (req) => {
       project = projectData;
       userId = project.user_id;
 
+      console.log("Project data:", JSON.stringify({
+        id: project.id,
+        source_type: project.source_type,
+        source_file_path: project.source_file_path
+      }));
+
       // Determine which videos to process
       let videosToProcess = [];
       
@@ -134,10 +140,10 @@ serve(async (req) => {
         try {
           // Parse the video file path to determine correct bucket
           const { bucketName, filePath } = parseStoragePath(video.source_file_path);
-          console.log(`Resolved bucket: ${bucketName}, path: ${filePath}`);
+          console.log(`Resolved storage path - Bucket: ${bucketName}, File path: ${filePath}`);
           
           // Download the video file from storage
-          console.log(`Downloading video file from storage: ${bucketName}/${filePath}`);
+          console.log(`Attempting to download video file from storage: ${bucketName}/${filePath}`);
           const { data: videoData, error: fileError } = await supabase
             .storage
             .from(bucketName)
@@ -145,7 +151,39 @@ serve(async (req) => {
           
           if (fileError || !videoData) {
             console.error("Failed to download video file:", fileError);
-            // Try alternative approach - maybe it's a chunked video
+            console.error("Full error details:", JSON.stringify(fileError));
+            
+            // Try direct public URL as fallback
+            console.log("Attempting to get public URL as fallback...");
+            const { data: urlData } = await supabase
+              .storage
+              .from(bucketName)
+              .getPublicUrl(filePath);
+              
+            if (urlData?.publicUrl) {
+              console.log(`Got public URL: ${urlData.publicUrl}`);
+              console.log("Attempting to fetch file from public URL...");
+              
+              // Try to fetch the file directly
+              const response = await fetch(urlData.publicUrl);
+              
+              if (response.ok) {
+                const videoData = await response.blob();
+                console.log(`Successfully fetched video from public URL, size: ${videoData.size}`);
+                
+                const videoTranscript = await transcribeVideoFile(videoData, useSpeakerDetection);
+                if (videoTranscript) {
+                  const videoTitle = video.title || `Video ${i + 1}`;
+                  const videoHeader = `\n\n## ${videoTitle}\n\n`;
+                  transcripts.push(videoHeader + videoTranscript);
+                  continue;
+                }
+              } else {
+                console.error(`Failed to fetch from public URL: ${response.status} ${response.statusText}`);
+              }
+            }
+            
+            // Try alternative storage approach - check if it's chunked
             if (video.video_metadata?.chunking?.chunks) {
               console.log("Video has chunks, trying to process chunks instead");
               const chunkTranscripts = await processVideoChunks(video);
@@ -156,7 +194,10 @@ serve(async (req) => {
                 continue;
               }
             }
-            continue; // Skip this video but continue with others
+            
+            // If we've exhausted all options, continue to the next video
+            console.error("All attempts to access video file failed, skipping this video");
+            continue;
           }
           
           console.log(`Video file downloaded successfully, size: ${videoData.size / 1024 / 1024} MB`);
@@ -664,17 +705,28 @@ function parseStoragePath(fullPath: string): { bucketName: string; filePath: str
     return { bucketName: 'video_uploads', filePath: fullPath };
   }
 
+  // Remove any leading slashes
+  const cleanPath = fullPath.startsWith('/') ? fullPath.substring(1) : fullPath;
+
   // Check if path starts with 'video_uploads/' prefix
-  if (fullPath.startsWith('video_uploads/')) {
+  if (cleanPath.startsWith('video_uploads/')) {
     return { 
       bucketName: 'video_uploads', 
-      filePath: fullPath.replace('video_uploads/', '')
+      filePath: cleanPath.replace('video_uploads/', '')
+    };
+  }
+  
+  // Check if path is just 'uploads/...'
+  if (cleanPath.startsWith('uploads/')) {
+    return { 
+      bucketName: 'video_uploads', 
+      filePath: cleanPath
     };
   }
 
   // Check if path has a bucket prefix (bucket/path format)
-  if (fullPath.includes('/')) {
-    const parts = fullPath.split('/');
+  if (cleanPath.includes('/')) {
+    const parts = cleanPath.split('/');
     // If first part doesn't have a dot (likely not a filename), treat as bucket
     if (parts.length > 1 && !parts[0].includes('.')) {
       return { 
@@ -687,6 +739,6 @@ function parseStoragePath(fullPath: string): { bucketName: string; filePath: str
   // Default to video_uploads bucket
   return { 
     bucketName: 'video_uploads', 
-    filePath: fullPath 
+    filePath: cleanPath
   };
 }

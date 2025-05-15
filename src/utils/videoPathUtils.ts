@@ -10,17 +10,28 @@ export function parseStoragePath(fullPath: string): { bucketName: string; filePa
     return { bucketName: 'video_uploads', filePath: fullPath };
   }
 
+  // Remove any leading slashes
+  const cleanPath = fullPath.startsWith('/') ? fullPath.substring(1) : fullPath;
+
   // Check if path starts with 'video_uploads/' prefix
-  if (fullPath.startsWith('video_uploads/')) {
+  if (cleanPath.startsWith('video_uploads/')) {
     return { 
       bucketName: 'video_uploads', 
-      filePath: fullPath.replace('video_uploads/', '')
+      filePath: cleanPath.replace('video_uploads/', '')
+    };
+  }
+  
+  // Check if path is just 'uploads/...'
+  if (cleanPath.startsWith('uploads/')) {
+    return { 
+      bucketName: 'video_uploads', 
+      filePath: cleanPath
     };
   }
 
   // Check if path has a bucket prefix (bucket/path format)
-  if (fullPath.includes('/')) {
-    const parts = fullPath.split('/');
+  if (cleanPath.includes('/')) {
+    const parts = cleanPath.split('/');
     // If first part doesn't have a dot (likely not a filename), treat as bucket
     if (parts.length > 1 && !parts[0].includes('.')) {
       return { 
@@ -33,7 +44,7 @@ export function parseStoragePath(fullPath: string): { bucketName: string; filePa
   // Default to video_uploads bucket
   return { 
     bucketName: 'video_uploads', 
-    filePath: fullPath 
+    filePath: cleanPath
   };
 }
 
@@ -63,6 +74,17 @@ export async function createSignedVideoUrl(
     
     if (error) {
       console.error("Error creating signed URL:", error);
+      
+      // Try to get a public URL as fallback
+      const { data: publicUrlData } = await supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filePath);
+      
+      if (publicUrlData?.publicUrl) {
+        console.log("Using public URL as fallback");
+        return publicUrlData.publicUrl;
+      }
+      
       return null;
     }
     

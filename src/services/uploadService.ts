@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
@@ -122,14 +121,49 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
     }
 
     toast.loading("Transcribing video...", { id: "transcribe-video" });
+    
+    // Get project details to verify file paths
+    const { data: project } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .single();
+      
+    if (project) {
+      console.log(`Transcribing project: ${project.title}`);
+      console.log(`Source path: ${project.source_file_path}`);
+      console.log(`Source type: ${project.source_type}`);
+      
+      if (project.source_file_path) {
+        // Check if the file exists in storage
+        const { bucketName, filePath } = parseStoragePath(project.source_file_path);
+        console.log(`Checking file existence at ${bucketName}/${filePath}`);
+        
+        // Verify the file exists
+        const { data } = await supabase.storage
+          .from(bucketName)
+          .list(filePath.split('/').slice(0, -1).join('/') || undefined, {
+            limit: 100,
+            offset: 0,
+            search: filePath.split('/').pop(),
+          });
+          
+        console.log(`Storage check results: ${data ? data.length : 'No data'} items found`);
+      }
+    }
 
     // Call the edge function to transcribe the video
+    console.log(`Calling transcribe-video function for project ${projectId}`);
+    console.log(`Providing ${projectVideos.length} project videos`);
+    
     const response = await supabase.functions.invoke('transcribe-video', {
       body: {
         projectId: projectId,
         projectVideos: projectVideos
       }
     });
+
+    console.log("Edge function response received", response);
 
     if (response.error) {
       console.error("Error from transcribe-video edge function:", response.error);
