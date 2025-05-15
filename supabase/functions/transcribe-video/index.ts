@@ -57,7 +57,7 @@ serve(async (req) => {
     try {
       const { data: projectData, error: projectError } = await supabaseClient
         .from('projects')
-        .select('id, source_type, source_file_path, video_metadata')
+        .select('id, source_type, source_file_path, video_metadata, title')
         .eq('id', projectId)
         .single();
         
@@ -84,242 +84,131 @@ serve(async (req) => {
     const chunking = project.video_metadata?.chunking || null;
     console.log(`Project data: ${JSON.stringify({
       id: project.id,
+      title: project.title,
       source_type: project.source_type,
       source_file_path: project.source_file_path,
       has_chunking: chunking?.isChunked ? "Yes" : "No",
       chunks_count: chunking?.chunks?.length || 0,
       chunks_status: chunking?.status || "none",
+      is_virtual_chunking: chunking?.isVirtualChunking ? "Yes" : "No",
       file_size: project.video_metadata?.file_size ? 
         `${(project.video_metadata?.file_size / (1024 * 1024)).toFixed(2)} MB` : "Unknown",
       duration: project.video_metadata?.duration ? 
         `${project.video_metadata?.duration.toFixed(1)}s` : "Unknown"
     })}`);
     
-    // Variables to store our videos for transcription
-    let videosToTranscribe = [];
+    // Check if video is too large for direct processing
+    const videoSize = project.video_metadata?.file_size || 0;
+    const videoSizeMB = videoSize / (1024 * 1024);
     
-    // First check if we have project videos from the request (chunked processing)
-    if (projectVideos && projectVideos.length > 0) {
-      console.log("Using provided project videos for transcription");
-      videosToTranscribe = projectVideos;
+    // Use chunk information if available
+    if (chunking?.isChunked && chunking.chunks && chunking.chunks.length > 0) {
+      console.log(`Processing video with ${chunking.chunks.length} chunks`);
       
-      // Additional logging for chunked videos
-      console.log(`Received ${projectVideos.length} video chunks:`);
-      projectVideos.forEach((video, index) => {
-        console.log(`Chunk ${index+1}: path=${video.source_file_path}, title=${video.title || 'Untitled'}`);
-      });
-    }
-    // Otherwise use the main project video
-    else {
-      console.log("Using project's main video");
+      // Process each chunk as a section of the video - for now generating mock transcripts
+      // In a real implementation, this would process each chunk through a transcription service
       
-      if (project.source_file_path && project.source_type === 'video') {
-        videosToTranscribe.push({
-          source_file_path: project.source_file_path,
-          title: "Main Video",
-          video_metadata: project.video_metadata
-        });
-      } else {
-        console.warn("Project has no valid source_file_path or is not a video type");
-      }
-    }
-    
-    // Check if we have any videos to transcribe
-    if (videosToTranscribe.length === 0) {
-      return new Response(JSON.stringify({
-        error: "No valid videos found to transcribe"
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-    
-    // Process each video and generate a combined transcript
-    let combinedTranscript = "";
-    let totalAudioMinutes = 0;
-    let errorCount = 0;
-    let successCount = 0;
-    
-    // For each video, process its transcription
-    for (let i = 0; i < videosToTranscribe.length; i++) {
-      const video = videosToTranscribe[i];
-      console.log(`Processing video ${i+1}/${videosToTranscribe.length}: ${video.source_file_path || "No path"}`);
+      let combinedTranscript = "";
+      const videoTitle = project.title || "Untitled Video";
       
-      if (!video.source_file_path) {
-        console.error(`Video ${i+1} has no source_file_path, skipping`);
-        errorCount++;
-        continue;
-      }
-      
-      // Parse the storage path to get bucket and file path
-      const parsedPath = parseStoragePath(video.source_file_path);
-      console.log(`Resolved storage path - Bucket: ${parsedPath.bucketName}, File path: ${parsedPath.filePath}`);
-      
-      // For large videos, check if this is a chunked video
-      const isChunkedVideo = chunking?.isChunked || false;
-      console.log(`This video ${isChunkedVideo ? 'is' : 'is not'} marked for chunking`);
-      
-      try {
-        console.log(`Attempting to download video file from storage: ${parsedPath.bucketName}/${parsedPath.filePath}`);
+      // Process each chunk
+      for (let i = 0; i < chunking.chunks.length; i++) {
+        const chunk = chunking.chunks[i];
+        console.log(`Processing chunk ${i+1}/${chunking.chunks.length}: ${chunk.startTime}s - ${chunk.endTime}s`);
         
-        // First check if the file exists
-        const { data: fileExists, error: listError } = await supabaseClient.storage
-          .from(parsedPath.bucketName)
-          .list(parsedPath.filePath.split('/').slice(0, -1).join('/') || '');
-          
-        if (listError) {
-          console.error(`Error listing files: ${JSON.stringify(listError)}`);
-          throw new Error(`Storage listing error: ${listError.message}`);
-        }
+        // In a real implementation, we would:
+        // 1. Download the chunk video or extract the time range from the original
+        // 2. Send to transcription API
+        // 3. Get back the transcript text
         
-        const fileName = parsedPath.filePath.split('/').pop();
-        const fileFound = fileExists?.some(file => file.name === fileName);
+        // For now, we'll generate a mock transcript for the chunk
+        const chunkTranscript = `## ${videoTitle} - Part ${i+1} (${formatTime(chunk.startTime)} to ${formatTime(chunk.endTime)})\n\n` +
+          `This is a mock transcript for chunk ${i+1}. In a real implementation, this would be generated using a transcription API.\n` +
+          `The chunk covers from ${formatTime(chunk.startTime)} to ${formatTime(chunk.endTime)} of the video.\n\n`;
         
-        if (!fileFound) {
-          console.error(`File not found in storage: ${parsedPath.bucketName}/${parsedPath.filePath}`);
-          throw new Error("File not found in storage");
-        }
-        
-        // Download the video file from storage
-        const { data: fileData, error: downloadError } = await supabaseClient.storage
-          .from(parsedPath.bucketName)
-          .download(parsedPath.filePath);
-          
-        if (downloadError) {
-          console.error(`Error downloading video file: ${JSON.stringify(downloadError)}`);
-          
-          // If this is a chunked video, we can try to continue with other chunks
-          if (isChunkedVideo && videosToTranscribe.length > 1) {
-            console.error(`Skipping chunk ${i+1} due to download error`);
-            errorCount++;
-            continue;
-          }
-          
-          if (videosToTranscribe.length === 1) {
-            // When only one video is being processed, return a clear error
-            return new Response(JSON.stringify({
-              error: `Failed to download video file: ${downloadError.message || "Storage access error"}`
-            }), {
-              status: 500,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
-          }
-          // Otherwise we'll just skip this chunk and continue
-          continue;
-        }
-        
-        if (!fileData) {
-          console.error("Downloaded file data is null");
-          
-          if (isChunkedVideo && videosToTranscribe.length > 1) {
-            console.error(`Skipping chunk ${i+1} due to empty file data`);
-            errorCount++;
-            continue;
-          }
-          
-          if (videosToTranscribe.length === 1) {
-            return new Response(JSON.stringify({
-              error: "Downloaded file data is empty"
-            }), {
-              status: 500,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
-          }
-          continue;
-        }
-        
-        // Convert the file data to a buffer
-        const videoBuffer = await fileData.arrayBuffer();
-        const videoSizeMB = videoBuffer.byteLength / (1024 * 1024);
-        console.log(`Video file downloaded successfully, size: ${videoSizeMB.toFixed(2)} MB`);
-        
-        // If this is not a chunked video and the file is too large for OpenAI (>25MB)
-        // We need to send an error message that the video needs to be chunked
-        if (!isChunkedVideo && videoSizeMB > 25) {
-          console.log("Video file is too large for OpenAI API, checking if it's a chunked video");
-          
-          // If we're in chunking mode and have multiple videos, continue with other chunks
-          if (videosToTranscribe.length > 1) {
-            console.log("Skipping large video chunk, will continue with others");
-            continue;
-          }
-          
-          // For non-chunked videos, return a message to use the chunking process
-          const singleVideoTranscript = "## Main Video\n\nThis video file is too large for direct transcription. Please use the \"Re-Transcribe Video\" button to process with automatic chunking.";
-          
-          // For large videos, we'll add the message to the combined transcript
-          if (combinedTranscript) {
-            combinedTranscript += `\n\n${singleVideoTranscript}`;
-          } else {
-            combinedTranscript = singleVideoTranscript;
-          }
-          
-          // We'll skip trying to transcribe this large file
-          continue;
-        }
-        
-        // Here we would normally call the OpenAI API to transcribe the video
-        // For this example, we'll just return a mock transcript
-        const singleVideoTranscript = `## ${video.title || "Video Section"}\n\nThis is a mock transcript for video ${i+1} (${video.title || "Untitled"}). In a real implementation, this would be generated using OpenAI's Whisper API or another transcription service.`;
-        
-        // Add estimated audio minutes for usage tracking
-        const duration = video.video_metadata?.duration || 5;
-        totalAudioMinutes += Math.ceil(duration / 60);
-        
-        // Add this video's transcript to the combined transcript
+        // Add this chunk's transcript to the combined transcript
         if (combinedTranscript) {
-          combinedTranscript += `\n\n${singleVideoTranscript}`;
+          combinedTranscript += `\n\n${chunkTranscript}`;
         } else {
-          combinedTranscript = singleVideoTranscript;
-        }
-        
-        successCount++;
-      } catch (error) {
-        console.error(`Error processing video ${i+1}: ${error.message}`);
-        console.error(`Stack trace: ${error.stack}`);
-        
-        errorCount++;
-        
-        // If this is a chunked video, try to continue with other chunks
-        if (isChunkedVideo && videosToTranscribe.length > 1) {
-          console.error(`Skipping chunk ${i+1} due to processing error`);
-          continue;
-        }
-        
-        // If we've attempted all videos and all failed, return an error
-        if (i === videosToTranscribe.length - 1 && successCount === 0) {
-          return new Response(JSON.stringify({
-            error: `Failed to process any videos: ${error.message}`
-          }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          combinedTranscript = chunkTranscript;
         }
       }
-    }
-    
-    // If we couldn't generate any transcript, return an error
-    if (!combinedTranscript) {
+      
+      // Add a note about large video processing
+      if (videoSizeMB > 25) {
+        combinedTranscript += `\n\n---\n\n**Note:** This video (${videoSizeMB.toFixed(1)} MB) was processed in ${chunking.chunks.length} chunks due to its large size. ` +
+          `The transcription shown is a placeholder. In a production environment, each chunk would be sent to a transcription service.`;
+      }
+      
+      // Update the project with the transcript
+      console.log("Updating project with chunked transcript");
+      const { error: updateError } = await supabaseClient
+        .from('projects')
+        .update({ transcript: combinedTranscript })
+        .eq('id', projectId);
+        
+      if (updateError) {
+        console.error(`Error updating project: ${updateError.message}`);
+        // We'll continue and return the transcript even if the update fails
+      }
+      
+      const totalTime = Date.now() - startTime;
+      console.log(`Transcribe-video function for chunked video completed in ${totalTime/1000} seconds`);
+      
+      // Return the transcript
       return new Response(JSON.stringify({
-        error: "Could not generate any transcript",
-        details: `Processed ${videosToTranscribe.length} videos with ${errorCount} errors and ${successCount} successful transcriptions`
+        transcript: combinedTranscript,
+        success: true,
+        processingDetails: {
+          chunksProcessed: chunking.chunks.length,
+          processingTimeSeconds: totalTime/1000,
+          isVirtualChunking: chunking.isVirtualChunking || false
+        }
       }), {
-        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    } 
+    
+    // If no chunking or there was another approach needed
+    if (videoSizeMB > 25) {
+      // Video is too large for direct processing
+      const largeVideoTranscript = `## ${project.title || "Video Transcription"}\n\n` +
+        `This video file (${videoSizeMB.toFixed(1)} MB) is too large for direct transcription and needs to be processed in chunks.\n\n` +
+        `Please use the "Re-Transcribe Video" button to process with automatic chunking.`;
+        
+      // Update the project with the message
+      const { error: updateError } = await supabaseClient
+        .from('projects')
+        .update({ transcript: largeVideoTranscript })
+        .eq('id', projectId);
+      
+      if (updateError) {
+        console.error(`Error updating project: ${updateError.message}`);
+      }
+      
+      return new Response(JSON.stringify({
+        transcript: largeVideoTranscript,
+        success: true,
+        needsChunking: true
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
     
-    console.log(`Generated combined transcript with ${combinedTranscript.length} chars from ${successCount} videos (${errorCount} failed)`);
-    console.log(`First 200 chars of transcript: ${combinedTranscript.substring(0, 200)}`);
+    // For normal-sized videos without chunking (fallback logic)
+    console.log("Processing regular video without chunking");
     
-    // Log usage for billing/analytics - in a real implementation this would be more sophisticated
-    console.log(`Recording usage data for ${totalAudioMinutes} minutes of audio`);
-    
+    // In a real implementation, we'd process the full video
+    // For now, we'll generate a mock transcript
+    const mockTranscript = `## ${project.title || "Video Transcription"}\n\n` +
+      `This is a mock transcript for demonstration purposes. In a production environment, ` +
+      `this would be the result of sending the video to a transcription service like OpenAI Whisper API.`;
+      
     // Update the project with the transcript
-    console.log("Updating project with transcript");
+    console.log("Updating project with standard transcript");
     const { error: updateError } = await supabaseClient
       .from('projects')
-      .update({ transcript: combinedTranscript })
+      .update({ transcript: mockTranscript })
       .eq('id', projectId);
       
     if (updateError) {
@@ -332,11 +221,9 @@ serve(async (req) => {
     
     // Return the transcript
     return new Response(JSON.stringify({
-      transcript: combinedTranscript,
+      transcript: mockTranscript,
+      success: true,
       processingDetails: {
-        videosProcessed: videosToTranscribe.length,
-        successfulTranscriptions: successCount,
-        failedTranscriptions: errorCount,
         processingTimeSeconds: totalTime/1000
       }
     }), {
@@ -347,13 +234,29 @@ serve(async (req) => {
     console.error(`Full stack trace: ${error.stack}`);
     
     return new Response(JSON.stringify({
-      error: `Transcription failed: ${error.message}`
+      error: `Transcription failed: ${error.message}`,
+      success: false
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
+
+// Helper function to format time in MM:SS or HH:MM:SS format
+function formatTime(seconds: number): string {
+  if (isNaN(seconds)) return "00:00";
+  
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  } else {
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+}
 
 function parseStoragePath(fullPath) {
   if (!fullPath) {
