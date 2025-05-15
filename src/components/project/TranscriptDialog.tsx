@@ -1,10 +1,8 @@
-
 import { useState, useEffect, useRef } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { FileText, RefreshCw, Check, Undo, ArrowDown, AlertTriangle } from "lucide-react";
 import { Project } from "@/services/projectService";
-import { updateProject } from "@/services/uploadService";
 import { toast } from "sonner";
 import { cleanupTranscript, formatWithSpeakers, splitIntoParagraphs, addTimestamps, hasMultipleVideoSections } from "@/utils/transcriptUtils";
 import { TranscriptRenderer } from "@/components/transcript/TranscriptRenderer";
@@ -14,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { fetchProjectVideos, ProjectVideo } from "@/services/projectVideoService";
+import { fetchProjectVideos } from "@/services/projectVideoService";
 import { transcribeVideo, updateProject } from "@/services/uploadService";
 
 interface TranscriptDialogProps {
