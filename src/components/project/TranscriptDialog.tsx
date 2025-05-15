@@ -223,39 +223,56 @@ export const TranscriptDialog = ({
       }
       
       // Call the transcribe video service with improved error handling
-      const result = await transcribeVideo(project.id, projectVideos);
-      
-      if (result.success && result.transcript) {
-        if (debugMode) {
-          console.log(`[DEBUG] Transcription succeeded. Transcript length: ${result.transcript.length} chars`);
+      try {
+        const result = await transcribeVideo(project.id, projectVideos);
+        
+        if (result.success && result.transcript) {
+          if (debugMode) {
+            console.log(`[DEBUG] Transcription succeeded. Transcript length: ${result.transcript.length} chars`);
+          }
+          
+          // Update the local state
+          setEditedTranscript(result.transcript);
+          setTranscript(result.transcript);
+          
+          // Reload all transcripts to get the updated combined version
+          await loadAllProjectTranscripts();
+          
+          toast.success("Video successfully re-transcribed!", { id: toastId });
+        } else {
+          console.error(`[DEBUG] Transcription failed:`, result.error);
+          const errorMessage = result.error || "Unknown error";
+          
+          // Show more helpful error message for common issues
+          if (errorMessage.includes("download") || errorMessage.includes("Storage access error")) {
+            toast.error("Failed to access video file. It may be missing or inaccessible.", { id: toastId, duration: 6000 });
+          } else if (errorMessage.includes("large")) {
+            toast.error("Video file is too large for direct transcription. Try using automatic chunking.", { id: toastId, duration: 6000 });
+          } else {
+            toast.error(`Failed to re-transcribe video: ${errorMessage}`, { id: toastId, duration: 6000 });
+          }
+          
+          // Show extended error details
+          if (debugMode) {
+            console.log(`[DEBUG] Extended error details for transcription failure:`, {
+              project_id: project.id,
+              error: result.error,
+              videosCount: projectVideos.length,
+              source_file_exists: !!project.source_file_path
+            });
+          }
         }
-        
-        // Update the local state
-        setEditedTranscript(result.transcript);
-        setTranscript(result.transcript);
-        
-        // Reload all transcripts to get the updated combined version
-        await loadAllProjectTranscripts();
-        
-        toast.success("Video successfully re-transcribed!", { id: toastId });
-      } else {
-        console.error(`[DEBUG] Transcription failed:`, result.error);
-        toast.error(`Failed to re-transcribe video: ${result.error || "Unknown error"}`, { id: toastId, duration: 6000 });
-        
-        // Show extended error details
-        if (debugMode) {
-          console.log(`[DEBUG] Extended error details for transcription failure:`, {
-            project_id: project.id,
-            error: result.error,
-            videosCount: projectVideos.length,
-            source_file_exists: !!project.source_file_path
-          });
-        }
+      } catch (apiError: any) {
+        console.error("[DEBUG] API error re-transcribing video:", apiError);
+        toast.error(`API error: ${apiError?.message || "Unknown error"}`, { 
+          id: toastId, 
+          duration: 6000
+        });
       }
     } catch (error: any) {
-      console.error("[DEBUG] Error re-transcribing video:", error);
-      toast.error(`Transcription failed: ${error?.message || "Unknown error"}`, { 
-        id: "retranscribe", 
+      console.error("[DEBUG] Error in re-transcribe handler:", error);
+      toast.error(`Error preparing transcription: ${error?.message || "Unknown error"}`, { 
+        id: toastId, 
         duration: 6000
       });
     } finally {
