@@ -5,13 +5,26 @@ import { Trash2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { syncStorageUsage } from "@/services/storageUsageService";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export function CleanupStorageButton() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   
   const handleCleanup = async () => {
     try {
       setIsLoading(true);
+      setIsDialogOpen(false);
       
       // Get the current user's session
       const { data: { session } } = await supabase.auth.getSession();
@@ -60,24 +73,42 @@ export function CleanupStorageButton() {
   };
   
   return (
-    <Button
-      onClick={handleCleanup}
-      variant="destructive"
-      disabled={isLoading}
-      size="sm"
-      className="mt-2"
-    >
-      {isLoading ? (
-        <>
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          Cleaning...
-        </>
-      ) : (
-        <>
-          <Trash2 className="h-4 w-4 mr-2" />
-          Clear All Storage
-        </>
-      )}
-    </Button>
+    <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="destructive"
+          disabled={isLoading}
+          size="sm"
+          className="mt-2"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Cleaning...
+            </>
+          ) : (
+            <>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear All Storage
+            </>
+          )}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Clear All Storage</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action will delete all files in your storage. This is irreversible and all your uploaded files will be lost.
+            Are you sure you want to continue?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleCleanup}>
+            Yes, Clear Everything
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

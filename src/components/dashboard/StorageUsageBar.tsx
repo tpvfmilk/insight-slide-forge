@@ -9,7 +9,12 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CleanupStorageButton } from "./CleanupStorageButton";
 import { StorageBreakdownChart } from "./StorageBreakdownChart";
-import { fetchStorageInfo } from "@/services/usageService";
+import { fetchStorageInfo, fetchStorageBreakdown } from "@/services/usageService";
+import { 
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
   const queryClient = useQueryClient();
@@ -22,6 +27,14 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
   } = useQuery({
     queryKey: ['storage-info'],
     queryFn: fetchStorageInfo,
+    refetchOnWindowFocus: true,
+    staleTime: 60 * 1000 // 1 minute
+  });
+
+  // Get storage breakdown data
+  const { data: breakdownData } = useQuery({
+    queryKey: ['storage-breakdown'],
+    queryFn: fetchStorageBreakdown,
     refetchOnWindowFocus: true,
     staleTime: 60 * 1000 // 1 minute
   });
@@ -69,15 +82,34 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
   }
   
   const usedFormatted = formatFileSize(storageInfo.storageUsed);
-  const limitFormatted = formatFileSize(storageInfo.storageLimit);
-  const percentage = Math.min(100, storageInfo.percentageUsed);
-
-  // Determine color based on percentage
-  let progressColor = "bg-primary";
-  if (percentage > 90) {
-    progressColor = "bg-destructive";
-  } else if (percentage > 75) {
-    progressColor = "bg-warning";
+  
+  // Calculate segment percentages for the progress bar
+  let segments = [];
+  
+  if (breakdownData) {
+    const total = breakdownData.total > 0 ? breakdownData.total : 1; // Avoid division by zero
+    segments = [
+      {
+        type: 'videos',
+        percentage: (breakdownData.videos / total) * 100,
+        color: 'bg-blue-500'
+      },
+      {
+        type: 'slides',
+        percentage: (breakdownData.slides / total) * 100,
+        color: 'bg-green-500'
+      },
+      {
+        type: 'frames', 
+        percentage: (breakdownData.frames / total) * 100,
+        color: 'bg-amber-500'
+      },
+      {
+        type: 'other',
+        percentage: (breakdownData.other / total) * 100,
+        color: 'bg-gray-500'
+      }
+    ];
   }
   
   return <div className="space-y-4 px-[25px] py-[16px]">
@@ -88,7 +120,7 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
         </div>
         <div className="flex items-center gap-2">
           <span>
-            {usedFormatted} / {limitFormatted}
+            {usedFormatted}
           </span>
           <Button 
             variant="ghost" 
@@ -103,9 +135,22 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
         </div>
       </div>
       
-      <Progress value={percentage} className="h-2" indicatorClassName={progressColor} />
-      
-      {percentage > 90 && <div className="text-xs text-destructive">Storage almost full</div>}
+      {/* Segmented Progress Bar */}
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-secondary">
+        {segments.map((segment, index) => (
+          segment.percentage > 0 && (
+            <div 
+              key={segment.type}
+              className={`absolute top-0 h-full ${segment.color}`}
+              style={{
+                left: `${segments.slice(0, index).reduce((sum, s) => sum + s.percentage, 0)}%`,
+                width: `${segment.percentage}%`
+              }}
+              title={`${segment.type}: ${formatFileSize(breakdownData?.[segment.type] || 0)}`}
+            />
+          )
+        ))}
+      </div>
       
       {/* Storage breakdown chart */}
       <div className="mt-6 pt-4 border-t">

@@ -4,11 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { 
   Bar, 
   BarChart, 
-  Cell,
-  Legend,
   ResponsiveContainer, 
   Tooltip, 
-  XAxis 
+  Legend 
 } from "recharts";
 import { fetchStorageBreakdown } from "@/services/usageService";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -98,7 +96,6 @@ export function StorageBreakdownChart() {
           <BarChart
             data={chartData}
             layout="vertical"
-            stackOffset="expand"
             margin={{
               top: 0,
               right: 0,
@@ -106,7 +103,6 @@ export function StorageBreakdownChart() {
               bottom: 0,
             }}
           >
-            <XAxis type="number" hide />
             <Tooltip 
               formatter={(value) => formatFileSize(value as number)}
               labelFormatter={() => 'Storage Usage'} 
