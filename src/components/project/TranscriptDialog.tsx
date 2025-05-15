@@ -18,6 +18,7 @@ import { ExtendedVideoMetadata } from "@/types/videoChunking";
 import { initializeStorage } from "@/services/storageService";
 import { parseStoragePath } from "@/utils/videoPathUtils";
 import { supabase } from "@/integrations/supabase/client";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TranscriptDialogProps {
   project: Project | null;
@@ -491,14 +492,14 @@ export const TranscriptDialog = ({
           />
         </>
       ) : (
-        <div className="border rounded-md p-4 min-h-[350px] bg-muted/10 overflow-y-auto">
+        <ScrollArea className="border rounded-md p-4 bg-muted/10 h-[350px]">
           <TranscriptRenderer 
             transcript={editedTranscript} 
             showTimestamps={showTimestamps}
             highlightSpeakers={highlightSpeakers}
             showVideoSeparators={true}
           />
-        </div>
+        </ScrollArea>
       )}
       
       <div className="flex justify-between mt-4">

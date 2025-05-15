@@ -8,6 +8,7 @@ import { Settings } from "lucide-react";
 import { Project } from "@/services/projectService";
 import { TranscriptDialog } from "@/components/project/TranscriptDialog";
 import { ContextDialog } from "@/components/project/ContextDialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ProjectSettingsDialogProps {
   project: Project | null;
@@ -51,33 +52,35 @@ export const ProjectSettingsDialog = ({
             <TabsTrigger value="context">Context</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="transcript" className="focus:outline-none">
-            <TranscriptDialog 
-              project={project}
-              transcript={transcript}
-              setTranscript={setTranscript}
-              isOpen={activeTab === "transcript"}
-              onOpenChange={(open) => {
-                if (!open) {
-                  handleClose();
-                }
-              }}
-            />
-          </TabsContent>
-          
-          <TabsContent value="context" className="focus:outline-none">
-            <ContextDialog 
-              project={project}
-              contextPrompt={contextPrompt}
-              setContextPrompt={setContextPrompt}
-              isOpen={activeTab === "context"}
-              onOpenChange={(open) => {
-                if (!open) {
-                  handleClose();
-                }
-              }}
-            />
-          </TabsContent>
+          <ScrollArea className="max-h-[70vh] overflow-y-auto">
+            <TabsContent value="transcript" className="focus:outline-none">
+              <TranscriptDialog 
+                project={project}
+                transcript={transcript}
+                setTranscript={setTranscript}
+                isOpen={activeTab === "transcript"}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    handleClose();
+                  }
+                }}
+              />
+            </TabsContent>
+            
+            <TabsContent value="context" className="focus:outline-none">
+              <ContextDialog 
+                project={project}
+                contextPrompt={contextPrompt}
+                setContextPrompt={setContextPrompt}
+                isOpen={activeTab === "context"}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    handleClose();
+                  }
+                }}
+              />
+            </TabsContent>
+          </ScrollArea>
         </Tabs>
       </SafeDialogContent>
     </SafeDialog>

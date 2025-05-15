@@ -38,10 +38,9 @@ export const SafeDialog = ({ children, onOpenChange, open, className, ...props }
     }
   }, [open, id, registerUIElement, unregisterUIElement, onOpenChange]);
   
-  // Remove className from props being passed to Dialog since it doesn't accept it
   return (
     <Dialog open={open} onOpenChange={onOpenChange} {...props}>
-      <div className={className}>{children}</div>
+      {children}
     </Dialog>
   );
 };
@@ -49,7 +48,7 @@ export const SafeDialog = ({ children, onOpenChange, open, className, ...props }
 export const SafeDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogContent>,
   React.ComponentPropsWithoutRef<typeof DialogContent>
->(({ children, ...props }, ref) => {
-  return <DialogContent ref={ref} {...props}>{children}</DialogContent>;
+>(({ children, className, ...props }, ref) => {
+  return <DialogContent ref={ref} className={className} {...props}>{children}</DialogContent>;
 });
 SafeDialogContent.displayName = 'SafeDialogContent';
