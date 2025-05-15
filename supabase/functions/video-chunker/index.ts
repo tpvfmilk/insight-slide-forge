@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -34,7 +35,7 @@ serve(async (req) => {
 
   try {
     console.log("Video-chunker function called");
-    const startTime = Date.now();
+    const functionStartTime = Date.now();
     
     let requestBody;
     try {
@@ -251,27 +252,27 @@ serve(async (req) => {
     
     // Generate chunks metadata with appropriately sized segments
     const updatedChunks = [];
-    let startTime = 0;
+    let chunkStartTime = 0;
     let chunkIndex = 0;
     
-    while (startTime < videoDuration) {
+    while (chunkStartTime < videoDuration) {
       // For the last chunk, make sure we don't exceed the total duration
-      const chunkDuration = Math.min(idealChunkDuration, videoDuration - startTime);
+      const chunkDuration = Math.min(idealChunkDuration, videoDuration - chunkStartTime);
       if (chunkDuration <= 0) break;
       
-      const endTime = startTime + chunkDuration;
+      const endTime = chunkStartTime + chunkDuration;
       
       // Generate the chunk file path - in production this would be a separate file
       const chunkFileName = `${chunksBasePath}/${projectTitle}_chunk_${chunkIndex + 1}.${fileExtension}`;
       const chunkPath = `chunks/${chunkFileName}`;
       
       console.log(`Creating reference for chunk ${chunkIndex + 1} at path: ${chunkPath}`);
-      console.log(`Chunk duration: ${chunkDuration}s (${startTime}s - ${endTime}s)`);
+      console.log(`Chunk duration: ${chunkDuration}s (${chunkStartTime}s - ${endTime}s)`);
       
       // Add chunk metadata
       updatedChunks.push({
         index: chunkIndex,
-        startTime: startTime,
+        startTime: chunkStartTime,
         endTime: endTime,
         duration: chunkDuration,
         videoPath: chunkPath,
@@ -279,7 +280,7 @@ serve(async (req) => {
         title: `Chunk ${chunkIndex + 1}`
       });
       
-      startTime = endTime;
+      chunkStartTime = endTime;
       chunkIndex++;
     }
     
@@ -316,7 +317,7 @@ serve(async (req) => {
         );
       }
       
-      const totalTime = Date.now() - startTime;
+      const totalTime = Date.now() - functionStartTime;
       console.log(`Video-chunker function completed in ${totalTime/1000} seconds`);
       
       // Return the updated chunk metadata
