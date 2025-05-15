@@ -25,37 +25,48 @@ serve(async (req) => {
   try {
     // Extract auth token from request
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'No authorization header provided' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    
+    // Initialize request body
+    let body;
+    let userId;
+    
+    try {
+      body = await req.json();
+      // If userId is provided in the body, use it (for admin calls)
+      userId = body.userId;
+    } catch (error) {
+      body = {};
     }
-
-    // Initialize Supabase client with admin role
+    
+    // Initialize Supabase admin client
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-
-    // Initialize Supabase client with user token
-    const token = authHeader.replace('Bearer ', '');
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
-
-    // Get the user ID from the token
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid token', details: authError }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    
+    // If no userId provided in body, get it from the auth token
+    if (!userId) {
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: 'No authorization header provided and no userId in body', success: false }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+      
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid token', details: authError, success: false }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      userId = user.id;
     }
-
-    const userId = user.id;
+    
+    console.log(`Calculating storage breakdown for user: ${userId}`);
 
     // Initialize storage breakdown
     const breakdown: StorageBreakdown = {
@@ -78,6 +89,8 @@ serve(async (req) => {
 
     // Process each object to categorize by file type
     if (storageObjects) {
+      console.log(`Found ${storageObjects.length} storage objects for user ${userId}`);
+      
       for (const obj of storageObjects) {
         const size = obj.metadata?.size ? parseInt(obj.metadata.size) : 0;
         
@@ -102,6 +115,8 @@ serve(async (req) => {
       }
     }
 
+    console.log(`Calculated breakdown for user ${userId}:`, breakdown);
+
     // Update the user_storage record with the calculated breakdown
     try {
       await supabaseAdmin.rpc('update_user_storage_with_breakdown', {
@@ -112,6 +127,8 @@ serve(async (req) => {
         frames_size: breakdown.frames,
         other_size: breakdown.other
       });
+      
+      console.log(`Successfully updated storage breakdown in database for user ${userId}`);
     } catch (updateError) {
       console.error('Failed to update storage breakdown:', updateError);
       // Continue even if update fails - we can still return the calculated breakdown

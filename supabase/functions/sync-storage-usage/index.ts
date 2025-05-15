@@ -15,57 +15,40 @@ serve(async (req) => {
   }
   
   try {
-    // Get the user ID from the request body or auth token
-    let userId;
-    try {
-      const body = await req.json();
-      userId = body.userId;
-    } catch (error) {
-      // If no body or invalid JSON, get the user from auth
-      const authHeader = req.headers.get('Authorization');
-      if (!authHeader) {
-        return new Response(
-          JSON.stringify({ error: 'No authorization header and no userId in body', success: false }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
-      
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-      
-      if (authError || !user) {
-        return new Response(
-          JSON.stringify({ error: 'Unauthorized', details: authError, success: false }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      userId = user.id;
-    }
-    
-    if (!userId) {
+    // Extract auth token from request
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'No user ID provided', success: false }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'No authorization header provided', success: false }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    console.log(`Starting storage sync for user ${userId}`);
-    
-    // Create a Supabase client with the admin key
+    // Initialize Supabase client with admin role for accessing storage breakdown
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
-    // First, get the storage breakdown directly using the get-storage-breakdown edge function
+    // Get the user ID from the token
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized', details: authError, success: false }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = user.id;
+    
+    console.log(`Starting storage sync for user ${userId}`);
+    
+    // IMPORTANT FIX: Pass the Authorization header when calling get-storage-breakdown
     const breakdownResponse = await supabaseAdmin.functions.invoke('get-storage-breakdown', {
-      body: { userId }
+      body: { userId },
+      headers: { Authorization: authHeader } // Forward the original auth header
     });
     
     if (breakdownResponse.error) {

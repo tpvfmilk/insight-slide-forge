@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { syncStorageUsage } from "@/services/storageUsageService";
 
 export function CleanupStorageButton() {
   const [isLoading, setIsLoading] = useState(false);
@@ -35,13 +36,11 @@ export function CleanupStorageButton() {
       if (response.data.success) {
         toast.success(response.data.message);
         
-        // Force sync storage info using the standard functions.invoke method
-        const syncResponse = await supabase.functions.invoke('sync-storage-usage', {
-          body: { userId: session.user.id }
-        });
+        // Force sync storage info
+        const syncResult = await syncStorageUsage();
         
-        if (syncResponse.error) {
-          console.warn("Storage sync warning:", syncResponse.error);
+        if (!syncResult.success) {
+          console.warn("Storage sync warning:", syncResult.message);
           // Continue with page reload even if sync fails
         }
         

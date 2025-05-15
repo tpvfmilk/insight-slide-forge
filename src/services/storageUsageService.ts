@@ -11,29 +11,40 @@ export const syncStorageUsage = async (): Promise<{ success: boolean; message: s
     // Get current user session
     const { data: session } = await supabase.auth.getSession();
     if (!session?.session) {
+      console.warn("Sync storage: No active session found");
       return { success: false, message: "No active session" };
     }
     
     const userId = session.session.user.id;
+    console.log(`Syncing storage usage for user ${userId}`);
     
-    // Call the edge function to sync storage using the standard functions.invoke method
+    // Call the edge function to sync storage
     const response = await supabase.functions.invoke('sync-storage-usage', {
       body: { userId }
     });
     
+    console.log("Storage sync response:", response);
+    
     if (response.error) {
       console.error("Storage sync error:", response.error);
-      return { success: false, message: `Failed to sync storage usage: ${response.error.message || 'Unknown error'}` };
+      return { 
+        success: false, 
+        message: `Failed to sync storage usage: ${response.error.message || 'Unknown error'}` 
+      };
     }
     
     // Check if data exists in the response
     if (!response.data) {
-      return { success: false, message: "No data returned from storage sync function" };
+      console.error("No data returned from storage sync function");
+      return { 
+        success: false, 
+        message: "No data returned from storage sync function" 
+      };
     }
     
     const data = response.data;
     
-    // Handle success response - data might have previous_size and new_size
+    // Handle success response
     if (data.success) {
       let message = "Storage usage updated successfully";
       
@@ -53,6 +64,9 @@ export const syncStorageUsage = async (): Promise<{ success: boolean; message: s
     };
   } catch (error) {
     console.error("Error syncing storage usage:", error);
-    return { success: false, message: `Error syncing storage usage: ${error.message || 'Unknown error'}` };
+    return { 
+      success: false, 
+      message: `Error syncing storage usage: ${error.message || 'Unknown error'}` 
+    };
   }
 };

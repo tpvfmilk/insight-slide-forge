@@ -2,7 +2,6 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Progress } from "@/components/ui/progress";
-import { fetchStorageInfo } from "@/services/usageService";
 import { formatFileSize } from "@/utils/formatUtils";
 import { HardDrive, RefreshCw } from "lucide-react";
 import { syncStorageUsage } from "@/services/storageUsageService";
@@ -10,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CleanupStorageButton } from "./CleanupStorageButton";
 import { StorageBreakdownChart } from "./StorageBreakdownChart";
+import { fetchStorageInfo } from "@/services/usageService";
 
 export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
   const queryClient = useQueryClient();
@@ -35,6 +35,7 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
     try {
       toast.loading("Syncing storage usage...");
       const result = await syncStorageUsage();
+      
       if (result.success) {
         toast.success(result.message);
         // Refetch storage info to update the UI
@@ -49,6 +50,7 @@ export function StorageUsageBar({ hidden = true }: { hidden?: boolean }) {
       }
     } catch (error) {
       toast.error("Failed to sync storage usage");
+      console.error("Error syncing storage:", error);
     }
   };
   
