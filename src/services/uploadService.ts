@@ -1,8 +1,9 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
 import { parseStoragePath } from "@/utils/videoPathUtils";
-import { videoNeedsChunking, analyzeVideoForChunking, createVideoChunks } from "@/services/videoChunkingService";
+import { videoNeedsChunking, analyzeVideoForChunking, createVideoChunks, initiateServerSideChunking } from "@/services/videoChunkingService";
 import { ExtendedVideoMetadata } from "@/types/videoChunking";
 
 // Update this function to handle large videos through chunking
@@ -61,7 +62,7 @@ export const createProjectFromVideo = async (
         .from('video_uploads')
         .upload(filePath, videoFile, {
           cacheControl: '3600',
-          upsert: false
+          upsert: true // Updated to true to allow re-uploads
         });
       
       if (uploadError) {
@@ -188,6 +189,22 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
       const videoMetadata = project.video_metadata as ExtendedVideoMetadata;
       const isChunkedVideo = Boolean(videoMetadata?.chunking?.isChunked);
       
+      // If this is a large video that needs chunking but doesn't have actual chunk files yet,
+      // initiate server-side chunking first
+      if (isChunkedVideo && videoMetadata?.chunking?.chunks?.some(chunk => !chunk.videoPath)) {
+        console.log("Video needs chunking but chunks haven't been created yet");
+        
+        // Initiate server-side chunking
+        const chunkingResult = await initiateServerSideChunking(projectId, project.source_file_path);
+        if (!chunkingResult.success) {
+          console.error("Chunking failed:", chunkingResult.error);
+          toast.error("Failed to process video chunks", { id: "transcribe-video" });
+          return { success: false, error: chunkingResult.error };
+        }
+        
+        console.log("Server-side chunking initiated successfully");
+      }
+      
       if (isChunkedVideo) {
         console.log("This is a chunked video. Processing chunk information for transcription.");
         console.log(`Found ${videoMetadata.chunking?.chunks.length || 0} chunks.`);
@@ -236,6 +253,7 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
 
     if (response.error) {
       console.error("Error from transcribe-video edge function:", response.error);
+      toast.error("Error transcribing video", { id: "transcribe-video" });
       return { 
         success: false, 
         error: response.error?.message || "Error calling transcription service" 
@@ -246,6 +264,7 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
 
     if (error) {
       console.error("Error in transcription response:", error);
+      toast.error("Error in transcription", { id: "transcribe-video" });
       return { 
         success: false, 
         error: error 
@@ -253,6 +272,7 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
     }
 
     if (!transcript) {
+      toast.error("No transcript was generated", { id: "transcribe-video" });
       return { 
         success: false, 
         error: "No transcript was generated" 
@@ -263,6 +283,7 @@ export const transcribeVideo = async (projectId: string, projectVideos: any[] = 
     return { success: true, transcript: transcript };
   } catch (error: any) {
     console.error("Error transcribing video:", error);
+    toast.error("Failed to transcribe video", { id: "transcribe-video" });
     return { 
       success: false, 
       error: error.message || "An unexpected error occurred" 
@@ -291,7 +312,6 @@ export const updateProject = async (projectId: string, updates: any): Promise<bo
       return false;
     }
     
-    toast.success("Project updated successfully!");
     return true;
   } catch (error) {
     console.error("Error updating project:", error);

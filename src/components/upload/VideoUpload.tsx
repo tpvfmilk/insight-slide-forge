@@ -1,7 +1,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { FileVideo, Upload, AlertTriangle } from "lucide-react";
+import { FileVideo, Upload, AlertTriangle, Info } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
@@ -121,7 +121,7 @@ export const VideoUpload = () => {
           console.log("Project created successfully:", project.id);
           
           if (isLargeFile) {
-            toast.info("Large video will be processed in chunks for better transcription");
+            toast.info("Large video will be automatically processed in chunks for better transcription", { duration: 6000 });
           }
           
           toast.success("Redirecting to slide editor...");
@@ -174,11 +174,12 @@ export const VideoUpload = () => {
         </div>
         
         {isLargeFile && videoFile && (
-          <Alert variant="warning">
-            <AlertTriangle className="h-4 w-4" />
+          <Alert variant="info">
+            <Info className="h-4 w-4" />
             <AlertTitle>Large Video File</AlertTitle>
             <AlertDescription>
-              This video ({formatFileSize(videoFile.size)}) is larger than {MAX_CHUNK_SIZE_MB}MB and will be processed in chunks for optimal transcription. Each chunk will be transcribed separately and combined automatically.
+              <p>This video ({formatFileSize(videoFile.size)}) is larger than {MAX_CHUNK_SIZE_MB}MB and will be automatically processed in chunks for optimal transcription.</p>
+              <p className="mt-1">Each chunk will be transcribed separately and the results will be combined. The chunking process happens automatically when you click the "Re-Transcribe Video" button in the project settings.</p>
             </AlertDescription>
           </Alert>
         )}

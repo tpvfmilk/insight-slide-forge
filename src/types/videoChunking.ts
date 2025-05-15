@@ -17,6 +17,8 @@ export interface ChunkingInfo {
   isChunked: boolean;
   totalDuration?: number;
   chunks: ChunkMetadata[];
+  status?: "prepared" | "processing" | "complete" | "error"; // Status of the chunking process
+  processedAt?: string; // Timestamp when chunking was completed
 }
 
 /**
@@ -29,4 +31,5 @@ export interface ChunkMetadata {
   duration?: number;
   videoPath: string;
   title?: string;
+  status?: "pending" | "processing" | "complete" | "error"; // Status of chunk processing
 }

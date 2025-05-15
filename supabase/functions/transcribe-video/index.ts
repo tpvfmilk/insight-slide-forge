@@ -93,6 +93,48 @@ serve(async (req) => {
       
       if (isChunkedVideo) {
         console.log(`This is a chunked video with ${project.video_metadata?.chunking?.chunks?.length || 0} chunks`);
+        
+        // Check if the chunks are already created
+        if (!project.video_metadata?.chunking?.chunks?.every(chunk => chunk.videoPath)) {
+          console.log("Not all chunks have video paths. Need to create chunks first.");
+          
+          // Call video-chunker function to create the actual video chunks
+          try {
+            const chunkingResponse = await supabase.functions.invoke('video-chunker', {
+              body: { 
+                projectId,
+                originalVideoPath: project.source_file_path,
+                chunkingMetadata: project.video_metadata?.chunking
+              }
+            });
+            
+            if (chunkingResponse.error) {
+              console.error("Error from video-chunker:", chunkingResponse.error);
+              return new Response(
+                JSON.stringify({ error: "Failed to create video chunks", details: chunkingResponse.error }),
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+            
+            // Get the updated project with chunk paths
+            const { data: updatedProject } = await supabase
+              .from('projects')
+              .select('video_metadata')
+              .eq('id', projectId)
+              .single();
+              
+            if (updatedProject?.video_metadata?.chunking?.chunks) {
+              project.video_metadata = updatedProject.video_metadata;
+              console.log(`Updated project with ${updatedProject.video_metadata.chunking.chunks.length} chunk paths`);
+            }
+          } catch (error) {
+            console.error("Error creating video chunks:", error);
+            return new Response(
+              JSON.stringify({ error: "Failed to process video chunks", details: error.message }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
       }
 
       // Determine which videos to process
@@ -241,8 +283,9 @@ serve(async (req) => {
               continue;
             }
             
-            // For large files that aren't chunks, we should have been using the chunking process
-            transcripts.push(`\n\n## ${video.title || `Video ${i + 1}`}\n\nThis video file is too large for the current transcription service. Please use the chunked video processing feature.`);
+            // For large files that aren't chunks and we're not in the chunking process, 
+            // Return an actionable message
+            transcripts.push(`\n\n## ${video.title || `Video ${i + 1}`}\n\nThis video file is too large for direct transcription. Please use the "Re-Transcribe Video" button to process with automatic chunking.`);
           } else {
             // Process this video file normally
             const videoTitle = video.title || `Video ${i + 1}`;
@@ -447,14 +490,13 @@ async function processLargeAudioBlob(audioBlob: Blob): Promise<string | null> {
 
 /**
  * Process a large video by extracting audio and splitting it into chunks
- * This implementation now actually attempts to break down the video into chunks
  */
 async function processLargeVideo(videoBlob: Blob): Promise<string | null> {
   console.log("Processing large video file - implementing chunk-based transcription");
   
   try {
-    // For very large videos, we'll just return a message advising the user to use chunking
-    return "This video file is too large for the current transcription service. Please use the chunked video processing feature.";
+    // Instead of just returning a message, we'll now trigger the video-chunker function
+    return "This video file needs to be processed in chunks. Please use the 'Re-Transcribe Video' button which will automatically handle chunking for you.";
   } catch (error) {
     console.error("Error processing large video:", error);
     return null;

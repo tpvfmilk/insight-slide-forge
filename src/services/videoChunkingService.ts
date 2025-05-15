@@ -74,15 +74,16 @@ export const analyzeVideoForChunking = async (
     
     // Create extended metadata with chunking information
     return {
-      duration: videoDuration,
-      original_file_name: file.name,
-      file_type: file.type,
-      file_size: file.size,
-      chunking: {
-        isChunked: true,
-        totalDuration: videoDuration,
-        chunks: chunks
-      }
+        duration: videoDuration,
+        original_file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+        chunking: {
+          isChunked: true,
+          totalDuration: videoDuration,
+          chunks: chunks,
+          status: "prepared" // Add status field to track chunking progress
+        }
     };
   } catch (error) {
     console.error("Error analyzing video for chunking:", error);
@@ -194,7 +195,7 @@ export const createVideoChunks = async (
       .from('video_uploads')
       .upload(originalFilePath, file, {
         cacheControl: '3600',
-        upsert: false
+        upsert: true // Changed to true to allow re-uploads
       });
     
     if (uploadError) {
@@ -206,7 +207,6 @@ export const createVideoChunks = async (
     toast.success("Video uploaded successfully. It will be processed in chunks for transcription.");
     
     // Update the chunk metadata with paths that would be created by the server
-    // In a real implementation, the server would actually create these chunks
     const updatedChunks = chunkMetadata.map((chunk, index) => {
       // Create a path for this chunk
       const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
@@ -225,6 +225,50 @@ export const createVideoChunks = async (
     console.error("Error creating video chunks:", error);
     toast.error("Failed to process video chunks");
     return null;
+  }
+};
+
+/**
+ * Initiates server-side chunking process for a video
+ * @param projectId The project ID
+ * @param sourceFilePath Path to the original video
+ * @returns Promise with status of the chunking process
+ */
+export const initiateServerSideChunking = async (
+  projectId: string,
+  sourceFilePath: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('video_metadata')
+      .eq('id', projectId)
+      .single();
+      
+    if (!project?.video_metadata?.chunking) {
+      console.error("Project doesn't have chunking metadata");
+      return { success: false, error: "Missing chunking metadata" };
+    }
+    
+    // Call the video-chunker function to create chunks on the server
+    const { data, error } = await supabase.functions.invoke('video-chunker', {
+      body: { 
+        projectId,
+        originalVideoPath: sourceFilePath,
+        chunkingMetadata: project.video_metadata.chunking
+      }
+    });
+    
+    if (error) {
+      console.error("Error calling video-chunker:", error);
+      return { success: false, error: error.message };
+    }
+    
+    console.log("Server-side chunking initiated:", data);
+    return { success: true };
+  } catch (error) {
+    console.error("Error initiating server-side chunking:", error);
+    return { success: false, error: error.message };
   }
 };
 
@@ -284,4 +328,3 @@ export const getChunkInfoAtTime = (time: number, metadata: ExtendedVideoMetadata
   
   return `Chunk ${chunk.index + 1} (${Math.floor(chunk.duration || 0)}s)`;
 };
-
