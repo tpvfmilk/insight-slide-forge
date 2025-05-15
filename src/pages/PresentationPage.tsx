@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchProjectById } from "@/services/projectService";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Slide } from "@/components/slides/editor/SlideEditorTypes";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SlideTransition } from "@/components/slides/SlideTransition";
 
 const PresentationPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -16,9 +18,19 @@ const PresentationPage = () => {
   const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const presentationRef = useRef<HTMLDivElement>(null);
+  const [nextSlidePreloaded, setNextSlidePreloaded] = useState<number | null>(null);
   
   // Get current slide
   const currentSlide = slides[currentSlideIndex];
+  
+  // Preload next slide for smoother transitions
+  useEffect(() => {
+    if (currentSlideIndex < slides.length - 1) {
+      setNextSlidePreloaded(currentSlideIndex + 1);
+    } else {
+      setNextSlidePreloaded(null);
+    }
+  }, [currentSlideIndex, slides.length]);
   
   // Handler for keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -147,11 +159,13 @@ const PresentationPage = () => {
       />
       
       {/* Main Content */}
-      <div className={`flex-1 flex items-center justify-center ${isFullscreen ? 'p-1' : 'p-2'}`}>
+      <div className={`flex-1 flex items-center justify-center ${isFullscreen ? 'p-1' : 'p-2'} overflow-hidden`}>
         {isLoading ? (
           <PresentationSkeleton />
         ) : slides.length > 0 ? (
-          <PresentationSlide slide={currentSlide} isFullscreen={isFullscreen} />
+          <SlideTransition slide={currentSlide} isFullscreen={isFullscreen}>
+            <PresentationSlide slide={currentSlide} isFullscreen={isFullscreen} />
+          </SlideTransition>
         ) : (
           <div className="text-center p-8">
             <h2 className="text-2xl font-semibold mb-4">No slides available</h2>
@@ -181,8 +195,30 @@ const PresentationPage = () => {
           .fullscreen-mode .presentation-slide-container {
             max-width: 98% !important;
           }
+          
+          /* Preload hidden images to prevent layout shifts */
+          .preload-image {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+          }
         `}
       </style>
+      
+      {/* Preload next slide images */}
+      {nextSlidePreloaded !== null && slides[nextSlidePreloaded] && (
+        <div className="hidden">
+          {/* Preload next slide images */}
+          {slides[nextSlidePreloaded].imageUrl && (
+            <img src={slides[nextSlidePreloaded].imageUrl} className="preload-image" alt="" />
+          )}
+          {slides[nextSlidePreloaded].imageUrls?.map((url, i) => (
+            <img key={`preload-${i}`} src={url} className="preload-image" alt="" />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
