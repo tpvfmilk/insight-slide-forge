@@ -30,29 +30,33 @@ export const createProjectFromVideo = async (
   onProgress?: (progress: number) => void
 ): Promise<Project | null> => {
   try {
+    console.log(`[DEBUG] Creating project from video: ${title}`);
+    console.log(`[DEBUG] File size: ${(videoFile.size / (1024 * 1024)).toFixed(2)}MB`);
+    console.log(`[DEBUG] Needs chunking: ${needsChunking}`);
+    
     // Verify user is authenticated
     const { data: session } = await supabase.auth.getSession();
     if (!session?.session?.access_token) {
-      toast.error("You need to be logged in to create a project");
-      return null;
+      throw new Error("You need to be logged in to create a project");
     }
     
     // Analyze video file for potential chunking
     const videoMetadata = await analyzeVideoForChunking(videoFile);
     if (!videoMetadata) {
-      toast.error("Failed to analyze video file");
-      return null;
+      throw new Error("Failed to analyze video file");
     }
     
-    let filePath = `uploads/${session.session.user.id}/${videoFile.name}`;
+    let filePath = `uploads/${session.session.user.id}/${Date.now()}_${videoFile.name}`;
     
     // Check if video needs chunking
     if (needsChunking || videoMetadata.chunking?.isChunked) {
+      console.log("[DEBUG] Video needs chunking, preparing for chunked upload");
       // If video needs chunking, create a different path for the original file
-      filePath = `chunks/${session.session.user.id}/${videoFile.name}`;
+      filePath = `chunks/${session.session.user.id}/${Date.now()}_${videoFile.name}`;
       
       // Process the video chunks
       if (chunkMetadata.length > 0) {
+        console.log(`[DEBUG] Processing ${chunkMetadata.length} chunks`);
         // Since we know that the ChunkMetadata[] is what we expect here,
         // we can safely pass it as is without worrying about JsonSafeChunkMetadata[]
         const updatedChunks = await createVideoChunks(
@@ -62,9 +66,10 @@ export const createProjectFromVideo = async (
         );
         
         if (!updatedChunks) {
-          toast.error("Failed to process video chunks");
-          return null;
+          throw new Error("Failed to process video chunks");
         }
+        
+        console.log(`[DEBUG] Updated chunks with paths: ${updatedChunks.length}`);
         
         // Update the metadata with chunk paths
         if (videoMetadata.chunking) {
@@ -76,6 +81,9 @@ export const createProjectFromVideo = async (
       }
       
       // Upload the original file
+      console.log(`[DEBUG] Uploading original file to: ${filePath}`);
+      onProgress?.(10);
+      
       const { error: uploadError } = await supabase.storage
         .from('video_uploads')
         .upload(filePath, videoFile, {
@@ -85,21 +93,26 @@ export const createProjectFromVideo = async (
       
       if (uploadError) {
         console.error("[DEBUG] File upload error:", uploadError);
-        toast.error("Failed to upload original video file");
-        return null;
+        throw new Error(`Failed to upload original video file: ${uploadError.message}`);
       }
+      
+      console.log("[DEBUG] Original file uploaded successfully");
+      onProgress?.(40);
       
       // Upload each chunk file if they exist
       if (chunkFiles.length > 0) {
+        console.log(`[DEBUG] Uploading ${chunkFiles.length} chunk files`);
+        
         for (let i = 0; i < chunkFiles.length; i++) {
           const chunkFile = chunkFiles[i];
           const chunkInfo = chunkMetadata[i];
           
-          if (!chunkInfo.videoPath) continue;
+          if (!chunkInfo.videoPath) {
+            console.warn(`[DEBUG] Chunk ${i} has no videoPath defined, skipping upload`);
+            continue;
+          }
           
           // Extract the bucket name and path
-          // Note: chunkInfo.videoPath might be in format "bucketName/path/to/file"
-          // or just "path/to/file" where we assume the bucket is 'video_uploads'
           let bucketName = 'video_uploads';
           let chunkPath = chunkInfo.videoPath;
           
@@ -125,38 +138,50 @@ export const createProjectFromVideo = async (
             if (chunkUploadError) {
               console.error(`[DEBUG] Chunk ${i} upload error:`, chunkUploadError);
               // We'll continue with other chunks even if one fails
+            } else {
+              console.log(`[DEBUG] Chunk ${i} uploaded successfully`);
             }
-          } catch (uploadError) {
+          } catch (uploadError: any) {
             console.error(`[DEBUG] Unexpected error uploading chunk ${i}:`, uploadError);
+            toast.warning(`Failed to upload chunk ${i + 1}. The project might still work.`);
           }
           
           // Update progress
           if (onProgress) {
-            onProgress(Math.round((i + 1) / chunkFiles.length * 100));
+            onProgress(40 + Math.round((i + 1) / chunkFiles.length * 40));
           }
         }
       }
     } else {
       // For normal-sized videos, upload the file to Supabase storage directly
+      console.log(`[DEBUG] Uploading standard video file to: ${filePath}`);
+      onProgress?.(20);
+      
       const { error: uploadError } = await supabase.storage
         .from('video_uploads')
         .upload(filePath, videoFile, {
           cacheControl: '3600',
-          upsert: true // Updated to true to allow re-uploads
+          upsert: true
         });
       
       if (uploadError) {
         console.error("[DEBUG] File upload error:", uploadError);
-        toast.error("Failed to upload video file");
-        return null;
+        throw new Error(`Failed to upload video file: ${uploadError.message}`);
       }
+      
+      console.log("[DEBUG] Standard video file uploaded successfully");
+      onProgress?.(80);
     }
     
     // Convert the ExtendedVideoMetadata to a JSON-compatible format
     // using our helper function
     const jsonSafeMetadata = toJsonSafe(videoMetadata);
+    console.log("[DEBUG] Created JSON-safe metadata for Supabase");
     
     // Create a new project in the database
+    console.log("[DEBUG] Creating project in database");
+    onProgress?.(90);
+    
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
@@ -166,22 +191,25 @@ export const createProjectFromVideo = async (
         source_file_path: filePath,
         context_prompt: contextPrompt,
         transcript: "",
-        video_metadata: jsonSafeMetadata
+        video_metadata: jsonSafeMetadata as Json
       })
       .select()
       .single();
     
     if (projectError) {
       console.error("[DEBUG] Project creation error:", projectError);
-      toast.error("Failed to create project");
-      return null;
+      throw new Error(`Failed to create project: ${projectError.message}`);
     }
+    
+    console.log(`[DEBUG] Project created successfully with ID: ${project.id}`);
+    onProgress?.(100);
     
     toast.success("Project created successfully!");
     return project as Project;
-  } catch (error) {
+  } catch (error: any) {
     console.error("[DEBUG] Error creating project:", error);
-    toast.error("Failed to create project");
+    const errorMessage = error.message || "Failed to create project";
+    toast.error(errorMessage);
     return null;
   }
 };

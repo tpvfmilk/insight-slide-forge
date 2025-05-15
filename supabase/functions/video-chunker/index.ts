@@ -10,7 +10,15 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error("Missing Supabase environment variables");
+}
+
+const supabase = createClient(
+  supabaseUrl || "", 
+  supabaseServiceKey || ""
+);
 
 // This function handles video chunking by creating virtual chunk references
 // In a production environment with FFmpeg, this would create actual video chunks
@@ -24,15 +32,40 @@ serve(async (req) => {
     console.log("Video-chunker function called");
     const startTime = Date.now();
     
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch (parseError) {
+      console.error("Failed to parse request body:", parseError);
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON in request body" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     const { 
       projectId, 
       originalVideoPath,
       chunkingMetadata
-    } = await req.json();
+    } = requestBody;
 
-    if (!projectId || !originalVideoPath || !chunkingMetadata) {
+    if (!projectId) {
       return new Response(
-        JSON.stringify({ error: "Project ID, original video path and chunking metadata are required" }),
+        JSON.stringify({ error: "Project ID is required" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!originalVideoPath) {
+      return new Response(
+        JSON.stringify({ error: "Original video path is required" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!chunkingMetadata) {
+      return new Response(
+        JSON.stringify({ error: "Chunking metadata is required" }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -48,10 +81,17 @@ serve(async (req) => {
       .eq('id', projectId)
       .single();
 
-    if (projectError || !project) {
+    if (projectError) {
       console.error("Project not found:", projectError);
       return new Response(
-        JSON.stringify({ error: "Project not found" }),
+        JSON.stringify({ error: `Project not found: ${projectError.message}` }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!project) {
+      return new Response(
+        JSON.stringify({ error: "Project not found in database" }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -88,6 +128,36 @@ serve(async (req) => {
     // 2. Reference this copy for all chunks in metadata
     // 3. Update the project with simulated chunk information
     
+    // First, check if the original file exists
+    let originalFileData;
+    try {
+      // Strip any 'video_uploads/' prefix for the download path if needed
+      const downloadPath = originalFilePath.replace(/^video_uploads\//, '');
+      console.log(`Checking for original file at: ${downloadPath}`);
+      
+      const { data, error } = await supabase
+        .storage
+        .from('video_uploads')
+        .download(downloadPath);
+        
+      if (error) {
+        console.error("Error accessing original video:", error);
+        return new Response(
+          JSON.stringify({ error: `Could not access original video file: ${error.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      originalFileData = data;
+      console.log("Successfully accessed original video file");
+    } catch (downloadError) {
+      console.error("Error during download:", downloadError);
+      return new Response(
+        JSON.stringify({ error: `Download error: ${downloadError.message}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     // First, copy the original video to the chunks bucket
     const projectTitle = project.title.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
     const chunksBasePath = `${projectId}/${projectTitle}`;
@@ -95,38 +165,32 @@ serve(async (req) => {
     
     console.log(`Creating main chunk file reference at chunks/${mainChunkFilePath}`);
     
-    // Check if the original file exists
-    const { data: originalFileData, error: originalFileError } = await supabase
-      .storage
-      .from('video_uploads')
-      .download(originalFilePath.replace('video_uploads/', ''));
-    
-    if (originalFileError) {
-      console.error("Error accessing original video:", originalFileError);
-      return new Response(
-        JSON.stringify({ error: "Could not access original video file" }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
     // Copy the file to the chunks bucket
-    const { error: uploadError } = await supabase
-      .storage
-      .from('chunks')
-      .upload(mainChunkFilePath, originalFileData, {
-        contentType: `video/${fileExtension}`,
-        upsert: true
-      });
-    
-    if (uploadError) {
-      console.error("Error copying original video to chunks bucket:", uploadError);
+    try {
+      const { error: uploadError } = await supabase
+        .storage
+        .from('chunks')
+        .upload(mainChunkFilePath, originalFileData, {
+          contentType: `video/${fileExtension}`,
+          upsert: true
+        });
+      
+      if (uploadError) {
+        console.error("Error copying original video to chunks bucket:", uploadError);
+        return new Response(
+          JSON.stringify({ error: `Failed to copy video to chunks bucket: ${uploadError.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log("Successfully copied original video to chunks bucket");
+    } catch (uploadError: any) {
+      console.error("Error during upload to chunks bucket:", uploadError);
       return new Response(
-        JSON.stringify({ error: "Failed to copy video to chunks bucket" }),
+        JSON.stringify({ error: `Upload error: ${uploadError.message}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    console.log("Successfully copied original video to chunks bucket");
     
     const updatedChunks = [];
     
@@ -152,51 +216,58 @@ serve(async (req) => {
     }
     
     // Update project with chunk info
-    const updatedMetadata = {
-      ...project.video_metadata,
-      chunking: {
-        ...chunkingMetadata,
-        chunks: updatedChunks,
-        isChunked: true,
-        status: 'complete',
-        processedAt: new Date().toISOString()
-      }
-    };
-    
-    // Update the project in the database
-    const { error: updateError } = await supabase
-      .from('projects')
-      .update({ 
-        video_metadata: updatedMetadata,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', projectId);
+    try {
+      const updatedMetadata = {
+        ...project.video_metadata,
+        chunking: {
+          ...chunkingMetadata,
+          chunks: updatedChunks,
+          isChunked: true,
+          status: 'complete',
+          processedAt: new Date().toISOString()
+        }
+      };
       
-    if (updateError) {
-      console.error("Failed to update project with chunk paths:", updateError);
+      // Update the project in the database
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update({ 
+          video_metadata: updatedMetadata,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', projectId);
+        
+      if (updateError) {
+        console.error("Failed to update project with chunk paths:", updateError);
+        return new Response(
+          JSON.stringify({ error: `Failed to update project with chunk paths: ${updateError.message}` }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      const totalTime = Date.now() - startTime;
+      console.log(`Video-chunker function completed in ${totalTime/1000} seconds`);
+      
+      // Return the updated chunk metadata
       return new Response(
-        JSON.stringify({ error: "Failed to update project with chunk paths" }),
+        JSON.stringify({ 
+          success: true, 
+          message: "Video chunks processed successfully",
+          chunks: updatedChunks 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } catch (updateError: any) {
+      console.error("Error during database update:", updateError);
+      return new Response(
+        JSON.stringify({ error: `Database update error: ${updateError.message}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    const totalTime = Date.now() - startTime;
-    console.log(`Video-chunker function completed in ${totalTime/1000} seconds`);
-    
-    // Return the updated chunk metadata
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "Video chunks processed successfully",
-        chunks: updatedChunks 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-    
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in video-chunker function:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: `Unexpected error: ${error.message}` }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

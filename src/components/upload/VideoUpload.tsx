@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { FileVideo, Upload, AlertTriangle, Info } from "lucide-react";
@@ -22,6 +23,7 @@ export const VideoUpload = () => {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>("");
   const [isLargeFile, setIsLargeFile] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const navigate = useNavigate();
   
   // Set default title from filename when a file is selected
@@ -45,6 +47,9 @@ export const VideoUpload = () => {
     
     const file = files[0]; // Only use the first file
     
+    // Clear any error messages when new file is selected
+    setUploadError(null);
+    
     // Check if the file is a video
     if (!file.type.startsWith('video/')) {
       toast.error(`${file.name} is not a valid video file`);
@@ -58,10 +63,12 @@ export const VideoUpload = () => {
     }
     
     setVideoFile(file);
+    console.log(`[DEBUG] Selected video file: ${file.name} (${formatFileSize(file.size)})`);
   };
   
   const handleRemoveFile = () => {
     setVideoFile(null);
+    setUploadError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,6 +84,9 @@ export const VideoUpload = () => {
       return;
     }
     
+    // Clear any previous errors
+    setUploadError(null);
+    
     // Start uploading
     setIsUploading(true);
     setUploadProgress(0);
@@ -87,16 +97,19 @@ export const VideoUpload = () => {
       console.log(`[DEBUG] Video size: ${(videoFile.size / (1024 * 1024)).toFixed(2)} MB`);
       
       // Display slightly different message for large files
+      const toastId = "video-upload";
       if (isLargeFile) {
-        toast.loading("Processing and uploading large video file...", { id: "video-upload" });
+        toast.loading("Processing and uploading large video file...", { id: toastId });
       } else {
-        toast.loading("Uploading video...", { id: "video-upload" });
+        toast.loading("Uploading video...", { id: toastId });
       }
       
       // Process the video for chunking if needed
+      console.log("[DEBUG] Starting video processing");
       const processResult = await processVideoForChunking(videoFile, (progress, message) => {
         setUploadProgress(Math.floor(progress * 0.5)); // First half of progress is for chunking
         setProgressMessage(message);
+        console.log(`[DEBUG] Chunking progress: ${progress}% - ${message}`);
       });
       
       // If chunking was needed and successful, we'll upload the chunks
@@ -120,31 +133,34 @@ export const VideoUpload = () => {
           // Second half of progress is for upload
           setUploadProgress(50 + Math.floor(progress * 0.5));
           setProgressMessage(`Uploading: ${Math.round(progress)}%`);
+          console.log(`[DEBUG] Upload progress: ${progress}%`);
         }
       );
       
+      if (!project) {
+        throw new Error("Failed to create project");
+      }
+      
       setUploadProgress(100);
       setProgressMessage("Upload complete!");
-      toast.success("Upload complete!", { id: "video-upload" });
+      toast.success("Upload complete!", { id: toastId });
       
       setTimeout(() => {
         setIsUploading(false);
         
-        if (project) {
-          console.log("[DEBUG] Project created successfully:", project.id);
-          
-          if (isLargeFile) {
-            toast.message("Large video has been automatically processed in chunks for better transcription", { duration: 6000 });
-          }
-          
-          toast.success("Redirecting to slide editor...");
-          navigate(`/projects/${project.id}`);
+        if (isLargeFile) {
+          toast.message("Large video has been automatically processed in chunks for better transcription", { duration: 6000 });
         }
+        
+        toast.success("Redirecting to slide editor...");
+        navigate(`/projects/${project.id}`);
       }, 500);
-    } catch (error) {
+    } catch (error: any) {
       setIsUploading(false);
-      toast.error("Failed to upload video", { id: "video-upload" });
+      const errorMessage = error?.message || "Unknown error";
+      setUploadError(errorMessage);
       console.error("[DEBUG] Upload error:", error);
+      toast.error("Failed to upload video", { id: "video-upload" });
     }
   };
 
@@ -185,7 +201,20 @@ export const VideoUpload = () => {
           </div>
         </div>
         
-        {isLargeFile && videoFile && (
+        {uploadError && (
+          <Alert variant="destructive" className="border-red-500">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Upload Error</AlertTitle>
+            <AlertDescription>
+              <div>{uploadError}</div>
+              <div className="text-xs mt-2">
+                Try refreshing the page or using a smaller video file (under 50MB).
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {isLargeFile && videoFile && !uploadError && (
           <Alert variant="default">
             <Info className="h-4 w-4" />
             <AlertTitle>Large Video File</AlertTitle>
@@ -211,7 +240,10 @@ export const VideoUpload = () => {
             <span>{progressMessage}</span>
             <span>{uploadProgress}%</span>
           </div>
-          <Progress value={uploadProgress} />
+          <Progress 
+            value={uploadProgress}
+            indicatorClassName={uploadProgress < 20 ? "bg-amber-500" : "bg-primary"} 
+          />
         </div>
       ) : (
         <div className="flex justify-end">

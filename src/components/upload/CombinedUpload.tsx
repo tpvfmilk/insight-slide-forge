@@ -1,12 +1,14 @@
+
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { FileVideo, Upload, RefreshCw } from "lucide-react";
+import { FileVideo, Upload, RefreshCw, AlertTriangle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner"; // Updated import
 import { ContextPromptInput } from "./ContextPromptInput";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const CombinedUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -16,6 +18,7 @@ export const CombinedUpload = () => {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoFileName, setVideoFileName] = useState<string>("");
   const [showDeveloperOptions, setShowDeveloperOptions] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   
@@ -27,6 +30,9 @@ export const CombinedUpload = () => {
     const file = e.target.files?.[0];
     
     if (!file) return;
+    
+    // Clear any previous errors
+    setUploadError(null);
     
     // Check file type
     if (!file.type.includes('video/')) {
@@ -51,6 +57,9 @@ export const CombinedUpload = () => {
       return;
     }
     
+    // Clear any previous errors
+    setUploadError(null);
+    
     // Start uploading
     setIsUploading(true);
     setUploadProgress(0);
@@ -58,16 +67,18 @@ export const CombinedUpload = () => {
     // Simulate progress while actual upload happens
     const interval = setInterval(() => {
       setUploadProgress(prev => {
-        const newProgress = prev + 5; // Slower progress increments
+        const newProgress = prev + 3; // Slower progress increments
         if (newProgress >= 80) { // Cap progress at 80% until actually complete
           clearInterval(interval);
           return 80;
         }
         return newProgress;
       });
-    }, 500); // Slower updates to avoid UI freezing
+    }, 800); // Slower updates to avoid UI freezing
     
     try {
+      console.log("[DEBUG] Starting video upload process");
+      
       // Create project from video, passing the transcript text
       // Pass false as default value for needsChunking
       const project = await createProjectFromVideo(
@@ -80,6 +91,7 @@ export const CombinedUpload = () => {
         (progress) => {
           // Allow progress updates from the service
           setUploadProgress(Math.min(90, progress)); // Cap at 90% until complete
+          console.log(`[DEBUG] Upload progress update: ${progress}%`);
         }
       );
       
@@ -92,13 +104,17 @@ export const CombinedUpload = () => {
         if (project) {
           toast.success("Upload complete! Redirecting to slide editor...");
           navigate(`/projects/${project.id}`);
+        } else {
+          setUploadError("Failed to create project after successful upload");
         }
       }, 500);
-    } catch (error) {
+    } catch (error: any) {
       clearInterval(interval);
       setIsUploading(false);
-      toast.error("Failed to upload content");
+      const errorMessage = error?.message || "Failed to upload content";
+      setUploadError(errorMessage);
       console.error("Upload error:", error);
+      toast.error(`Upload failed: ${errorMessage}`);
     }
   };
   
@@ -141,6 +157,19 @@ export const CombinedUpload = () => {
           </Button>
         )}
       </div>
+
+      {uploadError && (
+        <Alert variant="destructive" className="border-red-500">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="font-medium">Upload error:</div>
+            <div className="text-sm mt-1">{uploadError}</div>
+            <div className="text-xs mt-2">
+              Try refreshing the page or using a smaller video file (under 50MB).
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="p-4 border rounded-lg bg-muted/20">
         <p className="text-sm text-muted-foreground mb-2">
@@ -188,7 +217,10 @@ export const CombinedUpload = () => {
             <span>Uploading...</span>
             <span>{uploadProgress}%</span>
           </div>
-          <Progress value={uploadProgress} />
+          <Progress 
+            value={uploadProgress} 
+            indicatorClassName={uploadProgress < 20 ? "bg-amber-500" : "bg-primary"}
+          />
         </div>
       ) : (
         <Button onClick={handleSubmit} className="w-full" disabled={!videoFile}>

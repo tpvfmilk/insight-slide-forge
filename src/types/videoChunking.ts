@@ -8,7 +8,7 @@ export interface ExtendedVideoMetadata {
   file_type?: string;
   file_size?: number;
   chunking?: ChunkingInfo;
-  [key: string]: any; // Add index signature for Json compatibility
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 /**
@@ -20,7 +20,7 @@ export interface ChunkingInfo {
   chunks: ChunkMetadata[] | JsonSafeChunkMetadata[];
   status?: "prepared" | "processing" | "complete" | "error"; // Status of the chunking process
   processedAt?: string; // Timestamp when chunking was completed
-  [key: string]: any; // Add index signature for Json compatibility
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 /**
@@ -34,7 +34,7 @@ export interface ChunkMetadata {
   videoPath: string;
   title?: string;
   status?: "pending" | "processing" | "complete" | "error"; // Status of chunk processing
-  [key: string]: any; // Add index signature for Json compatibility
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 /**
@@ -49,7 +49,7 @@ export type JsonSafeChunkMetadata = {
   videoPath: string;
   title?: string;
   status?: string;
-  [key: string]: any; // Add index signature for Json compatibility
+  [key: string]: any; // Index signature for Json compatibility
 };
 
 /**
@@ -66,9 +66,9 @@ export interface JsonSafeVideoMetadata {
     chunks: JsonSafeChunkMetadata[];
     status?: string;
     processedAt?: string;
-    [key: string]: any; // Add index signature for Json compatibility
+    [key: string]: any; // Index signature for Json compatibility
   };
-  [key: string]: any; // Add index signature for Json compatibility
+  [key: string]: any; // Index signature for Json compatibility
 }
 
 /**
@@ -86,72 +86,86 @@ export type Json =
  * Helper function to convert ExtendedVideoMetadata to JsonSafeVideoMetadata
  */
 export function toJsonSafe(metadata: ExtendedVideoMetadata): Json {
-  const jsonSafeMetadata: Record<string, Json> = {
-    duration: metadata.duration,
-    original_file_name: metadata.original_file_name,
-    file_type: metadata.file_type,
-    file_size: metadata.file_size
-  };
-  
-  if (metadata.chunking) {
-    // Convert chunks to JSON-safe format
-    const jsonSafeChunks: JsonSafeChunkMetadata[] = [];
+  try {
+    const jsonSafeMetadata: Record<string, Json> = {
+      duration: metadata.duration,
+      original_file_name: metadata.original_file_name,
+      file_type: metadata.file_type,
+      file_size: metadata.file_size
+    };
     
-    // Safely convert each chunk regardless of its original type
-    if (Array.isArray(metadata.chunking.chunks)) {
-      metadata.chunking.chunks.forEach((chunk) => {
-        const safeChunk: JsonSafeChunkMetadata = {
-          index: chunk.index,
-          startTime: chunk.startTime,
-          endTime: chunk.endTime,
-          duration: chunk.duration,
-          videoPath: chunk.videoPath,
-          title: chunk.title || `Chunk ${chunk.index + 1}`,
-          status: chunk.status || 'pending'
-        };
-        jsonSafeChunks.push(safeChunk);
-      });
+    if (metadata.chunking) {
+      // Convert chunks to JSON-safe format
+      const jsonSafeChunks: JsonSafeChunkMetadata[] = [];
+      
+      // Safely convert each chunk regardless of its original type
+      if (Array.isArray(metadata.chunking.chunks)) {
+        metadata.chunking.chunks.forEach((chunk) => {
+          const safeChunk: JsonSafeChunkMetadata = {
+            index: chunk.index,
+            startTime: chunk.startTime,
+            endTime: chunk.endTime,
+            duration: chunk.duration,
+            videoPath: chunk.videoPath,
+            title: chunk.title || `Chunk ${chunk.index + 1}`,
+            status: chunk.status || 'pending'
+          };
+          jsonSafeChunks.push(safeChunk);
+        });
+      }
+      
+      jsonSafeMetadata.chunking = {
+        isChunked: metadata.chunking.isChunked,
+        totalDuration: metadata.chunking.totalDuration,
+        chunks: jsonSafeChunks,
+        status: metadata.chunking.status || "prepared",
+        processedAt: metadata.chunking.processedAt || new Date().toISOString()
+      };
     }
     
-    jsonSafeMetadata.chunking = {
-      isChunked: metadata.chunking.isChunked,
-      totalDuration: metadata.chunking.totalDuration,
-      chunks: jsonSafeChunks,
-      status: metadata.chunking.status || "prepared",
-      processedAt: metadata.chunking.processedAt || new Date().toISOString()
+    return jsonSafeMetadata;
+  } catch (error) {
+    console.error("[DEBUG] Error converting metadata to JSON-safe format:", error);
+    // Return a simplified version in case of errors
+    return {
+      duration: metadata.duration || 0,
+      file_size: metadata.file_size || 0
     };
   }
-  
-  return jsonSafeMetadata;
 }
 
 /**
  * Helper function to convert JsonSafeVideoMetadata back to ExtendedVideoMetadata
  */
 export function fromJsonSafe(jsonMetadata: Json): ExtendedVideoMetadata {
-  if (typeof jsonMetadata !== 'object' || !jsonMetadata) {
-    return {};
-  }
-  
-  const metadata = jsonMetadata as Record<string, any>;
-  
-  const result: ExtendedVideoMetadata = {
-    duration: metadata.duration,
-    original_file_name: metadata.original_file_name,
-    file_type: metadata.file_type,
-    file_size: metadata.file_size,
-  };
-  
-  if (metadata.chunking) {
-    const chunking = metadata.chunking as any;
-    result.chunking = {
-      isChunked: chunking.isChunked,
-      totalDuration: chunking.totalDuration,
-      chunks: Array.isArray(chunking.chunks) ? chunking.chunks : [],
-      status: chunking.status as any,
-      processedAt: chunking.processedAt
+  try {
+    if (typeof jsonMetadata !== 'object' || !jsonMetadata) {
+      return {};
+    }
+    
+    const metadata = jsonMetadata as Record<string, any>;
+    
+    const result: ExtendedVideoMetadata = {
+      duration: metadata.duration,
+      original_file_name: metadata.original_file_name,
+      file_type: metadata.file_type,
+      file_size: metadata.file_size,
     };
+    
+    if (metadata.chunking) {
+      const chunking = metadata.chunking as any;
+      result.chunking = {
+        isChunked: chunking.isChunked,
+        totalDuration: chunking.totalDuration,
+        chunks: Array.isArray(chunking.chunks) ? chunking.chunks : [],
+        status: chunking.status as any,
+        processedAt: chunking.processedAt
+      };
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("[DEBUG] Error converting JSON-safe format back to metadata:", error);
+    return {}; // Return empty object in case of errors
   }
-  
-  return result;
 }

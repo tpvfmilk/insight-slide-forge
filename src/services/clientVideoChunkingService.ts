@@ -25,10 +25,15 @@ export const createVideoChunkBlob = async (
     video.currentTime = startTime;
     video.muted = true;
     
-    // Wait for video to load metadata
-    await new Promise<void>((resolve) => {
-      video.onloadedmetadata = () => resolve();
-    });
+    // Wait for video to load metadata with a timeout
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        video.onloadedmetadata = () => resolve();
+      }),
+      new Promise<void>((_, reject) => {
+        setTimeout(() => reject(new Error("Video metadata loading timeout")), 30000);
+      })
+    ]);
     
     // We'll use MediaRecorder to record the video segment
     const canvas = document.createElement('canvas');
@@ -81,13 +86,18 @@ export const createVideoChunkBlob = async (
     // Start drawing frames
     drawFrame();
     
-    // Wait for recorder to finish
-    const recordedBlob = await new Promise<Blob>((resolve) => {
-      recorder.onstop = () => {
-        const recordedBlob = new Blob(chunks, { type: videoFile.type || 'video/webm' });
-        resolve(recordedBlob);
-      };
-    });
+    // Wait for recorder to finish with timeout
+    const recordedBlob = await Promise.race([
+      new Promise<Blob>((resolve) => {
+        recorder.onstop = () => {
+          const recordedBlob = new Blob(chunks, { type: videoFile.type || 'video/webm' });
+          resolve(recordedBlob);
+        };
+      }),
+      new Promise<Blob>((_, reject) => {
+        setTimeout(() => reject(new Error("Video recording timeout")), 60000);
+      })
+    ]);
     
     // Clean up
     URL.revokeObjectURL(videoUrl);
@@ -156,28 +166,30 @@ export const chunkVideoFile = async (
     
     onProgress?.(5, "Analyzing video file...");
     
-    // Wait for video to load metadata
-    const duration = await new Promise<number>((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        console.error("[DEBUG] Video metadata loading timed out");
-        video.src = ''; // Clear source
-        URL.revokeObjectURL(videoUrl);
-        resolve(0); // Resolve with 0 to avoid hanging
-      }, 30000); // 30 second timeout for metadata loading
-      
-      video.onloadedmetadata = () => {
-        clearTimeout(timeoutId);
-        resolve(video.duration);
-      };
-      
-      video.onerror = () => {
-        clearTimeout(timeoutId);
-        console.error("[DEBUG] Error loading video metadata:", video.error);
-        reject(new Error("Failed to load video metadata"));
-      };
-    }).catch(error => {
+    // Wait for video to load metadata with timeout and error handling
+    const duration = await Promise.race([
+      new Promise<number>((resolve, reject) => {
+        video.onloadedmetadata = () => {
+          if (video.duration && !isNaN(video.duration)) {
+            resolve(video.duration);
+          } else {
+            reject(new Error("Invalid video duration"));
+          }
+        };
+        
+        video.onerror = () => {
+          reject(new Error(`Failed to load video metadata: ${video.error?.message || "Unknown error"}`));
+        };
+      }),
+      new Promise<number>((_, reject) => {
+        setTimeout(() => {
+          console.error("[DEBUG] Video metadata loading timed out");
+          reject(new Error("Video metadata loading timeout"));
+        }, 30000);
+      })
+    ]).catch(error => {
       console.error("[DEBUG] Error getting video duration:", error);
-      // Estimate duration based on file size (very rough)
+      // Fallback to estimating duration based on file size (very rough)
       const estimatedDuration = Math.max(300, videoFile.size / (500 * 1024)); // Assume ~500KB/sec
       console.log(`[DEBUG] Using estimated duration: ${estimatedDuration}s`);
       return estimatedDuration;
@@ -187,25 +199,10 @@ export const chunkVideoFile = async (
     URL.revokeObjectURL(videoUrl);
     
     if (!duration) {
-      console.error("[DEBUG] Could not determine video duration");
-      onProgress?.(100, "Could not determine video duration, using file size only");
-      
-      // Create a single chunk as fallback
-      const singleChunk: ChunkMetadata = {
-        index: 0,
-        startTime: 0,
-        endTime: 0, // Unknown
-        duration: 0, // Unknown
-        videoPath: "", // Will be set later
-        title: "Full Video",
-        status: "pending"
-      };
-      
-      return {
-        chunks: [videoFile], // Return the original file
-        metadata: [singleChunk]
-      };
+      throw new Error("Could not determine video duration");
     }
+    
+    onProgress?.(15, "Planning video chunks...");
     
     // Calculate bytes per second (approximate)
     const bytesPerSecond = videoFile.size / duration;
@@ -226,12 +223,13 @@ export const chunkVideoFile = async (
     let startTime = 0;
     let chunkIndex = 0;
     
-    onProgress?.(10, "Planning video chunks...");
-    
     while (startTime < duration) {
       // For the last chunk, make sure we don't exceed the total duration
       const chunkDuration = Math.min(idealChunkDuration, duration - startTime);
       const endTime = startTime + chunkDuration;
+      
+      onProgress?.(20 + Math.floor((chunkIndex / Math.ceil(duration / idealChunkDuration)) * 30),
+        `Planning chunk ${chunkIndex + 1}...`);
       
       // Use the original file for each chunk since we aren't actually cutting it in browser
       // We'll let server-side processing handle the actual splitting
@@ -240,8 +238,6 @@ export const chunkVideoFile = async (
       const chunkFileName = `${nameWithoutExt}_chunk_${chunkIndex + 1}.${extension}`;
       
       // Create a File object with the same content as the original file
-      // In a real implementation we would slice the video, but for browser compatibility
-      // we use the whole file and let the server handle slicing
       const chunkFile = new File([videoFile], chunkFileName, {
         type: videoFile.type,
         lastModified: Date.now()
@@ -260,24 +256,20 @@ export const chunkVideoFile = async (
         status: "pending"
       });
       
-      // Update progress
-      const progressPercent = 10 + Math.floor((chunkIndex / Math.ceil(duration / idealChunkDuration)) * 40);
-      onProgress?.(progressPercent, `Planning chunk ${chunkIndex + 1}...`);
-      
       startTime = endTime;
       chunkIndex++;
     }
     
-    onProgress?.(50, `Created ${chunkMetadata.length} video chunks metadata`);
+    onProgress?.(70, `Created ${chunkMetadata.length} video chunks metadata`);
     onProgress?.(100, "Chunks prepared successfully");
     
     return {
       chunks: chunkFiles,
       metadata: chunkMetadata
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("[DEBUG] Error chunking video file:", error);
-    toast.error("Failed to chunk video file");
+    toast.error(`Failed to chunk video file: ${error.message || "Unknown error"}`);
     return null;
   }
 };
@@ -298,15 +290,53 @@ export const processVideoForChunking = async (
   chunkFiles: File[];
   chunkMetadata: ChunkMetadata[];
 }> => {
-  // Calculate file size in MB
-  const fileSizeMB = videoFile.size / (1024 * 1024);
-  
-  // Determine if the file needs chunking
-  const needsChunking = fileSizeMB > MAX_CHUNK_SIZE_MB;
-  
-  if (!needsChunking) {
-    // Return the file as-is if it's small enough
-    onProgress?.(100, "Video doesn't need chunking");
+  try {
+    // Calculate file size in MB
+    const fileSizeMB = videoFile.size / (1024 * 1024);
+    
+    // Determine if the file needs chunking
+    const needsChunking = fileSizeMB > MAX_CHUNK_SIZE_MB;
+    
+    if (!needsChunking) {
+      // Return the file as-is if it's small enough
+      onProgress?.(100, "Video doesn't need chunking");
+      return {
+        needsChunking: false,
+        originalFile: videoFile,
+        chunkFiles: [],
+        chunkMetadata: []
+      };
+    }
+    
+    onProgress?.(0, "Starting video chunking process...");
+    console.log(`[DEBUG] Chunking video file of ${fileSizeMB.toFixed(2)}MB`);
+    
+    const result = await chunkVideoFile(videoFile, onProgress);
+    
+    if (!result) {
+      // If chunking fails, log the error but still return the original file
+      console.error("[DEBUG] Video chunking failed, using original file");
+      toast.warning("Video chunking failed, using original file instead");
+      return {
+        needsChunking: true,
+        originalFile: videoFile,
+        chunkFiles: [],
+        chunkMetadata: []
+      };
+    }
+    
+    console.log(`[DEBUG] Successfully created ${result.chunks.length} chunks`);
+    return {
+      needsChunking: true,
+      originalFile: videoFile,
+      chunkFiles: result.chunks,
+      chunkMetadata: result.metadata
+    };
+  } catch (error: any) {
+    console.error("[DEBUG] Error in processVideoForChunking:", error);
+    toast.error(`Video processing error: ${error.message || "Unknown error"}`);
+    
+    // Return original file in case of error
     return {
       needsChunking: false,
       originalFile: videoFile,
@@ -314,25 +344,4 @@ export const processVideoForChunking = async (
       chunkMetadata: []
     };
   }
-  
-  onProgress?.(0, "Starting video chunking process...");
-  const result = await chunkVideoFile(videoFile, onProgress);
-  
-  if (!result) {
-    // If chunking fails, return the original file
-    toast.warning("Video chunking failed, using original file instead");
-    return {
-      needsChunking: true,
-      originalFile: videoFile,
-      chunkFiles: [],
-      chunkMetadata: []
-    };
-  }
-  
-  return {
-    needsChunking: true,
-    originalFile: videoFile,
-    chunkFiles: result.chunks,
-    chunkMetadata: result.metadata
-  };
 };
