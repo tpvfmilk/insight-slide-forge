@@ -1,6 +1,7 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ExtendedVideoMetadata, ChunkMetadata, ChunkingInfo, JsonSafeChunkMetadata } from "@/types/videoChunking";
+import { ExtendedVideoMetadata, ChunkMetadata, ChunkingInfo, JsonSafeChunkMetadata, JsonSafeVideoMetadata } from "@/types/videoChunking";
 import { parseStoragePath } from "@/utils/videoPathUtils";
 
 /**
@@ -73,8 +74,7 @@ export const analyzeVideoForChunking = async (
     
     console.log(`[DEBUG] Created ${chunks.length} chunks for video`);
     
-    // Create extended metadata with chunking information
-    // Convert to JSON-safe format for database storage
+    // Create JSON-safe chunks for database storage
     const jsonSafeChunks: JsonSafeChunkMetadata[] = chunks.map(chunk => ({
       index: chunk.index,
       startTime: chunk.startTime,
@@ -85,19 +85,19 @@ export const analyzeVideoForChunking = async (
       status: chunk.status || 'pending'
     }));
     
-    // Return metadata in a format that's compatible with JSON storage
+    // Return JSON-safe metadata for the database
     return {
-        duration: videoDuration,
-        original_file_name: file.name,
-        file_type: file.type,
-        file_size: file.size,
-        chunking: {
-          isChunked: true,
-          totalDuration: videoDuration,
-          chunks: jsonSafeChunks,
-          status: "prepared"
-        }
-    };
+      duration: videoDuration,
+      original_file_name: file.name,
+      file_type: file.type,
+      file_size: file.size,
+      chunking: {
+        isChunked: true,
+        totalDuration: videoDuration,
+        chunks: jsonSafeChunks,
+        status: "prepared"
+      }
+    } as ExtendedVideoMetadata;
   } catch (error) {
     console.error("[DEBUG] Error analyzing video for chunking:", error);
     return null;

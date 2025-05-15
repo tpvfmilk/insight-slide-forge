@@ -3,14 +3,18 @@ import { Project } from "@/services/projectService";
 import { toast } from "sonner";
 import { parseStoragePath } from "@/utils/videoPathUtils";
 import { videoNeedsChunking, analyzeVideoForChunking, createVideoChunks, initiateServerSideChunking, forceUpdateChunkingMetadata } from "@/services/videoChunkingService";
-import { ExtendedVideoMetadata } from "@/types/videoChunking";
+import { ExtendedVideoMetadata, ChunkMetadata, JsonSafeChunkMetadata, JsonSafeVideoMetadata } from "@/types/videoChunking";
 
 // Update this function to handle large videos through chunking
 export const createProjectFromVideo = async (
   videoFile: File,
   title: string,
   contextPrompt: string = "",
-  transcript: string = ""
+  transcript: string = "",
+  needsChunking: boolean = false,
+  chunkFiles: File[] = [],
+  chunkMetadata: ChunkMetadata[] = [],
+  onProgress?: (progress: number) => void
 ): Promise<Project | null> => {
   try {
     // Verify user is authenticated
@@ -28,21 +32,18 @@ export const createProjectFromVideo = async (
     }
     
     let filePath = `uploads/${session.session.user.id}/${videoFile.name}`;
-    let needsChunking = false;
     
     // Check if video needs chunking
-    if (videoMetadata.chunking?.isChunked) {
-      needsChunking = true;
-      
+    if (needsChunking || videoMetadata.chunking?.isChunked) {
       // If video needs chunking, create a different path for the original file
       filePath = `chunks/${session.session.user.id}/${videoFile.name}`;
       
       // Process the video chunks
-      if (videoMetadata.chunking.chunks.length > 0) {
+      if (chunkMetadata.length > 0) {
         const updatedChunks = await createVideoChunks(
           videoFile,
           session.session.user.id, // Using user ID as temporary project ID
-          videoMetadata.chunking.chunks
+          chunkMetadata
         );
         
         if (!updatedChunks) {
@@ -51,11 +52,55 @@ export const createProjectFromVideo = async (
         }
         
         // Update the metadata with chunk paths
-        videoMetadata.chunking.chunks = updatedChunks;
+        videoMetadata.chunking = {
+          ...videoMetadata.chunking,
+          chunks: updatedChunks
+        };
       }
-    }
-    
-    if (!needsChunking) {
+      
+      // Upload the original file
+      const { error: uploadError } = await supabase.storage
+        .from('video_uploads')
+        .upload(filePath, videoFile, {
+          cacheControl: '3600',
+          upsert: true
+        });
+      
+      if (uploadError) {
+        console.error("[DEBUG] File upload error:", uploadError);
+        toast.error("Failed to upload original video file");
+        return null;
+      }
+      
+      // Upload each chunk file if they exist
+      if (chunkFiles.length > 0) {
+        for (let i = 0; i < chunkFiles.length; i++) {
+          const chunkFile = chunkFiles[i];
+          const chunkInfo = chunkMetadata[i];
+          
+          if (!chunkInfo.videoPath) continue;
+          
+          const { bucketName, filePath: chunkPath } = parseStoragePath(chunkInfo.videoPath);
+          
+          const { error: chunkUploadError } = await supabase.storage
+            .from(bucketName)
+            .upload(chunkPath, chunkFile, {
+              cacheControl: '3600',
+              upsert: true
+            });
+          
+          if (chunkUploadError) {
+            console.error(`[DEBUG] Chunk ${i} upload error:`, chunkUploadError);
+            // We'll continue with other chunks even if one fails
+          }
+          
+          // Update progress
+          if (onProgress) {
+            onProgress(Math.round((i + 1) / chunkFiles.length * 100));
+          }
+        }
+      }
+    } else {
       // For normal-sized videos, upload the file to Supabase storage directly
       const { error: uploadError } = await supabase.storage
         .from('video_uploads')
@@ -71,8 +116,38 @@ export const createProjectFromVideo = async (
       }
     }
     
+    // Convert the ExtendedVideoMetadata to JsonSafeVideoMetadata to ensure it's JSON compatible
+    const jsonSafeMetadata: JsonSafeVideoMetadata = {
+      duration: videoMetadata.duration,
+      original_file_name: videoMetadata.original_file_name,
+      file_type: videoMetadata.file_type,
+      file_size: videoMetadata.file_size
+    };
+    
+    if (videoMetadata.chunking) {
+      // Convert chunks to JSON-safe format
+      const jsonSafeChunks = videoMetadata.chunking.chunks.map((chunk: ChunkMetadata | JsonSafeChunkMetadata) => {
+        return {
+          index: chunk.index,
+          startTime: chunk.startTime,
+          endTime: chunk.endTime,
+          duration: chunk.duration,
+          videoPath: chunk.videoPath,
+          title: chunk.title,
+          status: chunk.status
+        };
+      });
+      
+      jsonSafeMetadata.chunking = {
+        isChunked: videoMetadata.chunking.isChunked,
+        totalDuration: videoMetadata.chunking.totalDuration,
+        chunks: jsonSafeChunks,
+        status: videoMetadata.chunking.status,
+        processedAt: videoMetadata.chunking.processedAt
+      };
+    }
+    
     // Create a new project in the database
-    // Need to cast the videoMetadata to any to avoid type issues with Supabase's Json type
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
@@ -82,7 +157,7 @@ export const createProjectFromVideo = async (
         source_file_path: filePath,
         context_prompt: contextPrompt,
         transcript: transcript,
-        video_metadata: videoMetadata as any,
+        video_metadata: jsonSafeMetadata
       })
       .select()
       .single();

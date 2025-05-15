@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { FileVideo, Upload, AlertTriangle, Info } from "lucide-react";
@@ -114,7 +113,7 @@ export const VideoUpload = () => {
         processResult.originalFile, 
         title, 
         contextPrompt,
-        "", // No transcript
+        "", 
         processResult.needsChunking,
         processResult.chunkFiles,
         processResult.chunkMetadata,
