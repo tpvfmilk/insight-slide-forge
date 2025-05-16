@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
@@ -31,7 +30,7 @@ serve(async (req) => {
     }
 
     // Parse the request body
-    let projectId, projectVideos, isTranscriptOnly, useSpeakerDetection, audioData;
+    let projectId, projectVideos, isTranscriptOnly, useSpeakerDetection, audioData, isRetry;
     
     try {
       const requestData = await req.json();
@@ -40,12 +39,13 @@ serve(async (req) => {
       isTranscriptOnly = requestData.isTranscriptOnly || false;
       useSpeakerDetection = requestData.useSpeakerDetection || false;
       audioData = requestData.audioData || null;
+      isRetry = requestData.isRetry || false;
       
       if (!projectId) {
         throw new Error("Missing required parameter: projectId");
       }
       
-      console.log(`Processing request: projectId=${projectId}, useSpeakerDetection=${useSpeakerDetection}, isTranscriptOnly=${isTranscriptOnly}`);
+      console.log(`Processing request: projectId=${projectId}, useSpeakerDetection=${useSpeakerDetection}, isTranscriptOnly=${isTranscriptOnly}, isRetry=${isRetry}`);
       console.log(`Has audioData: ${audioData !== null}, audioData length: ${audioData?.length || 0}`);
       console.log(`Project videos provided: ${projectVideos?.length || 0}`);
     } catch (jsonError) {
@@ -111,6 +111,9 @@ serve(async (req) => {
       const videoTitle = project.title || "Untitled Video";
       
       // Process each chunk with Whisper API
+      const chunkSuccesses = [];
+      const chunkErrors = [];
+      
       for (let i = 0; i < chunking.chunks.length; i++) {
         const chunk = chunking.chunks[i];
         console.log(`Processing chunk ${i+1}/${chunking.chunks.length}: ${chunk.startTime}s - ${chunk.endTime}s`);
@@ -128,6 +131,13 @@ serve(async (req) => {
             } else {
               combinedTranscript = chunkTranscript;
             }
+            
+            chunkErrors.push({
+              chunkIndex: i,
+              error: "Missing video path",
+              path: null
+            });
+            
             continue;
           }
           
@@ -136,13 +146,15 @@ serve(async (req) => {
           console.log(`Getting chunk video from bucket: ${bucketName}, path: ${filePath}`);
           
           // Get signed URL to download the chunk file
-          const { data: signedURLData } = await supabaseClient
+          // Use longer expiry for retry attempts (5 minutes)
+          const expirySeconds = isRetry ? 300 : 60;
+          const { data: signedURLData, error: signedUrlError } = await supabaseClient
             .storage
             .from(bucketName)
-            .createSignedUrl(filePath, 60); // 60 seconds expiry
+            .createSignedUrl(filePath, expirySeconds);
           
-          if (!signedURLData?.signedUrl) {
-            throw new Error(`Could not get signed URL for chunk ${i+1}`);
+          if (signedUrlError || !signedURLData?.signedUrl) {
+            throw new Error(`Could not get signed URL for chunk ${i+1}: ${signedUrlError?.message || "No URL returned"}`);
           }
           
           // Download the video chunk content
@@ -170,6 +182,14 @@ serve(async (req) => {
             } else {
               combinedTranscript = chunkTranscript;
             }
+            
+            chunkErrors.push({
+              chunkIndex: i,
+              error: "Chunk exceeds size limit",
+              path: chunkPath,
+              size: videoBlob.size
+            });
+            
             continue;
           }
           
@@ -215,6 +235,7 @@ serve(async (req) => {
           }
           
           console.log(`Successfully processed chunk ${i+1}`);
+          chunkSuccesses.push(i);
           
         } catch (chunkError) {
           console.error(`Error processing chunk ${i+1}:`, chunkError);
@@ -228,14 +249,29 @@ serve(async (req) => {
           } else {
             combinedTranscript = errorTranscript;
           }
+          
+          chunkErrors.push({
+            chunkIndex: i,
+            error: chunkError.message,
+            path: chunk.videoPath
+          });
         }
       }
       
       // Update the project with the transcript
-      console.log("Updating project with real transcription from chunks");
+      console.log(`Updating project with real transcription from chunks. Successful chunks: ${chunkSuccesses.length}/${chunking.chunks.length}`);
       const { error: updateError } = await supabaseClient
         .from('projects')
-        .update({ transcript: combinedTranscript })
+        .update({ 
+          transcript: combinedTranscript,
+          transcription_metadata: {
+            chunk_successes: chunkSuccesses.length,
+            chunk_failures: chunkErrors.length,
+            chunk_errors: chunkErrors,
+            completed_at: new Date().toISOString(),
+            is_retry: isRetry
+          }
+        })
         .eq('id', projectId);
         
       if (updateError) {
@@ -252,10 +288,14 @@ serve(async (req) => {
         success: true,
         processingDetails: {
           chunksProcessed: chunking.chunks.length,
+          chunksSuccessful: chunkSuccesses.length,
+          chunksFailed: chunkErrors.length,
           processingTimeSeconds: totalTime/1000,
           isVirtualChunking: chunking.isVirtualChunking || false,
           usedWhisperAPI: true,
-          nextSteps: "Implement real audio extraction to improve transcription accuracy and reduce file size"
+          nextSteps: chunkErrors.length > 0 ? 
+            "Some chunks could not be processed. Try retranscribing or fixing storage issues." : 
+            "All chunks processed successfully."
         }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

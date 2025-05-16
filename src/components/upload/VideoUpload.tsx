@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { videoNeedsChunking, MAX_CHUNK_SIZE_MB } from "@/services/videoChunkingService";
 import { formatFileSize } from "@/utils/formatUtils";
 import { processVideoForChunking } from "@/services/clientVideoChunkingService";
+import { getUploadStageMessage } from "@/utils/uploadProgressUtils";
 
 export const VideoUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -103,14 +104,12 @@ export const VideoUpload = () => {
         toast.loading("Uploading video...", { id: toastId });
       }
       
-      // Process the video for chunking if needed
-      console.log("[DEBUG] Starting video processing");
-      
       // Video processing phase (0-20% of progress)
       const processResult = await processVideoForChunking(videoFile, (progress, message) => {
-        setUploadProgress(Math.floor(progress * 0.2)); // First 20% of progress is for processing
-        setProgressMessage(message);
-        console.log(`[DEBUG] Processing progress: ${progress}% - ${message}`);
+        // First 20% of progress is for processing
+        setUploadProgress(Math.floor(progress * 0.2)); 
+        setProgressMessage(message || "Processing video...");
+        console.log(`[DEBUG] Processing progress: ${progress}% - ${message || "Processing"}`);
       });
       
       // If chunking was needed and successful, we'll upload the chunks
@@ -122,7 +121,8 @@ export const VideoUpload = () => {
         setProgressMessage("Uploading video file...");
       }
       
-      // Create project from the processed video files (upload + project creation - 20-100%)
+      // Create project from the processed video files (upload + project creation)
+      // The progress callback will now receive accurate progress updates from uploadFileWithProgress
       const project = await createProjectFromVideo(
         processResult.originalFile, 
         title, 
@@ -131,29 +131,15 @@ export const VideoUpload = () => {
         processResult.chunkFiles,
         processResult.chunkMetadata,
         (progress, stage) => {
-          // Map the upload service progress (0-100%) to our remaining progress range (20-100%)
-          const scaledProgress = 20 + Math.floor(progress * 0.8);
-          setUploadProgress(scaledProgress);
+          setUploadProgress(progress);
           
+          // Use the utility function to generate user-friendly messages
           if (stage) {
-            // Set a more user-friendly message based on the stage
-            if (stage.startsWith("uploading")) {
-              const uploadPercent = stage.split(" ")[1] || "0%";
-              setProgressMessage(`Uploading video: ${uploadPercent}`);
-            } else if (stage === "analyzing") {
-              setProgressMessage("Analyzing video file...");
-            } else if (stage === "creating_project") {
-              setProgressMessage("Creating project...");
-            } else if (stage === "chunking" || stage === "preparing_chunks") {
-              setProgressMessage("Processing video segments...");
-            } else if (stage === "complete") {
-              setProgressMessage("Upload complete!");
-            } else {
-              setProgressMessage(stage.charAt(0).toUpperCase() + stage.slice(1).replace(/_/g, " ") + "...");
-            }
+            const message = getUploadStageMessage(stage, progress);
+            setProgressMessage(message);
           }
           
-          console.log(`[DEBUG] Upload progress: ${progress}%, Stage: ${stage}, Scaled: ${scaledProgress}%`);
+          console.log(`[DEBUG] Upload progress: ${progress}%, Stage: ${stage || "uploading"}`);
         }
       );
       
@@ -262,6 +248,7 @@ export const VideoUpload = () => {
           </div>
           <Progress 
             value={uploadProgress}
+            className="h-2"
             indicatorClassName={uploadProgress < 20 ? "bg-amber-500" : "bg-primary"} 
           />
         </div>

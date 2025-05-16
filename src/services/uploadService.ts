@@ -1,231 +1,311 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { Project } from "@/services/projectService";
 import { toast } from "sonner";
 import { parseStoragePath } from "@/utils/videoPathUtils";
-import { 
-  videoNeedsChunking, 
-  analyzeVideoForChunking, 
-  initiateServerSideChunking, 
-  forceUpdateChunkingMetadata 
-} from "@/services/videoChunkingService";
-import { 
-  ExtendedVideoMetadata, 
-  ChunkMetadata, 
-  JsonSafeChunkMetadata, 
-  JsonSafeVideoMetadata,
-  toJsonSafe,
-  fromJsonSafe,
-  Json
-} from "@/types/videoChunking";
+import { createProgressHandler, getUploadStageMessage } from "@/utils/uploadProgressUtils";
 
 /**
- * Uploads a file to Supabase storage with progress tracking
- * @param bucketName The storage bucket name
- * @param filePath The path where the file should be stored
- * @param file The file to upload
- * @param onProgress Callback function for upload progress updates
- * @returns Promise resolving to upload result
+ * Creates a new project from an uploaded video file
+ * @param videoFile The video file to upload
+ * @param title The project title
+ * @param contextPrompt Optional context prompt for the project
+ * @param isChunkedVideo Whether the video has been processed as chunks
+ * @param chunkFiles Optional array of video chunk files
+ * @param chunkMetadata Optional metadata about the video chunks
+ * @param onProgress Optional callback for upload progress updates
+ * @returns The created project or null if failed
  */
-export const uploadFileWithProgress = async (
-  bucketName: string,
-  filePath: string,
-  file: File,
-  onProgress?: (progress: number) => void
-): Promise<{ data: any; error: Error | null }> => {
-  return new Promise((resolve, reject) => {
-    // Create XMLHttpRequest for progress monitoring
-    const xhr = new XMLHttpRequest();
-    
-    // Track upload progress
-    xhr.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100);
-        onProgress?.(percentComplete);
-      }
-    });
-    
-    // Handle errors
-    xhr.addEventListener('error', () => {
-      reject(new Error('Upload failed'));
-    });
-    
-    xhr.addEventListener('abort', () => {
-      reject(new Error('Upload aborted'));
-    });
-    
-    // Use Supabase to get the presigned URL for upload
-    const performUpload = async () => {
-      try {
-        // Get the presigned URL
-        const { data: urlData, error: urlError } = await supabase.storage
-          .from(bucketName)
-          .createSignedUploadUrl(filePath);
-        
-        if (urlError) {
-          reject(urlError);
-          return;
-        }
-        
-        // Set up the XHR request
-        xhr.open('PUT', urlData.signedUrl);
-        
-        // Handle completion
-        xhr.onload = async () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            // Successfully uploaded, now get the file data from Supabase
-            const { data, error } = await supabase.storage
-              .from(bucketName)
-              .getPublicUrl(filePath);
-            
-            resolve({ data, error });
-          } else {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
-          }
-        };
-        
-        // Send the file
-        xhr.send(file);
-      } catch (error) {
-        reject(error);
-      }
-    };
-    
-    performUpload();
-  });
-};
-
-// Update this function to handle large videos through server-side chunking
 export const createProjectFromVideo = async (
   videoFile: File,
   title: string,
   contextPrompt: string = "",
-  needsChunking: boolean = false,
+  isChunkedVideo: boolean = false,
   chunkFiles: File[] = [],
-  chunkMetadata: ChunkMetadata[] = [],
+  chunkMetadata: any = null,
   onProgress?: (progress: number, stage?: string) => void
-): Promise<Project | null> => {
+) => {
   try {
-    console.log(`[DEBUG] Creating project from video: ${title}`);
-    console.log(`[DEBUG] File size: ${(videoFile.size / (1024 * 1024)).toFixed(2)}MB`);
-    console.log(`[DEBUG] Needs chunking: ${needsChunking}`);
-    
-    // Verify user is authenticated
-    const { data: session } = await supabase.auth.getSession();
-    if (!session?.session?.access_token) {
-      throw new Error("You need to be logged in to create a project");
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    if (!userId) {
+      throw new Error("User not authenticated");
     }
+
+    // Create a unique filename to avoid conflicts
+    const timestamp = Date.now();
+    const originalFileName = videoFile.name;
+    const fileExt = originalFileName.split('.').pop();
+    const fileName = `${timestamp}_${originalFileName.replace(/\s+/g, '_')}`;
+    const filePath = `${userId}/${fileName}`;
     
-    // Progress phases:
-    // 1. Analysis: 0-10%
-    // 2. File upload: 10-80%
-    // 3. Project creation: 80-95%
-    // 4. Chunking (if needed): 95-100%
-    
-    onProgress?.(5, "analyzing");
-    
-    // Analyze video file for potential chunking
-    const videoMetadata = await analyzeVideoForChunking(videoFile);
-    if (!videoMetadata) {
-      throw new Error("Failed to analyze video file");
+    // Prepare video metadata
+    const videoMetadata = {
+      original_file_name: originalFileName,
+      file_size: videoFile.size,
+      file_type: videoFile.type,
+      upload_timestamp: timestamp,
+      duration: null // We'll try to extract this later
+    };
+
+    // If we're dealing with a chunked video, add chunking metadata
+    if (isChunkedVideo && chunkMetadata) {
+      videoMetadata.chunking = chunkMetadata;
     }
-    
-    // Standard upload path for the file
-    let filePath = `uploads/${session.session.user.id}/${Date.now()}_${videoFile.name}`;
-    
-    // Update progress to upload phase
-    onProgress?.(10, "uploading");
-    
-    // Upload the original file using the new progress tracking function
-    console.log(`[DEBUG] Uploading original file to: ${filePath}`);
-    
-    try {
-      const uploadResult = await uploadFileWithProgress(
-        'video_uploads', 
-        filePath,
-        videoFile,
-        (uploadProgress) => {
-          // Map upload progress (0-100%) to our overall progress range (10-80%)
-          const scaledProgress = 10 + (uploadProgress * 0.7);
-          onProgress?.(scaledProgress, `uploading ${uploadProgress}%`);
+
+    // Create progress handlers for different phases
+    const uploadProgressHandler = createProgressHandler(
+      (progress, stage) => {
+        if (onProgress) {
+          if (stage === "complete") {
+            onProgress(90, "Creating project...");
+          } else {
+            onProgress(progress, stage || "Uploading video...");
+          }
         }
+      },
+      20, // Upload starts at 20% of the overall process
+      90  // Upload completes at 90% of the overall process
+    );
+
+    // Upload the video file with XMLHttpRequest to get real progress
+    if (onProgress) onProgress(20, "Uploading video file...");
+    
+    let uploadedFilePath;
+    
+    if (videoFile.size > 0) {
+      // Use XMLHttpRequest for real-time progress tracking
+      const { path, error: uploadError } = await uploadFileWithProgress(
+        videoFile, 
+        filePath, 
+        'video_uploads',
+        uploadProgressHandler
       );
       
-      if (uploadResult.error) {
-        throw uploadResult.error;
+      if (uploadError) {
+        throw new Error(`Error uploading video: ${uploadError.message}`);
       }
-    } catch (uploadError) {
-      console.error("[DEBUG] File upload error:", uploadError);
-      throw new Error(`Failed to upload video file: ${uploadError.message || 'Unknown error'}`);
+      
+      uploadedFilePath = path;
+    } else {
+      // For empty files or special cases
+      uploadedFilePath = filePath;
     }
     
-    console.log("[DEBUG] Original file uploaded successfully");
-    onProgress?.(80, needsChunking ? "preparing_chunks" : "processing");
-    
-    // If video needs chunking, prepare the chunking metadata
-    if (needsChunking) {
-      videoMetadata.chunking = {
-        isChunked: true,
-        totalDuration: videoMetadata.duration || 0,
-        chunks: [],
-        status: "prepared"
-      };
+    if (!uploadedFilePath) {
+      throw new Error("Failed to get uploaded file path");
     }
     
-    // Convert the ExtendedVideoMetadata to a JSON-compatible format
-    const jsonSafeMetadata = toJsonSafe(videoMetadata);
-    console.log("[DEBUG] Created JSON-safe metadata for Supabase");
+    // Upload any chunked files if present
+    if (isChunkedVideo && chunkFiles.length > 0) {
+      if (onProgress) onProgress(60, "Uploading video chunks...");
+      
+      for (let i = 0; i < chunkFiles.length; i++) {
+        const chunkFile = chunkFiles[i];
+        if (!chunkFile) continue;
+        
+        const chunkProgress = createProgressHandler(
+          (progress) => {
+            if (onProgress) {
+              const message = `Uploading chunk ${i + 1}/${chunkFiles.length}`;
+              onProgress(progress, message);
+            }
+          },
+          60 + (i * 30 / chunkFiles.length),    // Start progress
+          60 + ((i + 1) * 30 / chunkFiles.length)  // End progress
+        );
+        
+        // Get the chunk path from metadata
+        const chunkPath = chunkMetadata?.chunks?.[i]?.videoPath;
+        if (!chunkPath) continue;
+        
+        const { bucketName, filePath } = parseStoragePath(chunkPath);
+        
+        await uploadFileWithProgress(
+          chunkFile, 
+          filePath, 
+          bucketName,
+          chunkProgress
+        );
+      }
+    }
     
-    // Create a new project in the database
-    console.log("[DEBUG] Creating project in database");
-    onProgress?.(85, "creating_project");
-    
-    const { data: project, error: projectError } = await supabase
+    if (onProgress) onProgress(90, "creating_project");
+
+    // Create the project in the database
+    const { data: project, error } = await supabase
       .from('projects')
       .insert({
-        user_id: session.session.user.id,
-        title: title,
+        title,
         source_type: 'video',
-        source_file_path: filePath,
+        source_file_path: uploadedFilePath,
         context_prompt: contextPrompt,
-        transcript: "",
-        video_metadata: jsonSafeMetadata as Json
+        video_metadata: videoMetadata,
       })
       .select()
       .single();
-    
-    if (projectError) {
-      console.error("[DEBUG] Project creation error:", projectError);
-      throw new Error(`Failed to create project: ${projectError.message}`);
+
+    if (error) {
+      throw error;
     }
+
+    if (onProgress) onProgress(100, "complete");
     
-    console.log(`[DEBUG] Project created successfully with ID: ${project.id}`);
-    
-    // If chunking is needed, initiate server-side chunking process
-    if (needsChunking && project) {
-      onProgress?.(95, "chunking");
-      console.log("[DEBUG] Initiating server-side chunking process");
-      
-      const chunkingResult = await initiateServerSideChunking(project.id, filePath);
-      
-      if (!chunkingResult.success) {
-        console.error("[DEBUG] Server-side chunking failed:", chunkingResult.error);
-        // We'll continue anyway, but log and show the error
-        toast.warning("Video chunking encountered an issue, but the project was created successfully.");
-      } else {
-        console.log("[DEBUG] Server-side chunking initiated successfully");
-      }
-    }
-    
-    onProgress?.(100, "complete");
-    
-    toast.success("Project created successfully!");
-    return project as Project;
-  } catch (error: any) {
-    console.error("[DEBUG] Error creating project:", error);
-    const errorMessage = error.message || "Failed to create project";
-    toast.error(errorMessage);
+    return project;
+  } catch (error) {
+    console.error("Error creating project from video:", error);
     return null;
+  }
+};
+
+/**
+ * Uploads a file with real-time progress tracking using XMLHttpRequest
+ * @param file The file to upload
+ * @param filePath The path where to store the file
+ * @param bucket The storage bucket name
+ * @param onProgress Callback for progress updates
+ * @returns Object with the uploaded file path or error
+ */
+export const uploadFileWithProgress = async (
+  file: File,
+  filePath: string,
+  bucket: string = 'video_uploads',
+  onProgress?: (progress: number, stage?: string) => void
+): Promise<{ path?: string; error?: Error }> => {
+  return new Promise((resolve) => {
+    // Get file content as array buffer
+    const reader = new FileReader();
+    
+    reader.onload = async (event) => {
+      const fileContent = event.target?.result;
+      if (!fileContent) {
+        resolve({ error: new Error("Failed to read file content") });
+        return;
+      }
+
+      // Create XMLHttpRequest for upload with progress tracking
+      const xhr = new XMLHttpRequest();
+      const url = `${supabase.storageUrl}/object/${bucket}/${filePath}`;
+      
+      // Track upload progress
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          const progressPercent = Math.round((event.loaded / event.total) * 100);
+          onProgress(progressPercent, `uploading ${progressPercent}%`);
+        }
+      };
+      
+      // Handle completion
+      xhr.onload = async () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            // Verify the file exists in storage
+            const { data } = await supabase.storage
+              .from(bucket)
+              .getPublicUrl(filePath);
+              
+            if (!data) {
+              resolve({ error: new Error("Failed to verify uploaded file") });
+              return;
+            }
+            
+            resolve({ path: filePath });
+          } catch (verifyError) {
+            resolve({ error: new Error(`Error verifying upload: ${verifyError.message}`) });
+          }
+        } else {
+          resolve({ error: new Error(`Upload failed with status: ${xhr.status}`) });
+        }
+      };
+      
+      // Handle errors
+      xhr.onerror = () => {
+        resolve({ error: new Error("Network error during upload") });
+      };
+      
+      xhr.onabort = () => {
+        resolve({ error: new Error("Upload aborted") });
+      };
+      
+      // Send the request
+      xhr.open('POST', url);
+      
+      // Add authentication headers
+      const { data: authData } = await supabase.auth.getSession();
+      xhr.setRequestHeader('Authorization', `Bearer ${authData.session?.access_token}`);
+      xhr.setRequestHeader('apikey', supabase.supabaseKey);
+      
+      // Set content type
+      xhr.setRequestHeader('Content-Type', file.type);
+      xhr.setRequestHeader('x-upsert', 'true');
+      
+      // Send the file
+      xhr.send(fileContent);
+    };
+    
+    reader.onerror = () => {
+      resolve({ error: new Error("Error reading file") });
+    };
+    
+    reader.readAsArrayBuffer(file);
+  });
+};
+
+/**
+ * Transcribes a video using OpenAI's Whisper API via Supabase Edge Function
+ * @param projectId The project ID to transcribe
+ * @param projectVideos Optional array of video objects (for multi-video projects)
+ * @param isTranscriptOnly Whether this is a text-only project without video
+ * @param audioData Optional audio data if already extracted
+ * @returns The transcription result
+ */
+export const transcribeVideo = async (
+  projectId: string,
+  projectVideos: any[] = [],
+  isTranscriptOnly: boolean = false,
+  audioData: string | null = null
+) => {
+  try {
+    // Call the transcribe-video Edge Function
+    const { data, error } = await supabase.functions.invoke("transcribe-video", {
+      body: {
+        projectId,
+        projectVideos,
+        isTranscriptOnly,
+        audioData,
+        // Add a parameter to enable speaker detection
+        useSpeakerDetection: true,
+        // Add a retry flag to signal this is a retry attempt
+        isRetry: true
+      },
+    });
+
+    if (error) {
+      console.error("Transcription error:", error);
+      return { 
+        success: false, 
+        error: `Transcription failed: ${error.message || "Unknown error"}`,
+        transcript: null 
+      };
+    }
+
+    if (!data || !data.transcript) {
+      return { 
+        success: false, 
+        error: "No transcript was generated", 
+        transcript: null 
+      };
+    }
+
+    return { 
+      success: true, 
+      transcript: data.transcript, 
+      needsChunking: data.needsChunking || false 
+    };
+  } catch (error) {
+    console.error("Error in transcribeVideo:", error);
+    return { 
+      success: false, 
+      error: `Transcription failed: ${error.message || "Unknown error"}`,
+      transcript: null
+    };
   }
 };
 
@@ -267,204 +347,6 @@ export const createProjectFromTranscript = async (
     console.error("[DEBUG] Error creating project:", error);
     toast.error("Failed to create project");
     return null;
-  }
-};
-
-export const transcribeVideo = async (projectId: string, projectVideos: any[] = []): Promise<{ success: boolean; transcript?: string; error?: string }> => {
-  try {
-    console.log(`[DEBUG] Starting transcription for project ${projectId}`);
-    console.log(`[DEBUG] Project videos provided: ${projectVideos.length}`);
-
-    // Verify user is authenticated
-    const { data: session } = await supabase.auth.getSession();
-    if (!session?.session?.access_token) {
-      toast.error("You need to be logged in to transcribe a video");
-      return { success: false, error: "Authentication required" };
-    }
-
-    toast.loading("Transcribing video...", { id: "transcribe-video" });
-    
-    // Get project details to verify file paths
-    const { data: project } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('id', projectId)
-      .single();
-      
-    if (project) {
-      console.log(`[DEBUG] Transcribing project: ${project.title}`);
-      console.log(`[DEBUG] Source path: ${project.source_file_path}`);
-      console.log(`[DEBUG] Source type: ${project.source_type}`);
-      
-      if (project.source_file_path) {
-        // Check if the file exists in storage
-        const { bucketName, filePath } = parseStoragePath(project.source_file_path);
-        console.log(`[DEBUG] Checking file existence at ${bucketName}/${filePath}`);
-        
-        try {
-          // Verify the file exists by attempting to get its public URL
-          const { data: fileData } = await supabase.storage
-            .from(bucketName)
-            .getPublicUrl(filePath);
-            
-          console.log(`[DEBUG] Storage public URL check: ${fileData?.publicUrl ? 'URL available' : 'No URL available'}`);
-        } catch (e) {
-          console.warn("[DEBUG] Error checking file existence:", e);
-        }
-      }
-
-      // Check if the video is chunked
-      const videoMetadata = project.video_metadata as ExtendedVideoMetadata;
-      const isChunkedVideo = Boolean(videoMetadata?.chunking?.isChunked);
-      
-      console.log(`[DEBUG] Is chunked video: ${isChunkedVideo}`);
-      
-      // Get file size info
-      const fileSizeMB = videoMetadata?.file_size ? (videoMetadata.file_size / (1024 * 1024)).toFixed(2) : "Unknown";
-      console.log(`[DEBUG] Video file size: ${fileSizeMB} MB`);
-      
-      // If this is a large video that needs chunking but doesn't have actual chunk files yet,
-      // initiate server-side chunking first
-      if ((isChunkedVideo || (videoMetadata?.file_size && videoNeedsChunking(videoMetadata.file_size)))
-          && (!videoMetadata?.chunking?.chunks || videoMetadata?.chunking?.chunks?.length === 0)) {
-        console.log("[DEBUG] Video needs chunking but chunks haven't been created yet");
-        
-        // Force update the chunking metadata if needed
-        if (!isChunkedVideo && videoMetadata?.file_size && videoNeedsChunking(videoMetadata.file_size)) {
-          console.log("[DEBUG] Forcing chunking metadata update for large video");
-          const forceUpdateResult = await forceUpdateChunkingMetadata(projectId);
-          
-          if (!forceUpdateResult.success) {
-            console.error("[DEBUG] Force update failed:", forceUpdateResult.error);
-            toast.error("Failed to prepare video for chunked processing", { id: "transcribe-video" });
-            return { success: false, error: forceUpdateResult.error };
-          }
-          
-          console.log("[DEBUG] Successfully forced chunking metadata update");
-        }
-        
-        // Fixed: Removed the third argument to match the function signature
-        const chunkingResult = await initiateServerSideChunking(
-          projectId, 
-          project.source_file_path
-        );
-        
-        if (!chunkingResult.success) {
-          console.error("[DEBUG] Chunking failed:", chunkingResult.error);
-          toast.error("Failed to process video chunks", { id: "transcribe-video" });
-          return { success: false, error: chunkingResult.error };
-        }
-        
-        console.log("[DEBUG] Server-side chunking initiated successfully");
-        
-        // Refresh project data to get updated chunking info
-        const { data: updatedProject } = await supabase
-          .from('projects')
-          .select('video_metadata')
-          .eq('id', projectId)
-          .single();
-          
-        if (updatedProject) {
-          const updatedMetadata = updatedProject.video_metadata as ExtendedVideoMetadata;
-          if (updatedMetadata?.chunking?.chunks) {
-            console.log(`[DEBUG] Updated chunks available: ${updatedMetadata.chunking.chunks.length}`);
-          }
-        }
-      }
-      
-      if (isChunkedVideo) {
-        console.log("[DEBUG] This is a chunked video. Processing chunk information for transcription.");
-        console.log(`[DEBUG] Found ${videoMetadata.chunking?.chunks?.length || 0} chunks.`);
-        
-        // Add chunking information to the project videos array if needed
-        if (projectVideos.length === 0 && videoMetadata.chunking?.chunks) {
-          projectVideos = videoMetadata.chunking.chunks.map(chunk => ({
-            id: null,
-            project_id: projectId,
-            source_file_path: chunk.videoPath,
-            title: chunk.title || `Chunk ${chunk.index + 1}`,
-            video_metadata: {
-              duration: chunk.duration,
-              start_time: chunk.startTime,
-              end_time: chunk.endTime
-            }
-          }));
-          
-          console.log(`[DEBUG] Created ${projectVideos.length} video objects from chunks`);
-        }
-      }
-    }
-
-    // Additional debugging info for project videos
-    if (projectVideos && projectVideos.length > 0) {
-      console.log(`[DEBUG] Video details for ${projectVideos.length} videos:`);
-      projectVideos.forEach((video, i) => {
-        console.log(`[DEBUG] Video ${i+1}: ${video.title || 'Untitled'}`);
-        console.log(`[DEBUG] - Path: ${video.source_file_path}`);
-        console.log(`[DEBUG] - Has metadata: ${video.video_metadata ? 'Yes' : 'No'}`);
-      });
-    }
-
-    // Call the edge function to transcribe the video
-    console.log(`[DEBUG] Calling transcribe-video function for project ${projectId}`);
-    console.log(`[DEBUG] Providing ${projectVideos.length} project videos`);
-    
-    const response = await supabase.functions.invoke('transcribe-video', {
-      body: {
-        projectId: projectId,
-        projectVideos: projectVideos
-      }
-    });
-
-    console.log("[DEBUG] Edge function response received", response);
-
-    if (response.error) {
-      console.error("[DEBUG] Error from transcribe-video edge function:", response.error);
-      toast.error("Error transcribing video", { id: "transcribe-video" });
-      return { 
-        success: false, 
-        error: response.error?.message || "Error calling transcription service" 
-      };
-    }
-
-    const { transcript, error } = response.data || {};
-
-    if (error) {
-      console.error("[DEBUG] Error in transcription response:", error);
-      toast.error("Error in transcription", { id: "transcribe-video" });
-      return { 
-        success: false, 
-        error: error 
-      };
-    }
-
-    if (!transcript) {
-      toast.error("No transcript was generated", { id: "transcribe-video" });
-      return { 
-        success: false, 
-        error: "No transcript was generated" 
-      };
-    }
-
-    // Check if transcript contains the error message about large files
-    if (transcript.includes("too large for direct transcription")) {
-      console.log("[DEBUG] Received 'too large' message from transcription service, but we've already tried chunking");
-      toast.warning("Video file is large. If transcription fails, try again.", { id: "transcribe-video", duration: 5000 });
-      
-      // Return the transcript anyway, as it might contain useful info
-      toast.info("Please check the transcript for more information", { id: "transcribe-video", duration: 5000 });
-    } else {
-      toast.success("Video transcribed successfully!", { id: "transcribe-video" });
-    }
-    
-    return { success: true, transcript: transcript };
-  } catch (error: any) {
-    console.error("[DEBUG] Error transcribing video:", error);
-    toast.error("Failed to transcribe video", { id: "transcribe-video" });
-    return { 
-      success: false, 
-      error: error.message || "An unexpected error occurred" 
-    };
   }
 };
 
