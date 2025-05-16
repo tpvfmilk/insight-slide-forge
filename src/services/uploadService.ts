@@ -1,7 +1,23 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseStoragePath } from "@/utils/videoPathUtils";
 import { createProgressHandler, getUploadStageMessage } from "@/utils/uploadProgressUtils";
+import { Json } from "@/integrations/supabase/types";
+import { ExtendedVideoMetadata, ChunkingInfo, ChunkMetadata, toJsonSafe } from "@/types/videoChunking";
+
+// Define Project type interface to fix the type errors
+interface Project {
+  id: string;
+  title: string;
+  context_prompt?: string;
+  user_id: string;
+  source_type: string;
+  source_file_path?: string;
+  video_metadata?: Json;
+  transcript?: string;
+  [key: string]: any;
+}
 
 /**
  * Creates a new project from an uploaded video file
@@ -22,7 +38,7 @@ export const createProjectFromVideo = async (
   chunkFiles: File[] = [],
   chunkMetadata: any = null,
   onProgress?: (progress: number, stage?: string) => void
-) => {
+): Promise<Project | null> => {
   try {
     const userId = (await supabase.auth.getUser()).data.user?.id;
     if (!userId) {
@@ -37,7 +53,7 @@ export const createProjectFromVideo = async (
     const filePath = `${userId}/${fileName}`;
     
     // Prepare video metadata
-    const videoMetadata = {
+    const videoMetadata: ExtendedVideoMetadata = {
       original_file_name: originalFileName,
       file_size: videoFile.size,
       file_type: videoFile.type,
@@ -47,7 +63,7 @@ export const createProjectFromVideo = async (
 
     // If we're dealing with a chunked video, add chunking metadata
     if (isChunkedVideo && chunkMetadata) {
-      videoMetadata.chunking = chunkMetadata;
+      videoMetadata.chunking = chunkMetadata as ChunkingInfo;
     }
 
     // Create progress handlers for different phases
@@ -113,7 +129,7 @@ export const createProjectFromVideo = async (
         );
         
         // Get the chunk path from metadata
-        const chunkPath = chunkMetadata?.chunks?.[i]?.videoPath;
+        const chunkPath = videoMetadata.chunking?.chunks?.[i]?.videoPath;
         if (!chunkPath) continue;
         
         const { bucketName, filePath } = parseStoragePath(chunkPath);
@@ -134,10 +150,11 @@ export const createProjectFromVideo = async (
       .from('projects')
       .insert({
         title,
+        user_id: userId,  // Add the user_id field here
         source_type: 'video',
         source_file_path: uploadedFilePath,
         context_prompt: contextPrompt,
-        video_metadata: videoMetadata,
+        video_metadata: toJsonSafe(videoMetadata), // Ensure metadata is JSON-safe
       })
       .select()
       .single();
@@ -148,7 +165,7 @@ export const createProjectFromVideo = async (
 
     if (onProgress) onProgress(100, "complete");
     
-    return project;
+    return project as Project;
   } catch (error) {
     console.error("Error creating project from video:", error);
     return null;
@@ -182,7 +199,11 @@ export const uploadFileWithProgress = async (
 
       // Create XMLHttpRequest for upload with progress tracking
       const xhr = new XMLHttpRequest();
-      const url = `${supabase.storageUrl}/object/${bucket}/${filePath}`;
+      // Fix 1: Access the storage URL correctly using await
+      const { data } = await supabase.storage.from(bucket).getPublicUrl(filePath);
+      // Extract the base URL from the public URL to construct the upload endpoint
+      const baseUrl = new URL(data.publicUrl).origin;
+      const url = `${baseUrl}/storage/v1/object/${bucket}/${filePath}`;
       
       // Track upload progress
       xhr.upload.onprogress = (event) => {
@@ -230,7 +251,10 @@ export const uploadFileWithProgress = async (
       // Add authentication headers
       const { data: authData } = await supabase.auth.getSession();
       xhr.setRequestHeader('Authorization', `Bearer ${authData.session?.access_token}`);
-      xhr.setRequestHeader('apikey', supabase.supabaseKey);
+      
+      // Fix 2: Get the API key correctly
+      const apiKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      xhr.setRequestHeader('apikey', apiKey);
       
       // Set content type
       xhr.setRequestHeader('Content-Type', file.type);
