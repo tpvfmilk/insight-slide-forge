@@ -25,6 +25,11 @@ export interface ProgressOperation {
   status: OperationStatus;
   timestamp: Date;
   details?: string;
+  // New fields for operation sequencing
+  step?: number;
+  parentId?: string;
+  workflowId?: string;
+  workflowName?: string;
 }
 
 interface ProgressContextType {
@@ -37,13 +42,15 @@ interface ProgressContextType {
   clearAllOperations: () => void;
   getActiveOperations: () => ProgressOperation[];
   getRecentOperations: () => ProgressOperation[];
+  getWorkflowOperations: (workflowId: string) => ProgressOperation[];
+  createWorkflow: (name: string) => string;
   isActive: boolean;
 }
 
 const ProgressContext = createContext<ProgressContextType | undefined>(undefined);
 
 // Maximum number of operations to keep in history
-const MAX_OPERATIONS_HISTORY = 30;
+const MAX_OPERATIONS_HISTORY = 50;
 
 export function ProgressProvider({ children }: { children: ReactNode }) {
   const [operations, setOperations] = useState<ProgressOperation[]>([]);
@@ -51,6 +58,12 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   // Generate a unique ID for operations
   const generateId = useCallback(() => {
     return `op-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }, []);
+
+  // Create a workflow ID that groups related operations
+  const createWorkflow = useCallback((name: string) => {
+    const workflowId = `wf-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
+    return workflowId;
   }, []);
 
   // Add a new operation and return its ID
@@ -120,9 +133,64 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     return operations.filter(op => op.status === 'pending' || op.status === 'running');
   }, [operations]);
 
-  // Get recent operations, sorted by timestamp (newest first)
+  // Get operations that belong to a specific workflow
+  const getWorkflowOperations = useCallback((workflowId: string) => {
+    return operations
+      .filter(op => op.workflowId === workflowId)
+      .sort((a, b) => {
+        // Sort by step number if available
+        if (a.step !== undefined && b.step !== undefined) {
+          return a.step - b.step;
+        }
+        // Otherwise sort by timestamp
+        return a.timestamp.getTime() - b.timestamp.getTime();
+      });
+  }, [operations]);
+
+  // Get recent operations, grouped by workflow when possible
   const getRecentOperations = useCallback(() => {
-    return [...operations].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    // First, group operations by workflow
+    const workflowMap = new Map<string | undefined, ProgressOperation[]>();
+    
+    operations.forEach(op => {
+      if (op.workflowId) {
+        const existing = workflowMap.get(op.workflowId) || [];
+        workflowMap.set(op.workflowId, [...existing, op]);
+      } else {
+        // For standalone operations, use their ID as the key
+        workflowMap.set(op.id, [op]);
+      }
+    });
+    
+    // Flatten the map values and sort workflows by most recent op in each
+    const result: ProgressOperation[] = [];
+    
+    // Get all workflow IDs, sorted by the most recent operation in each workflow
+    const sortedWorkflowIds = Array.from(workflowMap.keys()).sort((a, b) => {
+      const opsA = workflowMap.get(a) || [];
+      const opsB = workflowMap.get(b) || [];
+      
+      const latestA = Math.max(...opsA.map(op => op.timestamp.getTime()));
+      const latestB = Math.max(...opsB.map(op => op.timestamp.getTime()));
+      
+      return latestB - latestA; // Most recent first
+    });
+    
+    // Add operations from each workflow in order
+    sortedWorkflowIds.forEach(workflowId => {
+      const workflowOps = workflowMap.get(workflowId) || [];
+      // Sort operations within a workflow by step or timestamp
+      const sortedOps = workflowOps.sort((a, b) => {
+        if (a.step !== undefined && b.step !== undefined) {
+          return a.step - b.step;
+        }
+        return a.timestamp.getTime() - b.timestamp.getTime();
+      });
+      
+      result.push(...sortedOps);
+    });
+    
+    return result;
   }, [operations]);
 
   // Check if there's any active operation
@@ -140,6 +208,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     clearAllOperations,
     getActiveOperations,
     getRecentOperations,
+    getWorkflowOperations,
+    createWorkflow,
     isActive
   };
 
@@ -160,22 +230,37 @@ export function useProgress() {
 
 // Hook to create and track a progress operation
 export function useProgressOperation() {
-  const { addOperation, updateOperation, completeOperation } = useProgress();
+  const { addOperation, updateOperation, completeOperation, createWorkflow } = useProgress();
   
   const startOperation = useCallback(
     (
       type: OperationType,
       title: string,
       message: string,
-      initialProgress = 0
+      options?: {
+        initialProgress?: number;
+        parentId?: string;
+        workflowId?: string;
+        workflowName?: string;
+        step?: number;
+      }
     ) => {
+      // Create a new workflow ID if a workflow name is provided but no ID
+      const actualWorkflowId = options?.workflowName && !options?.workflowId 
+        ? createWorkflow(options.workflowName)
+        : options?.workflowId;
+        
       const id = addOperation({
         type,
         title,
         message,
-        progress: initialProgress,
+        progress: options?.initialProgress ?? 0,
         status: 'running',
         details: '',
+        parentId: options?.parentId,
+        workflowId: actualWorkflowId,
+        workflowName: options?.workflowName,
+        step: options?.step
       });
 
       const updateProgress = (progress: number, message?: string) => {
@@ -194,12 +279,104 @@ export function useProgressOperation() {
 
       return {
         id,
+        workflowId: actualWorkflowId,
         updateProgress,
         finishOperation,
       };
     },
-    [addOperation, updateOperation, completeOperation]
+    [addOperation, updateOperation, completeOperation, createWorkflow]
+  );
+  
+  // Create a workflow with multiple sequential steps
+  const startWorkflow = useCallback(
+    (workflowName: string, operations: {
+      type: OperationType;
+      title: string;
+      message: string;
+    }[]) => {
+      const workflowId = createWorkflow(workflowName);
+      
+      const workflowOperations = operations.map((operation, index) => {
+        const id = addOperation({
+          ...operation,
+          progress: index === 0 ? 0 : 0,
+          status: index === 0 ? 'running' : 'pending',
+          workflowId,
+          workflowName,
+          step: index + 1
+        });
+        
+        return id;
+      });
+      
+      const updateWorkflowProgress = (step: number, progress: number, message?: string) => {
+        if (step > 0 && step <= workflowOperations.length) {
+          const operationId = workflowOperations[step - 1];
+          updateOperation(operationId, { 
+            progress: Math.min(Math.max(0, progress), 100),
+            status: 'running',
+            ...(message ? { message } : {})
+          });
+          
+          // Make sure previous steps are completed
+          for (let i = 0; i < step - 1; i++) {
+            updateOperation(workflowOperations[i], { 
+              progress: 100,
+              status: 'completed'
+            });
+          }
+        }
+      };
+      
+      const completeWorkflowStep = (step: number, success = true, message?: string) => {
+        if (step > 0 && step <= workflowOperations.length) {
+          const operationId = workflowOperations[step - 1];
+          completeOperation(operationId, success);
+          
+          if (message) {
+            updateOperation(operationId, { message });
+          }
+          
+          // Start next step if this one was successful
+          if (success && step < workflowOperations.length) {
+            updateOperation(workflowOperations[step], { status: 'running' });
+          }
+        }
+      };
+      
+      const completeWorkflow = (success = true) => {
+        workflowOperations.forEach(opId => {
+          const op = operations.find(op => op.id === opId);
+          if (op && op.status === 'pending' || op?.status === 'running') {
+            completeOperation(opId, success);
+          }
+        });
+      };
+      
+      return {
+        workflowId,
+        operationIds: workflowOperations,
+        updateWorkflowProgress,
+        completeWorkflowStep,
+        completeWorkflow
+      };
+    },
+    [addOperation, updateOperation, completeOperation, createWorkflow]
   );
 
-  return { startOperation };
+  return { 
+    startOperation,
+    startWorkflow
+  };
+}
+
+// Hook for workflow operations
+export function useWorkflowProgress() {
+  const { startWorkflow } = useProgressOperation();
+  const { getWorkflowOperations } = useProgress();
+  
+  return {
+    startWorkflow,
+    getWorkflowOperations
+  };
 }

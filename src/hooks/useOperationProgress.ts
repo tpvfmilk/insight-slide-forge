@@ -8,6 +8,7 @@ export function useUploadProgress() {
   const { startOperation } = useProgressOperation();
   const activeOperationRef = useRef<{
     id: string;
+    workflowId?: string;
     updateProgress: (progress: number, message?: string) => void;
     finishOperation: (success?: boolean, message?: string) => void;
   } | null>(null);
@@ -24,7 +25,12 @@ export function useUploadProgress() {
   // Create a progress handler for upload operations
   const createProgressHandler = (
     title: string = 'Uploading file',
-    type: OperationType = 'upload'
+    type: OperationType = 'upload',
+    options?: {
+      workflowName?: string;
+      workflowId?: string;
+      step?: number;
+    }
   ) => {
     // Complete any existing operation
     if (activeOperationRef.current) {
@@ -32,7 +38,13 @@ export function useUploadProgress() {
     }
 
     // Start a new operation
-    const operation = startOperation(type, title, 'Preparing...', 0);
+    const operation = startOperation(type, title, 'Preparing...', {
+      initialProgress: 0,
+      workflowName: options?.workflowName,
+      workflowId: options?.workflowId,
+      step: options?.step
+    });
+    
     activeOperationRef.current = operation;
 
     return (progress: number, stage?: string) => {
@@ -67,23 +79,87 @@ export function useUploadProgress() {
 
 // Hook for tracking processing operations with progress
 export function useProcessingProgress() {
-  const { startOperation } = useProgressOperation();
+  const { startOperation, startWorkflow } = useProgressOperation();
 
   // Start a processing operation
   const startProcessingOperation = (
     title: string,
     initialMessage: string = 'Starting...',
-    type: OperationType = 'processing'
+    type: OperationType = 'processing',
+    options?: {
+      workflowName?: string;
+      workflowId?: string;
+      step?: number;
+    }
   ) => {
-    const operation = startOperation(type, title, initialMessage, 0);
+    const operation = startOperation(type, title, initialMessage, {
+      initialProgress: 0,
+      workflowName: options?.workflowName,
+      workflowId: options?.workflowId,
+      step: options?.step
+    });
     
     return {
+      id: operation.id,
+      workflowId: operation.workflowId,
       updateProgress: operation.updateProgress,
       complete: (success: boolean = true, message?: string) => {
         operation.finishOperation(success, message);
       }
     };
   };
+  
+  // Start a multi-step workflow
+  const startProcessingWorkflow = (
+    workflowName: string,
+    steps: {
+      type: OperationType;
+      title: string;
+      message: string;
+    }[]
+  ) => {
+    return startWorkflow(workflowName, steps);
+  };
 
-  return { startProcessingOperation };
+  return { 
+    startProcessingOperation,
+    startProcessingWorkflow
+  };
+}
+
+// Create a hook for audio processing workflow
+export function useAudioProcessingWorkflow() {
+  const { startProcessingWorkflow } = useProcessingProgress();
+  
+  const startAudioProcessingWorkflow = () => {
+    return startProcessingWorkflow("Audio Processing", [
+      { 
+        type: 'extraction', 
+        title: 'Extract Audio', 
+        message: 'Extracting audio from video file...' 
+      },
+      { 
+        type: 'chunking', 
+        title: 'Chunk Audio', 
+        message: 'Breaking audio into manageable chunks...' 
+      },
+      { 
+        type: 'processing', 
+        title: 'Process Audio Chunks', 
+        message: 'Creating audio segments from chunks...' 
+      },
+      { 
+        type: 'upload', 
+        title: 'Upload Audio Chunks', 
+        message: 'Uploading audio chunks...' 
+      },
+      { 
+        type: 'transcription', 
+        title: 'Transcribe Audio', 
+        message: 'Transcribing audio chunks...' 
+      }
+    ]);
+  };
+  
+  return { startAudioProcessingWorkflow };
 }

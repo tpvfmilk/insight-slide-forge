@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,6 +14,7 @@ import { FileText, Mic, AlertTriangle, FileAudio } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { AudioChunkMetadata, chunkAudioFile, createActualAudioChunks, uploadAudioChunks } from "@/services/audioChunkingService";
+import { useAudioProcessingWorkflow } from "@/hooks/useOperationProgress";
 
 // Maximum recommended file duration in seconds
 const MAX_RECOMMENDED_DURATION = 60 * 60; // 60 minutes
@@ -33,6 +33,7 @@ export const TranscriptExtractor = () => {
   const [processingStage, setProcessingStage] = useState<string>("");
   const [audioChunks, setAudioChunks] = useState<AudioChunkMetadata[]>([]);
   const [chunkProgress, setChunkProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
+  const { startAudioProcessingWorkflow } = useAudioProcessingWorkflow();
 
   // Set default title from filename when a file is selected
   useEffect(() => {
@@ -179,8 +180,11 @@ export const TranscriptExtractor = () => {
     setIsUploading(true);
     setExtractionProgress(0);
     
+    // Create a workflow to track all the steps
+    const workflow = startAudioProcessingWorkflow();
+    
     try {
-      // Create an empty project first to get the project ID
+      // Step 0: Create an empty project first to get the project ID
       setProcessingStage("Creating project");
       const initialToastId = "create-project";
       toast.loading("Creating project...", { id: initialToastId });
@@ -203,14 +207,17 @@ export const TranscriptExtractor = () => {
       toast.success("Project created", { id: initialToastId });
       
       // Step 1: Extract audio from video
+      workflow.updateWorkflowProgress(1, 0, "Extracting audio from video...");
       setProcessingStage("Extracting audio from video");
       const audioToastId = "extract-audio";
       toast.loading("Extracting audio from video...", { id: audioToastId });
       
       const audioBlob = await extractAudioFromVideo(selectedFile);
       setExtractionProgress(20);
+      workflow.completeWorkflowStep(1, true, "Audio extracted successfully");
       
       // Step 2: Chunk the audio file
+      workflow.updateWorkflowProgress(2, 0, "Analyzing and chunking audio...");
       setProcessingStage("Chunking audio file");
       const chunkingToastId = "chunk-audio";
       toast.loading("Chunking audio file...", { id: chunkingToastId });
@@ -228,8 +235,10 @@ export const TranscriptExtractor = () => {
       
       setExtractionProgress(40);
       setAudioChunks(chunkingResult.chunks);
+      workflow.completeWorkflowStep(2, true, `Created ${chunkingResult.chunks.length} chunk definitions`);
       
       // Step 3: Create actual audio chunks
+      workflow.updateWorkflowProgress(3, 0, `Creating ${chunkingResult.chunks.length} audio chunks...`);
       setProcessingStage("Creating audio chunks");
       toast.loading(`Creating ${chunkingResult.chunks.length} audio chunks...`, { id: chunkingToastId });
       
@@ -239,6 +248,8 @@ export const TranscriptExtractor = () => {
         (progress, current, total) => {
           setExtractionProgress(40 + (progress * 0.2)); // 40% to 60%
           setChunkProgress({current, total});
+          workflow.updateWorkflowProgress(3, progress, 
+            `Creating audio chunk ${current} of ${total} (${Math.round(progress)}%)`);
         }
       );
       
@@ -247,9 +258,11 @@ export const TranscriptExtractor = () => {
       }
       
       setExtractionProgress(60);
+      workflow.completeWorkflowStep(3, true, `Created ${actualChunks.length} audio chunks`);
       toast.success(`Successfully created ${actualChunks.length} audio chunks`, { id: chunkingToastId });
       
       // Step 4: Upload audio chunks
+      workflow.updateWorkflowProgress(4, 0, `Uploading ${actualChunks.length} audio chunks...`);
       setProcessingStage("Uploading audio chunks");
       const uploadToastId = "upload-chunks";
       toast.loading(`Uploading ${actualChunks.length} audio chunks...`, { id: uploadToastId });
@@ -259,6 +272,8 @@ export const TranscriptExtractor = () => {
         actualChunks,
         (progress) => {
           setExtractionProgress(60 + (progress * 0.2)); // 60% to 80%
+          workflow.updateWorkflowProgress(4, progress, 
+            `Uploading audio chunks (${Math.round(progress)}%)`);
         }
       );
       
@@ -267,9 +282,11 @@ export const TranscriptExtractor = () => {
       }
       
       toast.success(`Successfully uploaded ${uploadedChunks.length} audio chunks`, { id: uploadToastId });
+      workflow.completeWorkflowStep(4, true, `Uploaded ${uploadedChunks.length} audio chunks`);
       setExtractionProgress(80);
       
       // Step 5: Transcribe the audio chunks
+      workflow.updateWorkflowProgress(5, 0, `Transcribing ${uploadedChunks.length} audio segments...`);
       setProcessingStage("Transcribing audio chunks");
       const transcribeToastId = "transcribe-audio";
       toast.loading(`Transcribing ${uploadedChunks.length} audio segments...`, { id: transcribeToastId });
@@ -277,10 +294,16 @@ export const TranscriptExtractor = () => {
       const transcriptionResult = await transcribeAudioChunks(
         project.id,
         uploadedChunks,
-        (progress) => setExtractionProgress(80 + (progress * 0.2)) // 80% to 100%
+        (progress) => {
+          setExtractionProgress(80 + (progress * 0.2)); // 80% to 100%
+          workflow.updateWorkflowProgress(5, progress, 
+            `Transcribing audio chunks (${Math.round(progress)}%)`);
+        }
       );
       
       if (!transcriptionResult.success) {
+        workflow.completeWorkflowStep(5, false, 
+          `Failed to transcribe: ${transcriptionResult.error || "Unknown error"}`);
         toast.error(`Failed to transcribe audio: ${transcriptionResult.error || "Unknown error"}`, { id: transcribeToastId });
         setIsUploading(false);
         
@@ -289,6 +312,7 @@ export const TranscriptExtractor = () => {
         return;
       }
       
+      workflow.completeWorkflowStep(5, true, "Transcription completed successfully");
       toast.success("Transcription completed successfully", { id: transcribeToastId });
       setExtractionProgress(100);
       
@@ -297,6 +321,17 @@ export const TranscriptExtractor = () => {
     } catch (error: any) {
       console.error("Error extracting transcription:", error);
       toast.error(`Failed to extract transcription: ${error.message || "Unknown error"}`);
+      
+      // Mark the current workflow step as failed
+      const steps = [1, 2, 3, 4, 5];
+      const runningStep = steps.find(step => {
+        const opId = workflow.operationIds[step-1];
+        return opId && workflow.getOperationById(opId)?.status === 'running';
+      });
+      
+      if (runningStep) {
+        workflow.completeWorkflowStep(runningStep, false, error.message);
+      }
     } finally {
       setIsUploading(false);
     }
