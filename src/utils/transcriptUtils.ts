@@ -246,3 +246,31 @@ export const extractVideoSections = (transcript: string): string[] => {
   
   return matches.map(match => match[1].trim());
 };
+
+/**
+ * Processes OpenAI Whisper API transcript to include section headers
+ * @param whisperText Raw text transcript from Whisper API
+ * @param videoTitle Title of the video for section header
+ * @param startTime Start time of the section in seconds
+ * @param endTime End time of the section in seconds 
+ * @returns Formatted transcript with section header
+ */
+export const formatWhisperTranscriptSection = (
+  whisperText: string,
+  videoTitle: string,
+  partNumber: number,
+  startTime: number,
+  endTime: number
+): string => {
+  if (!whisperText) return '';
+  
+  // Create the section header
+  const sectionHeader = `## ${videoTitle} - Part ${partNumber} (${formatDuration(startTime)} to ${formatDuration(endTime)})`;
+  
+  // Format and clean up the text
+  let cleanedText = cleanupTranscript(whisperText);
+  cleanedText = splitIntoParagraphs(cleanedText);
+  
+  // Combine header and text
+  return `${sectionHeader}\n\n${cleanedText}`;
+};
