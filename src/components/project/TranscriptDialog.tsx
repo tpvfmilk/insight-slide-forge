@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,19 +16,46 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useDistill } from "@/context/DistillContext"
-import { transcribeVideo } from "@/services/uploadService";
-import { useProcessingProgress } from '@/hooks/useOperationProgress';
+import { transcribeVideo } from "@/services/uploadService"
+import { useProcessingProgress } from '@/hooks/useOperationProgress'
 
-export function TranscriptDialog() {
-  const [open, setOpen] = useState(false)
-  const [transcript, setTranscript] = useState("")
-  const [isTranscribing, setIsTranscribing] = useState(false)
-  const { selectedProject, updateProjectData } = useDistill();
+interface TranscriptDialogProps {
+  project: any;
+  transcript: string;
+  setTranscript: (transcript: string) => void;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function TranscriptDialog({
+  project,
+  transcript,
+  setTranscript,
+  isOpen: externalOpen,
+  onOpenChange
+}: TranscriptDialogProps) {
+  const [open, setOpen] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   
   const { startProcessingOperation } = useProcessingProgress();
   
+  // Sync with external open state if provided
+  useEffect(() => {
+    if (externalOpen !== undefined) {
+      setOpen(externalOpen);
+    }
+  }, [externalOpen]);
+  
+  // Handle open change and notify parent if callback provided
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen);
+    if (onOpenChange) {
+      onOpenChange(newOpen);
+    }
+  };
+  
   const handleTranscribe = async () => {
-    if (!selectedProject) {
+    if (!project) {
       toast.error("Please select a project first.");
       return;
     }
@@ -44,7 +72,7 @@ export function TranscriptDialog() {
       // Update progress for starting
       operation.updateProgress(10, "Preparing audio for transcription");
       
-      const transcriptionResult = await transcribeVideo(selectedProject.id);
+      const transcriptionResult = await transcribeVideo(project.id);
 
       if (!transcriptionResult.success) {
         toast.error(transcriptionResult.error || "Transcription failed");
@@ -57,9 +85,6 @@ export function TranscriptDialog() {
       // Update progress during transcription
       operation.updateProgress(50, "Processing transcription");
 
-      // Update the project data with the new transcript
-      updateProjectData({ transcript: transcriptionResult.transcript });
-      
       if (transcriptionResult.success) {
         toast.success("Video transcribed successfully!");
         operation.complete(true, "Transcription complete");
@@ -67,7 +92,7 @@ export function TranscriptDialog() {
         toast.error(transcriptionResult.error || "Transcription failed");
         operation.complete(false, `Transcription failed: ${transcriptionResult.error}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Transcription error:", error);
       toast.error("Failed to transcribe video");
       operation.complete(false, `Error: ${error.message}`);
@@ -77,7 +102,7 @@ export function TranscriptDialog() {
   };
   
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
+    <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogTrigger asChild>
         <Button variant="outline" disabled={isTranscribing}>Transcribe</Button>
       </AlertDialogTrigger>
@@ -112,5 +137,5 @@ export function TranscriptDialog() {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  )
+  );
 }

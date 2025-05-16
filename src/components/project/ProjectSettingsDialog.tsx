@@ -54,31 +54,35 @@ export const ProjectSettingsDialog = ({
           
           <ScrollArea className="max-h-[70vh] overflow-y-auto">
             <TabsContent value="transcript" className="focus:outline-none">
-              <TranscriptDialog 
-                project={project}
-                transcript={transcript}
-                setTranscript={setTranscript}
-                isOpen={activeTab === "transcript"}
-                onOpenChange={(open) => {
-                  if (!open) {
-                    handleClose();
-                  }
-                }}
-              />
+              {activeTab === "transcript" && (
+                <TranscriptDialog 
+                  project={project}
+                  transcript={transcript}
+                  setTranscript={setTranscript}
+                  isOpen={true}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      handleClose();
+                    }
+                  }}
+                />
+              )}
             </TabsContent>
             
             <TabsContent value="context" className="focus:outline-none">
-              <ContextDialog 
-                project={project}
-                contextPrompt={contextPrompt}
-                setContextPrompt={setContextPrompt}
-                isOpen={activeTab === "context"}
-                onOpenChange={(open) => {
-                  if (!open) {
-                    handleClose();
-                  }
-                }}
-              />
+              {activeTab === "context" && (
+                <ContextDialog 
+                  project={project}
+                  contextPrompt={contextPrompt}
+                  setContextPrompt={setContextPrompt}
+                  isOpen={true}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      handleClose();
+                    }
+                  }}
+                />
+              )}
             </TabsContent>
           </ScrollArea>
         </Tabs>
