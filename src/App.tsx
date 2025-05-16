@@ -5,6 +5,8 @@ import { Toaster } from 'sonner';
 import { ThemeProvider } from "@/components/shared/ThemeProvider";
 import { ProgressProvider } from '@/context/ProgressContext';
 import { DistillProvider } from '@/context/DistillContext';
+import { UIResetProvider } from '@/context/UIResetContext';
+import { EmergencyResetButton } from '@/components/ui/EmergencyResetButton';
 
 // Import pages
 import LandingPage from '@/pages/LandingPage';
@@ -25,22 +27,25 @@ function App() {
     <ThemeProvider defaultTheme="system" storageKey="distill-theme">
       <ProgressProvider>
         <DistillProvider>
-          <Router>
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-              <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
-              <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
-              <Route path="/projects/:id" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
-              <Route path="/projects/:id/present" element={<ProtectedRoute><PresentationPage /></ProtectedRoute>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Router>
-          <Toaster position="bottom-right" />
+          <UIResetProvider>
+            <Router>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
+                <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
+                <Route path="/projects/:id" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
+                <Route path="/projects/:id/present" element={<ProtectedRoute><PresentationPage /></ProtectedRoute>} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Router>
+            <Toaster position="bottom-right" />
+            <EmergencyResetButton />
+          </UIResetProvider>
         </DistillProvider>
       </ProgressProvider>
     </ThemeProvider>
