@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,11 +9,12 @@ import { createProjectFromVideo } from "@/services/uploadService";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { extractAudioFromVideo } from "@/services/audioExtractionService";
+import { extractAndChunkAudio, transcribeAudioChunks } from "@/services/audioExtractionService";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Mic, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import { AudioChunkMetadata } from "@/services/audioChunkingService";
 
 // Maximum recommended file duration in seconds
 const MAX_RECOMMENDED_DURATION = 30 * 60; // 30 minutes
@@ -29,6 +31,7 @@ export const TranscriptExtractor = () => {
   const [showSizeWarning, setShowSizeWarning] = useState<boolean>(false);
   const [extractionProgress, setExtractionProgress] = useState<number>(0);
   const [processingStage, setProcessingStage] = useState<string>("");
+  const [audioChunks, setAudioChunks] = useState<AudioChunkMetadata[]>([]);
 
   // Set default title from filename when a file is selected
   useEffect(() => {
@@ -85,57 +88,85 @@ export const TranscriptExtractor = () => {
 
     setIsUploading(true);
     setExtractionProgress(0);
+    
     try {
-      // Extract audio from the video file client-side
-      setProcessingStage("Extracting audio from video");
-      toast.loading("Extracting audio from video...", { id: "extract-audio" });
+      // Create an empty project first to get the project ID
+      setProcessingStage("Creating project");
+      const initialToastId = "create-project";
+      toast.loading("Creating project...", { id: initialToastId });
       
-      let audioBlob;
-      try {
-        // The updated function now directly accepts a File object and a progress callback
-        audioBlob = await extractAudioFromVideo(
-          selectedFile,
-          (progress: number) => setExtractionProgress(progress)
-        );
-        
-        toast.success("Audio extracted successfully", { id: "extract-audio" });
-      } catch (extractionError: any) {
-        console.error("Error during audio extraction:", extractionError);
-        toast.error(`Audio extraction failed: ${extractionError.message || "Unknown error"}`, { id: "extract-audio" });
-        setIsUploading(false);
-        return;
-      }
-
-      // Check audio blob size
-      if (audioBlob.size > 10 * 1024 * 1024) { // 10MB limit for edge function
-        toast.warning("The extracted audio is quite large. Processing may take longer than expected.", { duration: 8000 });
-      }
-
-      // Create a project and process the audio for transcription
-      setProcessingStage("Processing transcription");
-      toast.loading("Processing transcription...", { id: "process-transcript" });
-
-      // Convert the audio blob to a file for upload
-      const audioFile = new File([audioBlob], "extracted_audio.mp3", { type: "audio/mpeg" });
+      // Create an empty audio file as a placeholder
+      const emptyAudioBlob = new Blob(["placeholder"], { type: "audio/mp3" });
+      const emptyAudioFile = new File([emptyAudioBlob], "placeholder_audio.mp3", { type: "audio/mpeg" });
       
-      // Create the project first
+      // Create the project with minimal data
       const project = await createProjectFromVideo(
-        audioFile, 
+        emptyAudioFile, 
         title, 
         ""  // Pass empty string for contextPrompt
       );
-
-      // Handle successful creation
-      if (project && project.id) {
-        toast.success("Video uploaded for transcription", { id: "process-transcript" });
-        // Navigate to the project page
-        navigate(`/projects/${project.id}`);
-      } else {
+      
+      if (!project || !project.id) {
         throw new Error("Failed to create project");
       }
+      
+      toast.success("Project created", { id: initialToastId });
+      
+      // Extract and chunk audio from the video file
+      setProcessingStage("Processing audio");
+      const audioToastId = "process-audio";
+      toast.loading("Processing audio from video...", { id: audioToastId });
+      
+      const audioResult = await extractAndChunkAudio(
+        selectedFile,
+        project.id,
+        {
+          maxChunkDuration: 60, // 60 second chunks
+          format: 'wav',
+          quality: 'medium'
+        },
+        (progress, stage) => {
+          setExtractionProgress(progress);
+          setProcessingStage(stage);
+        }
+      );
+      
+      if (!audioResult.success || !audioResult.chunks) {
+        toast.error(`Failed to process audio: ${audioResult.error || "Unknown error"}`, { id: audioToastId });
+        setIsUploading(false);
+        return;
+      }
+      
+      toast.success(`Audio processed into ${audioResult.chunks.length} chunks`, { id: audioToastId });
+      setAudioChunks(audioResult.chunks);
+      
+      // Transcribe the audio chunks
+      setProcessingStage("Transcribing audio");
+      const transcribeToastId = "transcribe-audio";
+      toast.loading(`Transcribing ${audioResult.chunks.length} audio segments...`, { id: transcribeToastId });
+      
+      const transcriptionResult = await transcribeAudioChunks(
+        project.id,
+        audioResult.chunks,
+        (progress) => setExtractionProgress(progress)
+      );
+      
+      if (!transcriptionResult.success) {
+        toast.error(`Failed to transcribe audio: ${transcriptionResult.error || "Unknown error"}`, { id: transcribeToastId });
+        setIsUploading(false);
+        
+        // Still navigate to the project so they can see the partial results
+        navigate(`/projects/${project.id}`);
+        return;
+      }
+      
+      toast.success("Transcription completed successfully", { id: transcribeToastId });
+      
+      // Navigate to the project page
+      navigate(`/projects/${project.id}`);
     } catch (error: any) {
       console.error("Error extracting transcription:", error);
-      toast.error(`Failed to extract transcription: ${error.message || "Unknown error"}`, { id: "process-transcript" });
+      toast.error(`Failed to extract transcription: ${error.message || "Unknown error"}`);
     } finally {
       setIsUploading(false);
     }
@@ -202,7 +233,7 @@ export const TranscriptExtractor = () => {
             <AlertTriangle className="h-4 w-4 text-yellow-600" />
             <AlertDescription>
               This file is quite large. For best results, we recommend using videos under 30 minutes or 50MB.
-              Processing may take longer than expected.
+              Processing may take longer than expected but our new chunking system will handle it efficiently.
             </AlertDescription>
           </Alert>
         )}
@@ -238,6 +269,12 @@ export const TranscriptExtractor = () => {
               "This may take several minutes depending on the file size." : 
               "Processing transcription... Please wait."}
           </p>
+          
+          {audioChunks.length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs font-medium">Audio processing complete: {audioChunks.length} chunks created</p>
+            </div>
+          )}
         </div>
       )}
       

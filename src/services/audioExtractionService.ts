@@ -1,5 +1,7 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AudioChunk, AudioChunkMetadata, chunkAudioFile, uploadAudioChunks } from "./audioChunkingService";
 
 /**
  * Service for handling audio extraction from videos
@@ -115,11 +117,192 @@ export const extractAudioFromVideo = async (
 };
 
 /**
- * Process multiple video chunks to extract audio from them
- * @param projectId Project ID
- * @param chunks Array of chunk metadata
- * @returns Promise with information about the extraction process
+ * Extract audio and chunk it for processing
+ * @param videoFile Video file to extract audio from
+ * @param projectId Project ID for storage
+ * @param options Extraction options including max chunk size
+ * @param progressCallback Progress tracking callback
+ * @returns Promise with information about the extraction and chunking process
  */
+export const extractAndChunkAudio = async (
+  videoFile: File,
+  projectId: string,
+  options: {
+    maxChunkDuration?: number;
+    format?: 'mp3' | 'wav';
+    quality?: 'low' | 'medium' | 'high';
+  } = {},
+  progressCallback?: (progress: number, stage: string) => void
+): Promise<{
+  success: boolean;
+  audioBlob?: Blob;
+  chunks?: AudioChunkMetadata[];
+  error?: string;
+}> => {
+  try {
+    // Extract audio from video
+    if (progressCallback) progressCallback(0, "Extracting audio from video");
+    
+    // Update progress for extraction (0-50%)
+    const extractionProgressCallback = (progress: number) => {
+      if (progressCallback) progressCallback(progress * 0.5, "Extracting audio from video");
+    };
+    
+    const audioBlob = await extractAudioFromVideo(videoFile, extractionProgressCallback);
+    
+    console.log(`Extracted audio: ${(audioBlob.size / 1024 / 1024).toFixed(2)} MB`);
+    
+    // Chunk the extracted audio
+    if (progressCallback) progressCallback(50, "Chunking audio");
+    
+    // Update progress for chunking (50-75%)
+    const chunkingProgressCallback = (progress: number) => {
+      if (progressCallback) progressCallback(50 + progress * 0.25, "Chunking audio");
+    };
+    
+    const chunkingResult = await chunkAudioFile(
+      audioBlob,
+      options.maxChunkDuration || 60,
+      chunkingProgressCallback
+    );
+    
+    if (!chunkingResult.success) {
+      throw new Error(`Failed to chunk audio: ${chunkingResult.error}`);
+    }
+    
+    console.log(`Created ${chunkingResult.chunks.length} audio chunks`);
+    
+    // Upload the chunks to storage
+    if (progressCallback) progressCallback(75, "Uploading audio chunks");
+    
+    // Update progress for upload (75-100%)
+    const uploadProgressCallback = (progress: number) => {
+      if (progressCallback) progressCallback(75 + progress * 0.25, "Uploading audio chunks");
+    };
+    
+    // Re-create AudioChunk objects since we only have metadata
+    const audioChunks: AudioChunk[] = await Promise.all(
+      chunkingResult.chunks.map(async (chunkMeta, index) => {
+        // Create the actual chunk again
+        const offlineCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const arrayBuffer = await audioBlob.slice(
+          0, 
+          audioBlob.size
+        ).arrayBuffer();
+        
+        const start = chunkMeta.startTime / chunkingResult.originalDuration;
+        const end = chunkMeta.endTime / chunkingResult.originalDuration;
+        const chunkSize = end - start;
+        
+        // Estimate the byte range based on proportion of the file
+        const startByte = Math.floor(start * audioBlob.size);
+        const endByte = Math.floor(end * audioBlob.size);
+        
+        // Create a new blob for this chunk
+        const chunkBlob = audioBlob.slice(startByte, endByte);
+        
+        return {
+          blob: chunkBlob,
+          startTime: chunkMeta.startTime,
+          endTime: chunkMeta.endTime,
+          index: chunkMeta.index,
+          duration: chunkMeta.duration,
+          size: chunkBlob.size
+        };
+      })
+    );
+    
+    // Upload chunks to storage
+    const uploadedChunks = await uploadAudioChunks(
+      projectId, 
+      audioChunks,
+      uploadProgressCallback
+    );
+    
+    // Final progress update
+    if (progressCallback) progressCallback(100, "Audio processing complete");
+    
+    return {
+      success: true,
+      audioBlob,
+      chunks: uploadedChunks
+    };
+  } catch (error) {
+    console.error("Error in audio extraction and chunking:", error);
+    
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+/**
+ * Process audio chunks for transcription
+ * @param projectId Project ID
+ * @param chunks Array of audio chunk metadata
+ * @returns Promise with transcription results
+ */
+export const transcribeAudioChunks = async (
+  projectId: string,
+  chunks: AudioChunkMetadata[],
+  progressCallback?: (progress: number) => void
+): Promise<{
+  success: boolean;
+  transcript?: string;
+  processedCount: number;
+  failedCount: number;
+  error?: string;
+}> => {
+  try {
+    if (!chunks || chunks.length === 0) {
+      return {
+        success: false,
+        processedCount: 0,
+        failedCount: 0,
+        error: "No audio chunks provided"
+      };
+    }
+    
+    console.log(`Transcribing ${chunks.length} audio chunks`);
+    
+    // Call the edge function to transcribe the audio chunks
+    const { data, error } = await supabase.functions.invoke('transcribe-audio-chunks', {
+      body: {
+        projectId,
+        chunks
+      }
+    });
+    
+    if (error) {
+      console.error("Error transcribing audio chunks:", error);
+      return {
+        success: false,
+        processedCount: 0,
+        failedCount: chunks.length,
+        error: error.message
+      };
+    }
+    
+    return {
+      success: true,
+      transcript: data.transcript,
+      processedCount: data.processedCount || 0,
+      failedCount: data.failedCount || 0
+    };
+  } catch (error) {
+    console.error("Error in transcribeAudioChunks:", error);
+    
+    return {
+      success: false,
+      processedCount: 0,
+      failedCount: chunks.length,
+      error: error.message
+    };
+  }
+};
+
+// This function is now a placeholder - we'll use our new audio chunking approach instead
 export const batchExtractAudio = async (
   projectId: string,
   chunks: Array<{ 
@@ -136,7 +319,7 @@ export const batchExtractAudio = async (
 }> => {
   // This function would handle batch processing but we're updating it to be a placeholder
   // until we implement the full production version
-  console.warn("Batch audio extraction is only available in production implementation");
+  console.warn("Using new audio-first chunking approach instead of batch video extraction");
   
   return {
     success: false,
