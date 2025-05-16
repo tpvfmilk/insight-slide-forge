@@ -58,6 +58,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onCaptureFrame,
   getChunkInfoAtTime,
 }) => {
+  // Function to render chunk info safely
+  const renderChunkInfo = () => {
+    if (!getChunkInfoAtTime) return null;
+    
+    const chunkInfo = getChunkInfoAtTime(currentTime);
+    if (!chunkInfo) return null;
+    
+    // If it's a string, return it directly
+    if (typeof chunkInfo === 'string') {
+      return chunkInfo;
+    }
+    
+    // If it's an object, format it properly
+    return `Chunk ${chunkInfo.chunkIndex >= 0 ? chunkInfo.chunkIndex + 1 : 'N/A'}`;
+  };
+
   return (
     <div className="flex flex-col w-full overflow-hidden">
       {/* Video error state */}
@@ -212,11 +228,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
           
           {/* Current chunk info - only shown if we're using chunked video */}
-          {getChunkInfoAtTime && getChunkInfoAtTime(currentTime) && (
+          {getChunkInfoAtTime && renderChunkInfo() && (
             <div className="text-xs text-muted-foreground">
-              {typeof getChunkInfoAtTime(currentTime) === 'string' 
-                ? getChunkInfoAtTime(currentTime) 
-                : `Chunk ${(getChunkInfoAtTime(currentTime) as any)?.chunkIndex || 0}`}
+              {renderChunkInfo()}
             </div>
           )}
         </div>
