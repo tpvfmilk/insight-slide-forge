@@ -7,6 +7,7 @@ import { ProgressProvider } from '@/context/ProgressContext';
 import { DistillProvider } from '@/context/DistillContext';
 import { UIResetProvider } from '@/context/UIResetContext';
 import { AudioChunkingProvider } from '@/context/AudioChunkingContext';
+import { AuthProvider } from '@/context/AuthContext';
 import { EmergencyResetButton } from '@/components/ui/EmergencyResetButton';
 
 // Import pages
@@ -31,22 +32,24 @@ function App() {
           <UIResetProvider>
             <AudioChunkingProvider>
               <Router>
-                <Routes>
-                  <Route path="/" element={<LandingPage />} />
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/register" element={<RegisterPage />} />
-                  <Route path="/reset-password" element={<ResetPasswordPage />} />
-                  <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                  <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-                  <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
-                  <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
-                  <Route path="/projects/:id" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
-                  <Route path="/projects/:id/present" element={<ProtectedRoute><PresentationPage /></ProtectedRoute>} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+                <AuthProvider>
+                  <Routes>
+                    <Route path="/" element={<LandingPage />} />
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
+                    <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                    <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                    <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
+                    <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
+                    <Route path="/projects/:id" element={<ProtectedRoute><ProjectPage /></ProtectedRoute>} />
+                    <Route path="/projects/:id/present" element={<ProtectedRoute><PresentationPage /></ProtectedRoute>} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                  <Toaster position="bottom-right" />
+                  <EmergencyResetButton />
+                </AuthProvider>
               </Router>
-              <Toaster position="bottom-right" />
-              <EmergencyResetButton />
             </AudioChunkingProvider>
           </UIResetProvider>
         </DistillProvider>

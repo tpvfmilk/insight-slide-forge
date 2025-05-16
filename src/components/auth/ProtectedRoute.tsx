@@ -1,15 +1,21 @@
+
 import React, { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 
 interface ProtectedRouteProps {
   children: ReactNode;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  // This is a placeholder for the actual authentication logic
-  const isAuthenticated = true; // In a real app, this would check auth state
+  const { user, loading } = useAuth();
   
-  if (!isAuthenticated) {
+  if (loading) {
+    // You might want to show a loading spinner here
+    return <div>Loading...</div>;
+  }
+  
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
   
