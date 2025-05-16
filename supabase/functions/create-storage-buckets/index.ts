@@ -58,6 +58,7 @@ serve(async (req) => {
     ];
 
     const results = [];
+    let allSucceeded = true;
 
     // Create each bucket if it doesn't already exist
     for (const bucket of requiredBuckets) {
@@ -74,18 +75,29 @@ serve(async (req) => {
           });
 
           if (error) {
+            console.error(`Failed to create bucket ${bucket.id}:`, error);
             results.push({ 
               bucket: bucket.id, 
               status: 'error', 
               message: `Failed to create: ${error.message}`
             });
+            allSucceeded = false;
           } else {
+            console.log(`Successfully created bucket: ${bucket.id}`);
             results.push({ 
               bucket: bucket.id, 
               status: 'created', 
               message: 'Bucket created successfully' 
             });
           }
+        } else if (getBucketError) {
+          console.error(`Error checking if bucket ${bucket.id} exists:`, getBucketError);
+          results.push({ 
+            bucket: bucket.id, 
+            status: 'error', 
+            message: `Failed to check bucket: ${getBucketError.message}`
+          });
+          allSucceeded = false;
         } else {
           // Update existing bucket
           const { data, error } = await supabaseAdmin.storage.updateBucket(bucket.id, {
@@ -95,12 +107,15 @@ serve(async (req) => {
           });
 
           if (error) {
+            console.error(`Failed to update bucket ${bucket.id}:`, error);
             results.push({ 
               bucket: bucket.id, 
               status: 'error', 
               message: `Failed to update: ${error.message}`
             });
+            allSucceeded = false;
           } else {
+            console.log(`Successfully updated bucket: ${bucket.id}`);
             results.push({ 
               bucket: bucket.id, 
               status: 'updated', 
@@ -109,13 +124,20 @@ serve(async (req) => {
           }
         }
       } catch (bucketError) {
+        console.error(`Unexpected error with bucket ${bucket.id}:`, bucketError);
         results.push({ 
           bucket: bucket.id, 
           status: 'error', 
           message: bucketError.message
         });
+        allSucceeded = false;
       }
     }
+
+    // Check if all operations succeeded
+    const statusMessage = allSucceeded 
+      ? "All storage buckets initialized successfully" 
+      : "Some buckets could not be initialized. Check logs for details.";
 
     // Inform the user which policies must be set up manually
     // We can't use .createPolicy directly as it's not supported in the Supabase JS client
@@ -125,9 +147,9 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
-        success: true, 
+        success: allSucceeded, 
         results,
-        message: 'Storage buckets initialized successfully',
+        message: statusMessage,
         policyNote: policyMessage
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -1,4 +1,3 @@
-
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -15,6 +14,9 @@ import { ExtendedVideoMetadata } from "@/types/videoChunking";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
 import { forceUpdateChunkingMetadata } from "@/services/videoChunkingService";
+import { StorageBucketVerifier } from "@/components/storage/StorageBucketVerifier";
+import { initializeStorage } from "@/services/storageService";
+import { useEffect } from "react";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -44,6 +46,20 @@ const ProjectPage = () => {
     handleManualFrameSelectionComplete,
     totalVideoDuration
   } = useProjectState(projectId);
+
+  // Ensure storage buckets are initialized when the project page loads
+  useEffect(() => {
+    const checkStorage = async () => {
+      try {
+        await initializeStorage();
+      } catch (err) {
+        console.error("Error initializing storage:", err);
+        toast.error("Storage initialization failed. Some features may not work correctly.");
+      }
+    };
+    
+    checkStorage();
+  }, []);
   
   const handleOpenManualFramePicker = () => {
     if (!project?.source_file_path) {
@@ -112,6 +128,10 @@ const ProjectPage = () => {
     toast.loading("Preparing video for chunked processing...", { id: toastId });
     
     try {
+      // First make sure all required storage buckets exist
+      await initializeStorage();
+      
+      // Then update the chunking metadata
       const result = await forceUpdateChunkingMetadata(projectId);
       
       if (result.success) {
@@ -132,6 +152,10 @@ const ProjectPage = () => {
       console.error("[DEBUG] Error in handleForceChunking:", error);
     }
   };
+  
+  // Show storage verification UI if we have issues with chunked videos
+  const showStorageVerifier = hasTooLargeTranscriptError || 
+                             (hasChunkedVideo && transcript?.includes("Error transcribing this chunk"));
   
   return (
     <InsightLayout>
@@ -185,23 +209,46 @@ const ProjectPage = () => {
                 <p className="text-sm text-muted-foreground">Loading project...</p>
               </div>
             </div>
-          ) : hasTooLargeTranscriptError && !hasChunkedVideo && isLargeVideo ? (
-            <div className="flex flex-col items-center justify-center p-8">
-              <Alert variant="destructive" className="max-w-xl">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Video is too large for direct transcription</AlertTitle>
-                <AlertDescription className="space-y-2 mt-2">
-                  <p>This video file is too large for direct transcription and needs to be processed in chunks.</p>
-                  <div className="mt-4">
-                    <button
-                      onClick={handleForceChunking}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
-                    >
-                      Prepare for Chunked Processing
-                    </button>
-                  </div>
-                </AlertDescription>
-              </Alert>
+          ) : showStorageVerifier ? (
+            <div className="p-4">
+              {hasTooLargeTranscriptError && !hasChunkedVideo && isLargeVideo && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Video is too large for direct transcription</AlertTitle>
+                  <AlertDescription className="space-y-2 mt-2">
+                    <p>This video file is too large for direct transcription and needs to be processed in chunks.</p>
+                    <div className="mt-4">
+                      <button
+                        onClick={handleForceChunking}
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                      >
+                        Prepare for Chunked Processing
+                      </button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {/* Storage bucket verification component */}
+              <StorageBucketVerifier />
+              
+              {(hasChunkedVideo && transcript?.includes("Error transcribing this chunk")) && (
+                <Alert className="mt-4" variant="warning">
+                  <AlertTitle>Chunked transcription incomplete</AlertTitle>
+                  <AlertDescription>
+                    <p>There were issues accessing some video chunks for transcription. Please use the verification tool above to fix storage issues.</p>
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => loadProject()}
+                  className="px-4 py-2 bg-secondary text-secondary-foreground rounded hover:bg-secondary/90"
+                >
+                  Continue to Project
+                </button>
+              </div>
             </div>
           ) : isTranscriptOnlyProject && !hasValidSlides(project) ? (
             <TranscriptView 
