@@ -28,6 +28,8 @@ Create PowerPoint-style slides that:
   - A concise **title** (4–10 words max)
   - **2 to 5 bullet points** summarizing the portion of the transcript in **the order they were spoken**
   - Bullet points should be paraphrased or quoted directly from the transcript, not reordered
+-Be detailed and accurate.
+-Do not create an title sheet or conclusion sheet.
 
 ---
 
@@ -65,7 +67,7 @@ If a non-multiple-choice question is in the transcript:
 - ❌ Do NOT add outside knowledge or invented explanations
 - ✅ Slide content must reflect the **order and timing** of the transcript/video
 - ✅ If something is explained later, that explanation should appear **after** the first mention
-- ✅ Always include accurate timestamps in the transcript for each slide
+
 
 # 📌 Summary:
 > All slides must follow the **transcript's natural order**, slide-by-slide. Do not move answers or concepts forward in the deck if they are only explained later in the transcript. Stay accurate. Stay sequential.`;
