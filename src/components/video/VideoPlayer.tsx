@@ -1,10 +1,9 @@
 
-import React, { useState } from "react";
+import React from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Play, Pause, Rewind, FastForward, Camera, RefreshCw, AlertCircle } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { Play, Pause, SkipBack, SkipForward, RefreshCw, Camera } from "lucide-react";
 
 interface VideoPlayerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -16,9 +15,9 @@ interface VideoPlayerProps {
   isVideoLoaded: boolean;
   isLoadingVideo: boolean;
   videoError: string | null;
-  capturedTimemarks: number[];
-  chunkTimemarks?: number[]; // Add chunk timemarks prop
-  isCapturingFrame: boolean;
+  capturedTimemarks?: number[];
+  chunkTimemarks?: number[];
+  isCapturingFrame?: boolean;
   formatTime: (seconds: number) => string;
   togglePlayPause: () => void;
   seekBack: () => void;
@@ -26,11 +25,11 @@ interface VideoPlayerProps {
   handleSeekStart: () => void;
   handleSeekChange: (value: number[]) => void;
   handleSeekEnd: () => void;
-  retryLoadVideo: () => void;
-  handleVideoLoaded: () => void;
-  handleVideoError: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
-  onCaptureFrame: () => void;
-  getChunkInfoAtTime?: (time: number) => string | null; // Optional function to get chunk info
+  retryLoadVideo?: () => void;
+  handleVideoLoaded?: () => void;
+  handleVideoError?: (e: any) => void;
+  onCaptureFrame?: () => Promise<void>;
+  getChunkInfoAtTime?: (time: number) => { chunkIndex: number; isInChunk: boolean; nextChunkTime: number } | null;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -43,9 +42,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   isVideoLoaded,
   isLoadingVideo,
   videoError,
-  capturedTimemarks,
-  chunkTimemarks = [], // Default to empty array if not provided
-  isCapturingFrame,
+  capturedTimemarks = [],
+  chunkTimemarks = [],
+  isCapturingFrame = false,
   formatTime,
   togglePlayPause,
   seekBack,
@@ -57,195 +56,167 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   handleVideoLoaded,
   handleVideoError,
   onCaptureFrame,
-  getChunkInfoAtTime
+  getChunkInfoAtTime,
 }) => {
-  const [hoveredTime, setHoveredTime] = useState<number | null>(null);
-  
-  // Custom render for slider with captured frame markers and chunk markers
-  const renderSliderWithMarkers = () => {
-    return (
-      <TooltipProvider>
-        <div 
-          className="relative w-full" 
-          onMouseLeave={() => setHoveredTime(null)}
-        >
-          <Slider 
-            value={[seekingValue]} 
-            min={0} 
-            max={duration || 100}
-            step={0.01}
-            onValueChange={handleSeekChange}
-            onValueCommit={handleSeekEnd}
-            onPointerDown={handleSeekStart}
-            className="z-10"
-            onMouseMove={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const pos = (e.clientX - rect.left) / rect.width;
-              const time = pos * (duration || 100);
-              setHoveredTime(time);
-            }}
-          />
-          
-          {/* Chunk markers - blue/purple indicators */}
-          {chunkTimemarks.map((time, index) => (
-            <Tooltip key={`chunk-${index}`}>
-              <TooltipTrigger asChild>
-                <div 
-                  className="absolute top-1/2 w-1 h-5 bg-blue-500 rounded-full transform -translate-y-1/2 z-0 cursor-pointer"
-                  style={{ 
-                    left: `${(time / (duration || 100)) * 100}%`,
-                    marginLeft: -2 // Center the marker
-                  }}
-                />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="z-50">
-                <p>
-                  Video chunk at {formatTime(time)}
-                  {getChunkInfoAtTime && getChunkInfoAtTime(time) ? 
-                    ` - ${getChunkInfoAtTime(time)}` : ''}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          ))}
-          
-          {/* Timemark indicators - Green color for captured frames */}
-          {capturedTimemarks.map((time, index) => (
-            <Tooltip key={`frame-${index}`}>
-              <TooltipTrigger asChild>
-                <div 
-                  className="absolute top-1/2 w-1 h-4 bg-green-500 rounded-full transform -translate-y-1/2 z-0 cursor-pointer"
-                  style={{ 
-                    left: `${(time / (duration || 100)) * 100}%`,
-                    marginLeft: -2 // Center the marker
-                  }}
-                />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="z-50">
-                <p>Captured frame at {formatTime(time)}</p>
-              </TooltipContent>
-            </Tooltip>
-          ))}
-          
-          {/* Current position indicator with time tooltip */}
-          {hoveredTime !== null && (
-            <div 
-              className="absolute top-0 -translate-y-6 transform -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-none"
-              style={{ 
-                left: `${(hoveredTime / (duration || 100)) * 100}%` 
-              }}
-            >
-              {formatTime(hoveredTime)}
-            </div>
-          )}
-        </div>
-      </TooltipProvider>
-    );
-  };
-
   return (
-    <div className="relative bg-black rounded-md overflow-hidden" style={{ width: "640px", height: "360px" }}>
-      {/* Loading state */}
-      {isLoadingVideo ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
-          <RefreshCw className="h-8 w-8 animate-spin mr-2" />
-          <span>Loading video...</span>
-        </div>
-      ) : null}
-      
-      {/* Error state */}
-      {videoError ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white p-4 text-center">
-          <div>
-            <AlertCircle className="h-10 w-10 mb-2 mx-auto text-destructive" />
-            <p className="mb-4">{videoError}</p>
+    <div className="flex flex-col w-full overflow-hidden">
+      {/* Video error state */}
+      {videoError && !isVideoLoaded && !isLoadingVideo && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10">
+          <p className="text-white text-sm mb-2">Failed to load video: {videoError}</p>
+          {retryLoadVideo && (
             <Button 
               variant="secondary" 
+              size="sm" 
               onClick={retryLoadVideo}
+              className="flex items-center gap-1"
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Retry Loading Video
+              <RefreshCw className="h-4 w-4" /> Retry
             </Button>
+          )}
+        </div>
+      )}
+      
+      {/* Loading state */}
+      {isLoadingVideo && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+          <div className="flex flex-col items-center">
+            <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+            <span className="text-white text-sm">Loading video...</span>
           </div>
         </div>
-      ) : null}
+      )}
       
       {/* Video element */}
       <video
         ref={videoRef}
+        className={cn(
+          "w-full h-full object-contain bg-black",
+          (isLoadingVideo || !isVideoLoaded) && "opacity-50"
+        )}
         src={videoUrl || undefined}
-        className="w-full h-full object-contain"
-        crossOrigin="anonymous"
         onLoadedData={handleVideoLoaded}
-        onLoadedMetadata={handleVideoLoaded}
         onError={handleVideoError}
-        playsInline
-        preload="auto"
-      >
-        Your browser does not support the video tag.
-      </video>
-      
-      {/* Video controls overlay */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-3 flex flex-col space-y-2">
-        <div className="flex items-center space-x-4 w-full">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={seekBack}
-            className="text-white hover:bg-white/20"
-            disabled={!isVideoLoaded}
-          >
-            <Rewind className="h-5 w-5" />
-          </Button>
+      ></video>
 
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={togglePlayPause}
-            className="text-white hover:bg-white/20"
+      {/* Controls */}
+      <div className="bg-background p-2 border-t">
+        {/* Seek bar */}
+        <div className="relative w-full h-6 mb-2">
+          <Slider
+            value={[seekingValue]}
+            min={0}
+            max={duration || 100}
+            step={0.1}
+            onValueChange={handleSeekChange}
+            onValueCommit={() => handleSeekEnd()}
+            onPointerDown={handleSeekStart}
             disabled={!isVideoLoaded}
-          >
-            {isPlaying ? (
-              <Pause className="h-5 w-5" />
-            ) : (
-              <Play className="h-5 w-5" />
-            )}
-          </Button>
+            className="h-1.5"
+          />
           
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={seekForward}
-            className="text-white hover:bg-white/20"
-            disabled={!isVideoLoaded}
-          >
-            <FastForward className="h-5 w-5" />
-          </Button>
+          {/* Timemarks for captured frames */}
+          {capturedTimemarks.map((time, index) => {
+            const position = (time / (duration || 100)) * 100;
+            return (
+              <div
+                key={`timemark-${index}`}
+                className="absolute w-1 h-4 bg-green-500 rounded-full -mt-1 transform -translate-x-1/2 z-10"
+                style={{
+                  left: `${position}%`,
+                  top: '6px',
+                }}
+              ></div>
+            );
+          })}
           
-          <div className="text-white text-sm">
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </div>
-          
-          <div className="flex-1"></div>
-          
-          <Button 
-            variant="secondary" 
-            size="sm"
-            onClick={onCaptureFrame}
-            className="flex items-center space-x-1"
-            disabled={!isVideoLoaded || isCapturingFrame}
-          >
-            {isCapturingFrame ? (
-              <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Camera className="h-4 w-4 mr-1" />
-            )}
-            {isCapturingFrame ? 'Capturing...' : 'Capture Frame'}
-          </Button>
+          {/* Timemarks for video chunks */}
+          {chunkTimemarks.map((time, index) => {
+            const position = (time / (duration || 100)) * 100;
+            return (
+              <div
+                key={`chunk-${index}`}
+                className="absolute w-1 h-4 bg-blue-500 rounded-full -mt-1 transform -translate-x-1/2 z-5"
+                style={{
+                  left: `${position}%`,
+                  top: '6px',
+                }}
+              ></div>
+            );
+          })}
         </div>
         
-        {/* Video seek slider with markers */}
-        <div className="px-1">
-          {renderSliderWithMarkers()}
+        {/* Time display and controls */}
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-mono">
+            {formatTime(currentTime)} / {formatTime(duration || 0)}
+          </div>
+
+          <div className="flex space-x-2 items-center">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={seekBack} 
+              disabled={!isVideoLoaded}
+              className="h-8 w-8"
+            >
+              <SkipBack className="h-4 w-4" />
+            </Button>
+            
+            <Button 
+              variant="default" 
+              size="icon" 
+              onClick={togglePlayPause} 
+              disabled={!isVideoLoaded}
+              className="h-9 w-9"
+            >
+              {isPlaying ? (
+                <Pause className="h-5 w-5" />
+              ) : (
+                <Play className="h-5 w-5" />
+              )}
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={seekForward} 
+              disabled={!isVideoLoaded}
+              className="h-8 w-8"
+            >
+              <SkipForward className="h-4 w-4" />
+            </Button>
+            
+            {/* Capture frame button */}
+            {onCaptureFrame && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onCaptureFrame}
+                disabled={!isVideoLoaded || isCapturingFrame}
+                className="ml-2 flex items-center gap-1"
+              >
+                {isCapturingFrame ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Capturing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera className="h-4 w-4" />
+                    <span>Capture Frame</span>
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+          
+          {/* Current chunk info - only shown if we're using chunked video */}
+          {getChunkInfoAtTime && getChunkInfoAtTime(currentTime) && (
+            <div className="text-xs text-muted-foreground">
+              Chunk {getChunkInfoAtTime(currentTime)?.chunkIndex || 0}
+            </div>
+          )}
         </div>
       </div>
     </div>

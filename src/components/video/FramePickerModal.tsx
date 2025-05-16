@@ -1,3 +1,4 @@
+
 // At the top of the file, import our new hook and types
 import { useChunkedVideoPlayer } from "@/hooks/useChunkedVideoPlayer";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
@@ -56,6 +57,25 @@ export function FramePickerModal({
   const [frameToDelete, setFrameToDelete] = useState<ExtractedFrame | null>(null);
   const [selectedFramesForDeletion, setSelectedFramesForDeletion] = useState<string[]>([]);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  // Add canvas refs for the frame capture process
+  const hiddenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    // Create hidden canvas for frame capture
+    if (!hiddenCanvasRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.style.display = 'none';
+      document.body.appendChild(canvas);
+      hiddenCanvasRef.current = canvas;
+    }
+
+    // Cleanup function to remove hidden canvas
+    return () => {
+      if (hiddenCanvasRef.current) {
+        document.body.removeChild(hiddenCanvasRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Fetch project data to get metadata including chunking info

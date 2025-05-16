@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
 import { ExtractedFrame } from "@/services/clientFrameExtractionService";
+import { toast } from "sonner";
 
 export function useFrameCapture({
   videoRef,
@@ -22,7 +23,7 @@ export function useFrameCapture({
   allExtractedFrames?: ExtractedFrame[];
 }) {
   const [isCapturingFrame, setIsCapturingFrame] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(document.createElement("canvas"));
   const [capturedTimemarks, setCapturedTimemarks] = useState<number[]>([]);
   
   // Function to convert timestamp string to seconds
@@ -52,12 +53,17 @@ export function useFrameCapture({
 
   // Capture frame function
   const captureFrame = async () => {
-    if (!videoRef.current || !videoRef.current.videoWidth || !canvasRef.current || !projectId || !videoUrl || isCapturingFrame) {
+    if (!videoRef.current || !projectId || isCapturingFrame) {
+      console.log("Cannot capture frame: Video not ready or already capturing");
+      if (!videoRef.current) toast.error("Video not ready for capture");
+      if (isCapturingFrame) toast.info("Already capturing a frame, please wait");
       return;
     }
 
     try {
       setIsCapturingFrame(true);
+      toast.loading("Capturing frame...", { id: "capture-frame" });
+      
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
@@ -67,8 +73,12 @@ export function useFrameCapture({
       }
       
       // Set canvas dimensions to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      
+      if (!video.videoWidth || !video.videoHeight) {
+        console.warn("Video dimensions not available, using defaults");
+      }
       
       // Draw current video frame to canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -88,6 +98,8 @@ export function useFrameCapture({
       // Create unique filename
       const frameId = uuidv4();
       const filename = `project_${projectId}/${frameId}.jpg`;
+      
+      console.log(`Uploading frame at timestamp ${timestamp} with filename ${filename}`);
       
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
@@ -126,8 +138,11 @@ export function useFrameCapture({
       // Call the callback
       onFrameCaptured(extractedFrame);
       
+      toast.success(`Frame captured at ${timestamp}`, { id: "capture-frame" });
+      
     } catch (error) {
       console.error("Error capturing frame:", error);
+      toast.error(`Failed to capture frame: ${error instanceof Error ? error.message : "Unknown error"}`, { id: "capture-frame" });
     } finally {
       setIsCapturingFrame(false);
     }
