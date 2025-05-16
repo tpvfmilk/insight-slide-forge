@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -81,11 +80,11 @@ export const extractAudioFromVideo = async (
     if (progressCallback) {
       const progressInterval = setInterval(() => {
         if (video.currentTime > 0) {
-          const progress = Math.min((video.currentTime / videoTotalTime) * 100, 100);
-          progressCallback(progress);
+          const currentProgress = Math.min((video.currentTime / videoTotalTime) * 100, 100);
+          progressCallback(currentProgress);
         }
         
-        if (video.ended || progress === 100) {
+        if (video.ended || video.currentTime >= videoTotalTime) {
           clearInterval(progressInterval);
         }
       }, 500);
