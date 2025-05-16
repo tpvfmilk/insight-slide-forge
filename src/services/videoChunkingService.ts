@@ -34,8 +34,10 @@ export const forceUpdateChunkingMetadata = async (
     }
 
     // Update the video metadata to indicate chunking is needed
+    // Fix: Explicitly check if video_metadata is an object and use a type assertion
+    const currentMetadata = projectData.video_metadata || {};
     const newMetadata = {
-      ...(projectData.video_metadata || {}),
+      ...currentMetadata,
       chunking: {
         isChunked: true,
         isVirtualChunking: true,  // Set to true for client-side chunking
