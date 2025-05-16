@@ -11,15 +11,15 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { extractAndChunkAudio, transcribeAudioChunks } from "@/services/audioExtractionService";
 import { Card, CardContent } from "@/components/ui/card";
-import { FileText, Mic, AlertTriangle } from "lucide-react";
+import { FileText, Mic, AlertTriangle, FileAudio } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { AudioChunkMetadata } from "@/services/audioChunkingService";
 
 // Maximum recommended file duration in seconds
-const MAX_RECOMMENDED_DURATION = 30 * 60; // 30 minutes
+const MAX_RECOMMENDED_DURATION = 60 * 60; // 60 minutes
 // Maximum recommended file size in bytes
-const MAX_RECOMMENDED_SIZE = 50 * 1024 * 1024; // 50 MB
+const MAX_RECOMMENDED_SIZE = 200 * 1024 * 1024; // 200 MB - increased threshold since we handle chunking
 
 export const TranscriptExtractor = () => {
   const { user } = useAuth();
@@ -45,7 +45,7 @@ export const TranscriptExtractor = () => {
   }, [selectedFile]);
 
   const checkFileSizeAndDuration = async (file: File) => {
-    // Check file size
+    // Check file size - show warning but don't block large files
     if (file.size > MAX_RECOMMENDED_SIZE) {
       setShowSizeWarning(true);
     } else {
@@ -117,11 +117,17 @@ export const TranscriptExtractor = () => {
       const audioToastId = "process-audio";
       toast.loading("Processing audio from video...", { id: audioToastId });
       
+      // Implement our workflow:
+      // 1. Extract full audio from video
+      // 2. Store full audio in audio_extracts bucket (no size limit)
+      // 3. Chunk audio into smaller pieces (max 20MB each)
+      // 4. Store chunks in audio_chunks bucket
       const audioResult = await extractAndChunkAudio(
         selectedFile,
         project.id,
         {
           maxChunkDuration: 60, // 60 second chunks
+          maxChunkSizeMB: 20,   // 20MB max chunk size
           format: 'wav',
           quality: 'medium'
         },
@@ -203,14 +209,14 @@ export const TranscriptExtractor = () => {
                 <FileText className={`h-10 w-10 mb-2 mx-auto ${showSizeWarning ? "text-yellow-500" : "text-primary"}`} />
                 <p className="text-sm font-medium">Extract transcript from a video file</p>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Only the audio will be processed - the video won't be stored
+                  Audio will be extracted and processed in chunks for optimal transcription
                 </p>
               </div>
               
               <FileUploader 
                 onFilesSelected={handleFileSelected} 
                 accept="video/*" 
-                maxSize={100} 
+                maxSize={500} // Increase max size since we handle chunking
                 multiple={false} 
                 className="w-full" 
                 disabled={isUploading} 
@@ -232,8 +238,8 @@ export const TranscriptExtractor = () => {
           <Alert variant="warning" className="bg-yellow-50 text-yellow-800 border-yellow-200">
             <AlertTriangle className="h-4 w-4 text-yellow-600" />
             <AlertDescription>
-              This file is quite large. For best results, we recommend using videos under 30 minutes or 50MB.
-              Processing may take longer than expected but our new chunking system will handle it efficiently.
+              This file is quite large. Processing may take longer than expected, but our audio chunking system will handle it efficiently 
+              by extracting the full audio and breaking it into smaller chunks for processing.
             </AlertDescription>
           </Alert>
         )}
@@ -272,7 +278,15 @@ export const TranscriptExtractor = () => {
           
           {audioChunks.length > 0 && (
             <div className="mt-2">
-              <p className="text-xs font-medium">Audio processing complete: {audioChunks.length} chunks created</p>
+              <p className="text-xs font-medium mb-1">Audio processing complete:</p>
+              <div className="flex items-center gap-1">
+                <FileAudio className="h-3.5 w-3.5 text-blue-600" /> 
+                <span className="text-xs">Full audio extracted and stored</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <FileAudio className="h-3.5 w-3.5 text-green-600" /> 
+                <span className="text-xs">{audioChunks.length} processing chunks created</span>
+              </div>
             </div>
           )}
         </div>

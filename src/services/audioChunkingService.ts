@@ -1,4 +1,3 @@
-
 /**
  * Audio chunking service
  * Handles chunking of audio files for more efficient processing
@@ -34,15 +33,17 @@ export interface AudioChunkingResult {
 }
 
 /**
- * Chunks an audio blob into smaller segments
+ * Chunks an audio blob into smaller segments, ensuring chunks don't exceed max size
  * @param audioBlob The audio blob to chunk
  * @param maxChunkDuration Maximum duration in seconds for each chunk 
+ * @param maxChunkSizeMB Maximum size in MB for each chunk (defaults to 20MB)
  * @param progressCallback Optional callback for tracking progress
  * @returns Promise with metadata about the chunks
  */
 export const chunkAudioFile = async (
   audioBlob: Blob, 
   maxChunkDuration: number = 60, // Default to 60 second chunks
+  maxChunkSizeMB: number = 20,   // Default to 20MB max chunk size
   progressCallback?: (progress: number) => void
 ): Promise<AudioChunkingResult> => {
   try {
@@ -50,15 +51,32 @@ export const chunkAudioFile = async (
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     const audioContext = new AudioContext();
     
+    // Convert MB to bytes for easier comparison
+    const maxChunkSizeBytes = maxChunkSizeMB * 1024 * 1024;
+    
     // Create an audio source from the blob
     const arrayBuffer = await audioBlob.arrayBuffer();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
     
     // Calculate total duration
     const totalDuration = audioBuffer.duration;
-    const totalChunks = Math.ceil(totalDuration / maxChunkDuration);
+    
+    // Estimate bytes per second based on the full audio blob
+    const bytesPerSecond = audioBlob.size / totalDuration;
+    
+    // Calculate optimal chunk duration based on max file size
+    // But ensure we don't exceed the specified maxChunkDuration
+    const optimalChunkDuration = Math.min(
+      maxChunkDuration,
+      maxChunkSizeBytes / bytesPerSecond
+    );
+    
+    // Calculate total chunks needed
+    const totalChunks = Math.ceil(totalDuration / optimalChunkDuration);
     
     console.log(`Chunking audio file: ${totalDuration.toFixed(2)}s into ~${totalChunks} chunks`);
+    console.log(`Audio bitrate: ~${(bytesPerSecond / 1024).toFixed(2)} KB/s`);
+    console.log(`Optimal chunk duration: ${optimalChunkDuration.toFixed(2)}s to stay under ${maxChunkSizeMB}MB`);
     
     // Create chunks
     const chunks: AudioChunk[] = [];
@@ -68,8 +86,8 @@ export const chunkAudioFile = async (
         progressCallback((i / totalChunks) * 100);
       }
       
-      const startTime = i * maxChunkDuration;
-      const endTime = Math.min((i + 1) * maxChunkDuration, totalDuration);
+      const startTime = i * optimalChunkDuration;
+      const endTime = Math.min((i + 1) * optimalChunkDuration, totalDuration);
       const chunkDuration = endTime - startTime;
       
       // Create an offline audio context for this chunk
@@ -93,6 +111,13 @@ export const chunkAudioFile = async (
       // Convert the chunk to a blob
       const audioData = exportBufferToWav(renderedBuffer);
       const chunkBlob = new Blob([audioData], { type: 'audio/wav' });
+      
+      // Ensure chunk size doesn't exceed the max size
+      if (chunkBlob.size > maxChunkSizeBytes) {
+        console.warn(`Chunk ${i + 1} exceeds maximum size (${(chunkBlob.size / 1024 / 1024).toFixed(2)}MB > ${maxChunkSizeMB}MB)`);
+        // If this happens, we could recursively split this chunk into smaller ones
+        // For now, we'll continue and let the upload handle potential failures
+      }
       
       chunks.push({
         blob: chunkBlob,

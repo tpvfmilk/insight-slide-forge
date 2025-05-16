@@ -33,24 +33,17 @@ serve(async (req) => {
         allowedMimeTypes: ['video/*', 'audio/*', 'image/*']
       },
       {
-        id: 'chunks',
-        name: 'Video Chunks',
-        public: true,
-        fileSizeLimit: 52428800, // 50MB
-        allowedMimeTypes: ['video/*', 'audio/*']
-      },
-      {
         id: 'audio_extracts',
         name: 'Audio Extracts',
         public: true,
-        fileSizeLimit: 26214400, // 25MB
+        fileSizeLimit: null, // NO SIZE LIMIT as requested
         allowedMimeTypes: ['audio/*']
       },
       {
         id: 'audio_chunks',
         name: 'Audio Chunks',
         public: true,
-        fileSizeLimit: 10485760, // 10MB
+        fileSizeLimit: 20971520, // 20MB as requested
         allowedMimeTypes: ['audio/*']
       },
       {
@@ -179,7 +172,6 @@ serve(async (req) => {
       : "Some buckets could not be initialized. Check logs for details.";
 
     // Inform the user which policies must be set up manually
-    // We can't use .createPolicy directly as it's not supported in the Supabase JS client
     const policyMessage = `Note: Please ensure RLS policies are set up for these buckets. Go to Storage > Bucket > Policies in the Supabase dashboard to configure:
     - Allow authenticated users to upload files
     - Allow public read access to files`;

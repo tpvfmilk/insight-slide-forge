@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AudioChunk, AudioChunkMetadata, chunkAudioFile, uploadAudioChunks } from "./audioChunkingService";
@@ -117,6 +116,66 @@ export const extractAudioFromVideo = async (
 };
 
 /**
+ * Upload the full extracted audio to storage
+ * @param audioBlob The audio blob to upload
+ * @param projectId The project ID for storage
+ * @param progressCallback Optional callback for tracking progress
+ * @returns Promise with information about the uploaded file
+ */
+export const uploadFullAudio = async (
+  audioBlob: Blob,
+  projectId: string,
+  progressCallback?: (progress: number) => void
+): Promise<{
+  success: boolean;
+  path?: string;
+  error?: string;
+  size?: number;
+}> => {
+  try {
+    if (!audioBlob) {
+      throw new Error("No audio data provided");
+    }
+    
+    // Format the file path
+    const fileName = `full_audio_${Date.now()}.mp3`;
+    const filePath = `projects/${projectId}/${fileName}`;
+    
+    console.log(`Uploading full audio (${(audioBlob.size / (1024 * 1024)).toFixed(2)} MB) to path: ${filePath}`);
+    
+    // Start progress tracking
+    if (progressCallback) progressCallback(10);
+    
+    // Upload to audio_extracts bucket (with no size limit)
+    const { data, error } = await supabase.storage
+      .from('audio_extracts')
+      .upload(filePath, audioBlob, {
+        contentType: 'audio/mp3',
+        upsert: true
+      });
+      
+    if (error) {
+      console.error("Error uploading full audio:", error);
+      throw error;
+    }
+    
+    if (progressCallback) progressCallback(100);
+    
+    return {
+      success: true,
+      path: filePath,
+      size: audioBlob.size
+    };
+  } catch (error) {
+    console.error("Failed to upload full audio:", error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+/**
  * Extract audio and chunk it for processing
  * @param videoFile Video file to extract audio from
  * @param projectId Project ID for storage
@@ -129,6 +188,7 @@ export const extractAndChunkAudio = async (
   projectId: string,
   options: {
     maxChunkDuration?: number;
+    maxChunkSizeMB?: number;
     format?: 'mp3' | 'wav';
     quality?: 'low' | 'medium' | 'high';
   } = {},
@@ -136,6 +196,7 @@ export const extractAndChunkAudio = async (
 ): Promise<{
   success: boolean;
   audioBlob?: Blob;
+  fullAudioPath?: string;
   chunks?: AudioChunkMetadata[];
   error?: string;
 }> => {
@@ -143,26 +204,47 @@ export const extractAndChunkAudio = async (
     // Extract audio from video
     if (progressCallback) progressCallback(0, "Extracting audio from video");
     
-    // Update progress for extraction (0-50%)
+    // Update progress for extraction (0-40%)
     const extractionProgressCallback = (progress: number) => {
-      if (progressCallback) progressCallback(progress * 0.5, "Extracting audio from video");
+      if (progressCallback) progressCallback(progress * 0.4, "Extracting audio from video");
     };
     
+    // Extract full audio from the video file
     const audioBlob = await extractAudioFromVideo(videoFile, extractionProgressCallback);
     
     console.log(`Extracted audio: ${(audioBlob.size / 1024 / 1024).toFixed(2)} MB`);
     
-    // Chunk the extracted audio
-    if (progressCallback) progressCallback(50, "Chunking audio");
+    // Upload the full audio to storage first (40-60%)
+    if (progressCallback) progressCallback(40, "Uploading full audio");
     
-    // Update progress for chunking (50-75%)
-    const chunkingProgressCallback = (progress: number) => {
-      if (progressCallback) progressCallback(50 + progress * 0.25, "Chunking audio");
+    const uploadProgressCallback = (progress: number) => {
+      if (progressCallback) progressCallback(40 + progress * 0.2, "Uploading full audio");
     };
     
+    const fullAudioResult = await uploadFullAudio(
+      audioBlob,
+      projectId,
+      uploadProgressCallback
+    );
+    
+    if (!fullAudioResult.success) {
+      throw new Error(`Failed to upload full audio: ${fullAudioResult.error}`);
+    }
+    
+    // Chunk the extracted audio into smaller pieces
+    if (progressCallback) progressCallback(60, "Chunking audio");
+    
+    // Update progress for chunking (60-80%)
+    const chunkingProgressCallback = (progress: number) => {
+      if (progressCallback) progressCallback(60 + progress * 0.2, "Chunking audio");
+    };
+    
+    // Set the maximum chunk size to 20MB (as requested in the spec)
+    // Default chunk duration is 60 seconds, but will adjust based on audio quality to stay under 20MB
     const chunkingResult = await chunkAudioFile(
       audioBlob,
       options.maxChunkDuration || 60,
+      options.maxChunkSizeMB || 20,
       chunkingProgressCallback
     );
     
@@ -173,11 +255,11 @@ export const extractAndChunkAudio = async (
     console.log(`Created ${chunkingResult.chunks.length} audio chunks`);
     
     // Upload the chunks to storage
-    if (progressCallback) progressCallback(75, "Uploading audio chunks");
+    if (progressCallback) progressCallback(80, "Uploading audio chunks");
     
-    // Update progress for upload (75-100%)
-    const uploadProgressCallback = (progress: number) => {
-      if (progressCallback) progressCallback(75 + progress * 0.25, "Uploading audio chunks");
+    // Update progress for upload (80-100%)
+    const chunksUploadProgressCallback = (progress: number) => {
+      if (progressCallback) progressCallback(80 + progress * 0.2, "Uploading audio chunks");
     };
     
     // Re-create AudioChunk objects since we only have metadata
@@ -212,11 +294,11 @@ export const extractAndChunkAudio = async (
       })
     );
     
-    // Upload chunks to storage
+    // Upload chunks to storage (with 20MB limit)
     const uploadedChunks = await uploadAudioChunks(
       projectId, 
       audioChunks,
-      uploadProgressCallback
+      chunksUploadProgressCallback
     );
     
     // Final progress update
@@ -225,6 +307,7 @@ export const extractAndChunkAudio = async (
     return {
       success: true,
       audioBlob,
+      fullAudioPath: fullAudioResult.path,
       chunks: uploadedChunks
     };
   } catch (error) {
