@@ -93,11 +93,58 @@ export const getChunkInfoAtTime = (currentTime: number, metadata: ExtendedVideoM
   
   // Find which chunk contains the current time
   const currentChunk = metadata.chunking.chunks.find(
-    chunk => currentTime >= chunk.startTime && currentTime < chunk.endTime
+    chunk => currentTime >= chunk.startTime && (!chunk.endTime || currentTime < chunk.endTime)
   );
   
   if (currentChunk) {
-    return `Chunk ${currentChunk.index + 1} (${Math.floor(currentChunk.startTime / 60)}:${String(Math.floor(currentChunk.startTime % 60)).padStart(2, '0')} - ${Math.floor(currentChunk.endTime / 60)}:${String(Math.floor(currentChunk.endTime % 60)).padStart(2, '0')})`;
+    return `Chunk ${currentChunk.index + 1} (${Math.floor(currentChunk.startTime / 60)}:${String(Math.floor(currentChunk.startTime % 60)).padStart(2, '0')} - ${currentChunk.endTime ? Math.floor(currentChunk.endTime / 60) : "?"}:${currentChunk.endTime ? String(Math.floor(currentChunk.endTime % 60)).padStart(2, '0') : "??"})`; 
+  }
+  
+  return null;
+};
+
+/**
+ * Gets detailed information about which chunk contains a specific time
+ * @param currentTime Time in seconds
+ * @param metadata ExtendedVideoMetadata with chunking information
+ * @returns Object with chunk information or null
+ */
+export const getDetailedChunkInfoAtTime = (currentTime: number, metadata: ExtendedVideoMetadata | null): { chunkIndex: number; isInChunk: boolean; nextChunkTime: number } | null => {
+  if (!metadata?.chunking?.chunks || metadata.chunking.chunks.length === 0) {
+    return null;
+  }
+  
+  // Find which chunk contains the current time
+  const currentChunk = metadata.chunking.chunks.find(
+    chunk => currentTime >= chunk.startTime && (!chunk.endTime || currentTime < chunk.endTime)
+  );
+  
+  if (currentChunk) {
+    // Find the next chunk's start time (if any)
+    let nextChunkTime = Infinity;
+    if (currentChunk.index < metadata.chunking.chunks.length - 1) {
+      nextChunkTime = metadata.chunking.chunks[currentChunk.index + 1].startTime;
+    } else if (currentChunk.endTime) {
+      nextChunkTime = currentChunk.endTime;
+    }
+    
+    return {
+      chunkIndex: currentChunk.index,
+      isInChunk: true,
+      nextChunkTime
+    };
+  }
+  
+  // If we're not in any chunk, find the next upcoming chunk
+  const sortedChunks = [...metadata.chunking.chunks].sort((a, b) => a.startTime - b.startTime);
+  const nextChunk = sortedChunks.find(chunk => currentTime < chunk.startTime);
+  
+  if (nextChunk) {
+    return {
+      chunkIndex: -1,  // Not in a chunk
+      isInChunk: false,
+      nextChunkTime: nextChunk.startTime
+    };
   }
   
   return null;

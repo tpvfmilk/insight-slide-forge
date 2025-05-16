@@ -1,5 +1,3 @@
-
-// At the top of the file, import our new hook and types
 import { useChunkedVideoPlayer } from "@/hooks/useChunkedVideoPlayer";
 import { VideoPlayer } from "@/components/video/VideoPlayer";
 import { Project } from "@/services/projectService";

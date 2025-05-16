@@ -29,7 +29,7 @@ interface VideoPlayerProps {
   handleVideoLoaded?: () => void;
   handleVideoError?: (e: any) => void;
   onCaptureFrame?: () => Promise<void>;
-  getChunkInfoAtTime?: (time: number) => { chunkIndex: number; isInChunk: boolean; nextChunkTime: number } | null;
+  getChunkInfoAtTime?: (time: number) => string | { chunkIndex: number; isInChunk: boolean; nextChunkTime: number } | null;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -214,7 +214,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           {/* Current chunk info - only shown if we're using chunked video */}
           {getChunkInfoAtTime && getChunkInfoAtTime(currentTime) && (
             <div className="text-xs text-muted-foreground">
-              Chunk {getChunkInfoAtTime(currentTime)?.chunkIndex || 0}
+              {typeof getChunkInfoAtTime(currentTime) === 'string' 
+                ? getChunkInfoAtTime(currentTime) 
+                : `Chunk ${(getChunkInfoAtTime(currentTime) as any)?.chunkIndex || 0}`}
             </div>
           )}
         </div>

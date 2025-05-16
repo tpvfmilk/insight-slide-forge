@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useVideoPlayer } from "./useVideoPlayer";
 import { ExtendedVideoMetadata, ChunkMetadata } from "@/types/videoChunking";
-import { getChunkTimemarks, getChunkInfoAtTime } from "@/services/videoChunkingService";
+import { getChunkTimemarks, getChunkInfoAtTime, getDetailedChunkInfoAtTime } from "@/services/videoChunkingService";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -152,9 +152,14 @@ export function useChunkedVideoPlayer({
     setSignedUrl(null);
   };
   
-  // Function to get chunk info at a specific time
+  // Function to get chunk info at a specific time - string format for display
   const getChunkInfoForTime = (time: number): string | null => {
     return getChunkInfoAtTime(time, chunkedMetadata);
+  };
+  
+  // Function to get detailed chunk info at a specific time - object format for logic
+  const getDetailedChunkInfoForTime = (time: number) => {
+    return getDetailedChunkInfoAtTime(time, chunkedMetadata);
   };
   
   // Return enhanced player with chunk functionality
@@ -163,8 +168,8 @@ export function useChunkedVideoPlayer({
     videoUrl: enhancedVideoUrl,
     chunkTimemarks,
     getChunkInfoForTime,
+    getDetailedChunkInfoForTime,
     hasChunks: chunkTimemarks.length > 0,
     handleChunkError
   };
 }
-
