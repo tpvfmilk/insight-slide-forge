@@ -136,7 +136,7 @@ export const ChunkedProcessingAlert = ({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="openai">OpenAI Whisper</SelectItem>
-                    <SelectItem value="google">Google Speech-to-Text</SelectItem>
+                    <SelectItem value="google">Google Speech-to-Text (Central API Key)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

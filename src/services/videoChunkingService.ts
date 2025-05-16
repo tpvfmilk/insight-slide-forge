@@ -34,7 +34,7 @@ export const forceUpdateChunkingMetadata = async (
     }
 
     // Update the video metadata to indicate chunking is needed
-    // Fix: Create a new object without using spread operator on potentially non-object value
+    // Create a new object without using spread operator on potentially non-object value
     let newMetadata: Record<string, any> = {};
     
     // Safely copy existing metadata if it exists and is an object

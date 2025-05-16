@@ -38,3 +38,4 @@ enabled = false
 verify_jwt = true
 [functions.transcribe-video-google]
 verify_jwt = true
+
