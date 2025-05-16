@@ -30,30 +30,35 @@ serve(async (req) => {
         name: 'Video Uploads',
         public: true,
         fileSizeLimit: 104857600, // 100MB
+        allowedMimeTypes: ['video/*', 'audio/*', 'image/*']
       },
       {
         id: 'chunks',
         name: 'Video Chunks',
         public: true,
         fileSizeLimit: 52428800, // 50MB
+        allowedMimeTypes: ['video/*', 'audio/*']
       },
       {
         id: 'audio_extracts',
         name: 'Audio Extracts',
         public: true,
         fileSizeLimit: 26214400, // 25MB
+        allowedMimeTypes: ['audio/*']
       },
       {
         id: 'audio_chunks',
         name: 'Audio Chunks',
         public: true,
         fileSizeLimit: 10485760, // 10MB
+        allowedMimeTypes: ['audio/*']
       },
       {
         id: 'slide_stills',
         name: 'Slide Still Images',
         public: true,
         fileSizeLimit: 10485760, // 10MB
+        allowedMimeTypes: ['image/*']
       }
     ];
 
@@ -63,47 +68,53 @@ serve(async (req) => {
     // Create each bucket if it doesn't already exist
     for (const bucket of requiredBuckets) {
       try {
+        console.log(`Checking bucket: ${bucket.id}`);
         // Check if bucket exists
         const { data: existingBucket, error: getBucketError } = await supabaseAdmin.storage.getBucket(bucket.id);
         
-        if (getBucketError && getBucketError.message.includes('does not exist')) {
-          // Create new bucket
-          const { data, error } = await supabaseAdmin.storage.createBucket(bucket.id, {
-            public: bucket.public,
-            fileSizeLimit: bucket.fileSizeLimit,
-            allowedMimeTypes: ['video/*', 'audio/*', 'image/*'],
-          });
+        if (getBucketError) {
+          if (getBucketError.message.includes('does not exist') || 
+              getBucketError.message.includes('Bucket not found')) {
+            console.log(`Bucket ${bucket.id} doesn't exist, creating...`);
+            // Create new bucket
+            const { data, error } = await supabaseAdmin.storage.createBucket(bucket.id, {
+              public: bucket.public,
+              fileSizeLimit: bucket.fileSizeLimit,
+              allowedMimeTypes: bucket.allowedMimeTypes,
+            });
 
-          if (error) {
-            console.error(`Failed to create bucket ${bucket.id}:`, error);
+            if (error) {
+              console.error(`Failed to create bucket ${bucket.id}:`, error);
+              results.push({ 
+                bucket: bucket.id, 
+                status: 'error', 
+                message: `Failed to create: ${error.message}`
+              });
+              allSucceeded = false;
+            } else {
+              console.log(`Successfully created bucket: ${bucket.id}`);
+              results.push({ 
+                bucket: bucket.id, 
+                status: 'created', 
+                message: 'Bucket created successfully' 
+              });
+            }
+          } else {
+            console.error(`Error checking if bucket ${bucket.id} exists:`, getBucketError);
             results.push({ 
               bucket: bucket.id, 
               status: 'error', 
-              message: `Failed to create: ${error.message}`
+              message: `Failed to check bucket: ${getBucketError.message}`
             });
             allSucceeded = false;
-          } else {
-            console.log(`Successfully created bucket: ${bucket.id}`);
-            results.push({ 
-              bucket: bucket.id, 
-              status: 'created', 
-              message: 'Bucket created successfully' 
-            });
           }
-        } else if (getBucketError) {
-          console.error(`Error checking if bucket ${bucket.id} exists:`, getBucketError);
-          results.push({ 
-            bucket: bucket.id, 
-            status: 'error', 
-            message: `Failed to check bucket: ${getBucketError.message}`
-          });
-          allSucceeded = false;
         } else {
+          console.log(`Bucket exists: ${bucket.id}, updating settings...`);
           // Update existing bucket
           const { data, error } = await supabaseAdmin.storage.updateBucket(bucket.id, {
             public: bucket.public,
             fileSizeLimit: bucket.fileSizeLimit,
-            allowedMimeTypes: ['video/*', 'audio/*', 'image/*'],
+            allowedMimeTypes: bucket.allowedMimeTypes,
           });
 
           if (error) {
@@ -132,6 +143,34 @@ serve(async (req) => {
         });
         allSucceeded = false;
       }
+    }
+
+    // Create RLS policies for the buckets to ensure proper access
+    try {
+      // Allow authenticated users to read from all buckets
+      const bucketIds = requiredBuckets.map(b => b.id);
+      for (const bucketId of bucketIds) {
+        try {
+          await supabaseAdmin.rpc('create_storage_policy', { 
+            bucket_name: bucketId,
+            policy_name: 'Allow authenticated users to read',
+            definition: 'auth.role() = \'authenticated\''
+          });
+          
+          await supabaseAdmin.rpc('create_storage_policy', { 
+            bucket_name: bucketId,
+            policy_name: 'Allow authenticated users to upload',
+            operation: 'INSERT',
+            definition: 'auth.role() = \'authenticated\''
+          });
+          
+          console.log(`Created or updated policies for bucket: ${bucketId}`);
+        } catch (policyError) {
+          console.log(`Note: Policy creation for ${bucketId} attempted but may have failed: ${policyError.message}`);
+        }
+      }
+    } catch (policyError) {
+      console.log('Note: Policy creation attempted but may have failed (this is normal if policies already exist)');
     }
 
     // Check if all operations succeeded
