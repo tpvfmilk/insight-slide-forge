@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   AlertDialog,
@@ -177,12 +176,12 @@ export function TranscriptDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="openai">OpenAI Whisper</SelectItem>
-                  <SelectItem value="google">Google Speech-to-Text</SelectItem>
+                  <SelectItem value="google">Google Speech-to-Text (Central API Key)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
                 {transcriptionProvider === 'google'
-                  ? "Google Speech API provides good accuracy and speaker detection"
+                  ? "Google Speech API provides good accuracy and speaker detection using the system's API key"
                   : "OpenAI Whisper provides fast and accurate transcription"
                 }
               </p>

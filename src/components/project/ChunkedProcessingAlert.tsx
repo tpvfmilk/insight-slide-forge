@@ -139,6 +139,12 @@ export const ChunkedProcessingAlert = ({
                     <SelectItem value="google">Google Speech-to-Text (Central API Key)</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {transcriptionProvider === 'google'
+                    ? "Uses the central Google Speech API for better accuracy and speaker detection"
+                    : "Uses OpenAI Whisper for fast and efficient transcription"
+                  }
+                </p>
               </div>
               
               <Button onClick={handleStartProcessing} size="sm" className="mt-2 gap-2">
