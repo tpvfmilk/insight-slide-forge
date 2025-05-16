@@ -1,8 +1,20 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { MAX_CHUNK_SIZE_MB } from "./videoChunkingService";
 
+export const MAX_CHUNK_SIZE_MB = 20; // 20 MB maximum size per chunk
+
+// Audio chunk type definition
+export interface AudioChunk {
+  blob: Blob;
+  index: number;
+  startTime: number;
+  endTime: number;
+  duration: number;
+  size: number;
+}
+
+// Type for audio chunk metadata (without the binary data)
 export interface AudioChunkMetadata {
   index: number;
   startTime: number;
@@ -13,173 +25,192 @@ export interface AudioChunkMetadata {
   text?: string;
 }
 
-export interface AudioExtractionOptions {
-  maxChunkDuration: number;
-  maxChunkSizeMB: number;
-  format: 'mp3' | 'wav' | 'ogg';
-  quality: 'low' | 'medium' | 'high';
-}
-
-// In browser environments, we can't actually chunk audio directly
-// This is a helper function to simulate audio chunking for frontend visualization
-export const createVirtualChunks = (
-  totalDuration: number,
-  options: AudioExtractionOptions
-): AudioChunkMetadata[] => {
-  const chunks: AudioChunkMetadata[] = [];
-  let startTime = 0;
-  let chunkIndex = 0;
-  
-  while (startTime < totalDuration) {
-    const chunkDuration = Math.min(options.maxChunkDuration, totalDuration - startTime);
-    if (chunkDuration <= 0) break;
-    
-    const endTime = startTime + chunkDuration;
-    
-    chunks.push({
-      index: chunkIndex,
-      startTime,
-      endTime,
-      duration: chunkDuration,
-      audioPath: `chunk_${chunkIndex}.${options.format}`,
-      status: 'pending'
-    });
-    
-    startTime = endTime;
-    chunkIndex++;
-  }
-  
-  return chunks;
-};
-
-// This function calls the edge function to extract audio and chunk it
-export const extractAndChunkAudio = async (
-  videoFile: File,
-  projectId: string,
-  options: AudioExtractionOptions,
-  onProgress?: (progress: number, stage: string) => void
-): Promise<{ 
-  success: boolean; 
-  chunks?: AudioChunkMetadata[]; 
-  error?: string;
-}> => {
-  try {
-    if (onProgress) onProgress(10, "Preparing audio extraction");
-    
-    // Get video duration
-    const videoDuration = await getVideoDuration(videoFile);
-    
-    if (onProgress) onProgress(20, "Preparing audio chunks");
-    
-    // Create virtual chunks based on duration
-    const chunks = createVirtualChunks(videoDuration, options);
-    
-    if (onProgress) onProgress(30, "Starting server-side audio processing");
-    
-    // Call edge function to actually process the audio
-    const { data, error } = await supabase.functions.invoke("extract-audio", {
-      body: {
-        projectId,
-        originalFileName: videoFile.name,
-        totalDuration: videoDuration,
-        chunkingOptions: options,
-        fileSize: videoFile.size,
-      }
-    });
-    
-    if (error) {
-      console.error("[DEBUG] Error extracting audio:", error);
-      return { success: false, error: error.message };
-    }
-    
-    if (!data || !data.success) {
-      return { 
-        success: false, 
-        error: data?.error || "Unknown error extracting audio"
-      };
-    }
-    
-    if (onProgress) onProgress(90, "Audio processing complete");
-    
-    // Update chunks with server data if available
-    const serverChunks = data.chunks || chunks;
-    
-    return { success: true, chunks: serverChunks };
-  } catch (error: any) {
-    console.error("[DEBUG] Error in extractAndChunkAudio:", error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Helper function to get video duration
-const getVideoDuration = async (file: File): Promise<number> => {
-  return new Promise((resolve) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    
-    video.onloadedmetadata = () => {
-      window.URL.revokeObjectURL(video.src);
-      resolve(video.duration);
-    };
-    
-    video.onerror = () => {
-      // Fallback to estimating duration based on file size
-      // Assuming roughly 500 KB/s for a medium quality video
-      const estimatedDurationSecs = file.size / (500 * 1024);
-      resolve(estimatedDurationSecs);
-    };
-    
-    video.src = URL.createObjectURL(file);
-    
-    // Fallback timeout
-    setTimeout(() => {
-      const estimatedDurationSecs = file.size / (500 * 1024);
-      resolve(estimatedDurationSecs);
-    }, 5000);
-  });
-};
-
-// Function to transcribe audio chunks
-export const transcribeAudioChunks = async (
-  projectId: string,
-  chunks: AudioChunkMetadata[],
-  onProgress?: (progress: number) => void
+/**
+ * Chunk an audio file into smaller pieces for processing
+ * @param audioBlob The full audio blob to chunk
+ * @param maxChunkDurationSecs Maximum duration of each chunk in seconds
+ * @param maxChunkSizeMB Maximum size of each chunk in MB
+ * @param progressCallback Optional callback for tracking chunking progress
+ * @returns Promise with array of chunk metadata
+ */
+export const chunkAudioFile = async (
+  audioBlob: Blob,
+  maxChunkDurationSecs: number = 60,
+  maxChunkSizeMB: number = MAX_CHUNK_SIZE_MB,
+  progressCallback?: (progress: number) => void
 ): Promise<{
   success: boolean;
-  transcript?: string;
+  chunks: AudioChunkMetadata[];
+  originalDuration: number;
   error?: string;
 }> => {
   try {
-    if (!chunks || chunks.length === 0) {
-      return { success: false, error: "No audio chunks to transcribe" };
-    }
+    // Create an audio element to get duration
+    const audioElement = document.createElement('audio');
+    audioElement.src = URL.createObjectURL(audioBlob);
     
-    // Call our edge function to transcribe the chunks
-    const { data, error } = await supabase.functions.invoke("transcribe-audio-chunks", {
-      body: {
-        projectId,
-        chunks,
-      }
+    // Wait for metadata to load
+    await new Promise<void>((resolve) => {
+      audioElement.addEventListener('loadedmetadata', () => {
+        resolve();
+      });
+      
+      // Fallback if metadata doesn't load
+      setTimeout(() => {
+        resolve();
+      }, 3000);
     });
     
-    if (error) {
-      console.error("[DEBUG] Error transcribing audio chunks:", error);
-      return { success: false, error: error.message };
+    // Get audio duration (in seconds)
+    const duration = audioElement.duration || 0;
+    
+    console.log(`Audio duration: ${duration} seconds, size: ${audioBlob.size / (1024 * 1024)} MB`);
+    
+    if (duration === 0) {
+      throw new Error("Failed to determine audio duration");
     }
     
-    if (!data || !data.success) {
-      return { 
-        success: false, 
-        error: data?.error || "Unknown error transcribing audio chunks"
-      };
+    // Release the object URL
+    URL.revokeObjectURL(audioElement.src);
+    
+    // Calculate bytes per second (rough estimation)
+    const bytesPerSecond = audioBlob.size / duration;
+    
+    // Calculate optimal chunk duration to stay under maxChunkSizeMB
+    // But don't exceed maxChunkDurationSecs
+    const optimalChunkDuration = Math.min(
+      maxChunkDurationSecs,
+      (maxChunkSizeMB * 1024 * 1024) / bytesPerSecond
+    );
+    
+    console.log(`Optimal chunk duration: ${optimalChunkDuration} seconds`);
+    
+    // Calculate number of chunks needed
+    const numChunks = Math.ceil(duration / optimalChunkDuration);
+    const chunks: AudioChunkMetadata[] = [];
+    
+    let startTime = 0;
+    
+    for (let i = 0; i < numChunks; i++) {
+      // For the last chunk, make sure we don't exceed the total duration
+      const chunkDuration = Math.min(optimalChunkDuration, duration - startTime);
+      if (chunkDuration <= 0) break;
+      
+      const endTime = startTime + chunkDuration;
+      
+      // Add chunk metadata without the blob (we'll generate chunks on demand later)
+      chunks.push({
+        index: i,
+        startTime,
+        endTime,
+        duration: chunkDuration,
+        audioPath: `chunk_${i}.mp3`, // Placeholder path
+        status: 'pending'
+      });
+      
+      startTime = endTime;
+      
+      // Update progress if callback provided
+      if (progressCallback) {
+        const progress = ((i + 1) / numChunks) * 100;
+        progressCallback(progress);
+      }
     }
     
-    return { 
-      success: true, 
-      transcript: data.transcript 
+    console.log(`Created ${chunks.length} audio chunk metadata entries`);
+    
+    return {
+      success: true,
+      chunks,
+      originalDuration: duration
     };
   } catch (error: any) {
-    console.error("[DEBUG] Error in transcribeAudioChunks:", error);
-    return { success: false, error: error.message };
+    console.error("Error chunking audio:", error);
+    return {
+      success: false,
+      chunks: [],
+      originalDuration: 0,
+      error: error.message
+    };
   }
+};
+
+/**
+ * Upload audio chunks to storage
+ * @param projectId Project ID for storage path
+ * @param chunks Array of audio chunks to upload
+ * @param progressCallback Optional callback for tracking upload progress
+ * @returns Promise with array of updated chunk metadata
+ */
+export const uploadAudioChunks = async (
+  projectId: string,
+  chunks: AudioChunk[],
+  progressCallback?: (progress: number) => void
+): Promise<AudioChunkMetadata[]> => {
+  const uploadedChunks: AudioChunkMetadata[] = [];
+  let totalUploaded = 0;
+  
+  if (!chunks.length) {
+    console.warn("No chunks to upload");
+    return [];
+  }
+  
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    
+    try {
+      // Format the file path for this chunk
+      const fileName = `chunk_${chunk.index}_${Date.now()}.mp3`;
+      const filePath = `projects/${projectId}/audio_chunks/${fileName}`;
+      
+      // Upload the chunk to storage
+      const { data, error } = await supabase.storage
+        .from('audio_chunks')
+        .upload(filePath, chunk.blob, {
+          contentType: 'audio/mp3',
+          upsert: true
+        });
+        
+      if (error) {
+        console.error(`Error uploading chunk ${chunk.index}:`, error);
+        uploadedChunks.push({
+          index: chunk.index,
+          startTime: chunk.startTime,
+          endTime: chunk.endTime,
+          duration: chunk.duration,
+          audioPath: "", // No path since upload failed
+          status: 'failed'
+        });
+      } else {
+        uploadedChunks.push({
+          index: chunk.index,
+          startTime: chunk.startTime,
+          endTime: chunk.endTime,
+          duration: chunk.duration,
+          audioPath: filePath,
+          status: 'complete'
+        });
+      }
+      
+      // Update progress
+      totalUploaded++;
+      if (progressCallback) {
+        const progress = (totalUploaded / chunks.length) * 100;
+        progressCallback(progress);
+      }
+      
+    } catch (error) {
+      console.error(`Error processing chunk ${chunk.index}:`, error);
+      uploadedChunks.push({
+        index: chunk.index,
+        startTime: chunk.startTime,
+        endTime: chunk.endTime,
+        duration: chunk.duration,
+        audioPath: "", // No path since processing failed
+        status: 'failed'
+      });
+    }
+  }
+  
+  return uploadedChunks;
 };
