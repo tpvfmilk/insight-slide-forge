@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { AudioChunkMetadata, chunkAudioFile, createActualAudioChunks, uploadAudioChunks } from "@/services/audioChunkingService";
 import { useAudioProcessingWorkflow } from "@/hooks/useOperationProgress";
+import { useProgress } from "@/context/ProgressContext";
 
 // Maximum recommended file duration in seconds
 const MAX_RECOMMENDED_DURATION = 60 * 60; // 60 minutes
@@ -34,6 +36,7 @@ export const TranscriptExtractor = () => {
   const [audioChunks, setAudioChunks] = useState<AudioChunkMetadata[]>([]);
   const [chunkProgress, setChunkProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
   const { startAudioProcessingWorkflow } = useAudioProcessingWorkflow();
+  const { getOperationById } = useProgress();
 
   // Set default title from filename when a file is selected
   useEffect(() => {
@@ -326,7 +329,7 @@ export const TranscriptExtractor = () => {
       const steps = [1, 2, 3, 4, 5];
       const runningStep = steps.find(step => {
         const opId = workflow.operationIds[step-1];
-        return opId && workflow.getOperationById(opId)?.status === 'running';
+        return opId && getOperationById(opId)?.status === 'running';
       });
       
       if (runningStep) {

@@ -158,8 +158,12 @@ export function AudioChunkingProvider({ children }: AudioChunkingProviderProps) 
       
       // Mark the current step as failed
       const currentStepIndex = [1, 2, 3, 4, 5].find(step => {
-        const ops = workflow.operationIds[step - 1];
-        return ops && ops.status === 'running';
+        // Check if this operation's ID is in the workflow
+        const opId = workflow.operationIds[step - 1];
+        // Get the operation from the context
+        const operation = opId ? workflow.getOperationById(opId) : undefined;
+        // Return true if this is a running operation
+        return operation?.status === 'running';
       }) || workflow.operationIds.length;
       
       workflow.completeWorkflowStep(currentStepIndex, false, error.message);

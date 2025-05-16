@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useCallback, ReactNode, useMemo } from 'react';
 
 // Define types for operations and progress tracking
@@ -43,6 +44,7 @@ interface ProgressContextType {
   getActiveOperations: () => ProgressOperation[];
   getRecentOperations: () => ProgressOperation[];
   getWorkflowOperations: (workflowId: string) => ProgressOperation[];
+  getOperationById: (id: string) => ProgressOperation | undefined;
   createWorkflow: (name: string) => string;
   isActive: boolean;
 }
@@ -146,6 +148,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         return a.timestamp.getTime() - b.timestamp.getTime();
       });
   }, [operations]);
+  
+  // Get operation by ID
+  const getOperationById = useCallback((id: string) => {
+    return operations.find(op => op.id === id);
+  }, [operations]);
 
   // Get recent operations, grouped by workflow when possible
   const getRecentOperations = useCallback(() => {
@@ -209,6 +216,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     getActiveOperations,
     getRecentOperations,
     getWorkflowOperations,
+    getOperationById,
     createWorkflow,
     isActive
   };
@@ -230,7 +238,7 @@ export function useProgress() {
 
 // Hook to create and track a progress operation
 export function useProgressOperation() {
-  const { addOperation, updateOperation, completeOperation, createWorkflow } = useProgress();
+  const { addOperation, updateOperation, completeOperation, createWorkflow, getOperationById } = useProgress();
   
   const startOperation = useCallback(
     (
@@ -346,8 +354,8 @@ export function useProgressOperation() {
       
       const completeWorkflow = (success = true) => {
         workflowOperations.forEach(opId => {
-          const op = operations.find(op => op.id === opId);
-          if (op && op.status === 'pending' || op?.status === 'running') {
+          const op = getOperationById(opId);
+          if (op && (op.status === 'pending' || op.status === 'running')) {
             completeOperation(opId, success);
           }
         });
@@ -356,12 +364,13 @@ export function useProgressOperation() {
       return {
         workflowId,
         operationIds: workflowOperations,
+        getOperationById,
         updateWorkflowProgress,
         completeWorkflowStep,
         completeWorkflow
       };
     },
-    [addOperation, updateOperation, completeOperation, createWorkflow]
+    [addOperation, updateOperation, completeOperation, createWorkflow, getOperationById]
   );
 
   return { 
