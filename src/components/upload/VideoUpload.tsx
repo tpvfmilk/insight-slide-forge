@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { FileVideo, Upload, AlertTriangle, Info } from "lucide-react";
@@ -106,10 +105,12 @@ export const VideoUpload = () => {
       
       // Process the video for chunking if needed
       console.log("[DEBUG] Starting video processing");
+      
+      // Video processing phase (0-20% of progress)
       const processResult = await processVideoForChunking(videoFile, (progress, message) => {
-        setUploadProgress(Math.floor(progress * 0.5)); // First half of progress is for chunking
+        setUploadProgress(Math.floor(progress * 0.2)); // First 20% of progress is for processing
         setProgressMessage(message);
-        console.log(`[DEBUG] Chunking progress: ${progress}% - ${message}`);
+        console.log(`[DEBUG] Processing progress: ${progress}% - ${message}`);
       });
       
       // If chunking was needed and successful, we'll upload the chunks
@@ -121,7 +122,7 @@ export const VideoUpload = () => {
         setProgressMessage("Uploading video file...");
       }
       
-      // Create project from the processed video files
+      // Create project from the processed video files (upload + project creation - 20-100%)
       const project = await createProjectFromVideo(
         processResult.originalFile, 
         title, 
@@ -129,11 +130,30 @@ export const VideoUpload = () => {
         processResult.needsChunking,
         processResult.chunkFiles,
         processResult.chunkMetadata,
-        (progress) => {
-          // Second half of progress is for upload
-          setUploadProgress(50 + Math.floor(progress * 0.5));
-          setProgressMessage(`Uploading: ${Math.round(progress)}%`);
-          console.log(`[DEBUG] Upload progress: ${progress}%`);
+        (progress, stage) => {
+          // Map the upload service progress (0-100%) to our remaining progress range (20-100%)
+          const scaledProgress = 20 + Math.floor(progress * 0.8);
+          setUploadProgress(scaledProgress);
+          
+          if (stage) {
+            // Set a more user-friendly message based on the stage
+            if (stage.startsWith("uploading")) {
+              const uploadPercent = stage.split(" ")[1] || "0%";
+              setProgressMessage(`Uploading video: ${uploadPercent}`);
+            } else if (stage === "analyzing") {
+              setProgressMessage("Analyzing video file...");
+            } else if (stage === "creating_project") {
+              setProgressMessage("Creating project...");
+            } else if (stage === "chunking" || stage === "preparing_chunks") {
+              setProgressMessage("Processing video segments...");
+            } else if (stage === "complete") {
+              setProgressMessage("Upload complete!");
+            } else {
+              setProgressMessage(stage.charAt(0).toUpperCase() + stage.slice(1).replace(/_/g, " ") + "...");
+            }
+          }
+          
+          console.log(`[DEBUG] Upload progress: ${progress}%, Stage: ${stage}, Scaled: ${scaledProgress}%`);
         }
       );
       

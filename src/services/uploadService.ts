@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Project } from "@/services/projectService";
 import { toast } from "sonner";
@@ -17,6 +18,82 @@ import {
   fromJsonSafe,
   Json
 } from "@/types/videoChunking";
+
+/**
+ * Uploads a file to Supabase storage with progress tracking
+ * @param bucketName The storage bucket name
+ * @param filePath The path where the file should be stored
+ * @param file The file to upload
+ * @param onProgress Callback function for upload progress updates
+ * @returns Promise resolving to upload result
+ */
+export const uploadFileWithProgress = async (
+  bucketName: string,
+  filePath: string,
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<{ data: any; error: Error | null }> => {
+  return new Promise((resolve, reject) => {
+    // Create XMLHttpRequest for progress monitoring
+    const xhr = new XMLHttpRequest();
+    
+    // Track upload progress
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) {
+        const percentComplete = Math.round((event.loaded / event.total) * 100);
+        onProgress?.(percentComplete);
+      }
+    });
+    
+    // Handle errors
+    xhr.addEventListener('error', () => {
+      reject(new Error('Upload failed'));
+    });
+    
+    xhr.addEventListener('abort', () => {
+      reject(new Error('Upload aborted'));
+    });
+    
+    // Use Supabase to get the presigned URL for upload
+    const performUpload = async () => {
+      try {
+        // Get the presigned URL
+        const { data: urlData, error: urlError } = await supabase.storage
+          .from(bucketName)
+          .createSignedUploadUrl(filePath);
+        
+        if (urlError) {
+          reject(urlError);
+          return;
+        }
+        
+        // Set up the XHR request
+        xhr.open('PUT', urlData.signedUrl);
+        
+        // Handle completion
+        xhr.onload = async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            // Successfully uploaded, now get the file data from Supabase
+            const { data, error } = await supabase.storage
+              .from(bucketName)
+              .getPublicUrl(filePath);
+            
+            resolve({ data, error });
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        };
+        
+        // Send the file
+        xhr.send(file);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    performUpload();
+  });
+};
 
 // Update this function to handle large videos through server-side chunking
 export const createProjectFromVideo = async (
@@ -39,6 +116,12 @@ export const createProjectFromVideo = async (
       throw new Error("You need to be logged in to create a project");
     }
     
+    // Progress phases:
+    // 1. Analysis: 0-10%
+    // 2. File upload: 10-80%
+    // 3. Project creation: 80-95%
+    // 4. Chunking (if needed): 95-100%
+    
     onProgress?.(5, "analyzing");
     
     // Analyze video file for potential chunking
@@ -50,26 +133,34 @@ export const createProjectFromVideo = async (
     // Standard upload path for the file
     let filePath = `uploads/${session.session.user.id}/${Date.now()}_${videoFile.name}`;
     
-    // Update progress
+    // Update progress to upload phase
     onProgress?.(10, "uploading");
     
-    // Upload the original file
+    // Upload the original file using the new progress tracking function
     console.log(`[DEBUG] Uploading original file to: ${filePath}`);
     
-    const { error: uploadError } = await supabase.storage
-      .from('video_uploads')
-      .upload(filePath, videoFile, {
-        cacheControl: '3600',
-        upsert: true
-      });
-    
-    if (uploadError) {
+    try {
+      const uploadResult = await uploadFileWithProgress(
+        'video_uploads', 
+        filePath,
+        videoFile,
+        (uploadProgress) => {
+          // Map upload progress (0-100%) to our overall progress range (10-80%)
+          const scaledProgress = 10 + (uploadProgress * 0.7);
+          onProgress?.(scaledProgress, `uploading ${uploadProgress}%`);
+        }
+      );
+      
+      if (uploadResult.error) {
+        throw uploadResult.error;
+      }
+    } catch (uploadError) {
       console.error("[DEBUG] File upload error:", uploadError);
-      throw new Error(`Failed to upload video file: ${uploadError.message}`);
+      throw new Error(`Failed to upload video file: ${uploadError.message || 'Unknown error'}`);
     }
     
     console.log("[DEBUG] Original file uploaded successfully");
-    onProgress?.(50, needsChunking ? "preparing_chunks" : "processing");
+    onProgress?.(80, needsChunking ? "preparing_chunks" : "processing");
     
     // If video needs chunking, prepare the chunking metadata
     if (needsChunking) {
@@ -87,7 +178,7 @@ export const createProjectFromVideo = async (
     
     // Create a new project in the database
     console.log("[DEBUG] Creating project in database");
-    onProgress?.(70, "creating_project");
+    onProgress?.(85, "creating_project");
     
     const { data: project, error: projectError } = await supabase
       .from('projects')
@@ -112,10 +203,9 @@ export const createProjectFromVideo = async (
     
     // If chunking is needed, initiate server-side chunking process
     if (needsChunking && project) {
-      onProgress?.(80, "chunking");
+      onProgress?.(95, "chunking");
       console.log("[DEBUG] Initiating server-side chunking process");
       
-      // Fixed: Removed the third argument to match the function signature
       const chunkingResult = await initiateServerSideChunking(project.id, filePath);
       
       if (!chunkingResult.success) {
