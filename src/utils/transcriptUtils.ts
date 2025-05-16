@@ -1,4 +1,3 @@
-
 import { formatDuration, timestampToSeconds } from "./formatUtils";
 
 /**
@@ -273,4 +272,69 @@ export const formatWhisperTranscriptSection = (
   
   // Combine header and text
   return `${sectionHeader}\n\n${cleanedText}`;
+};
+
+/**
+ * Combines multiple chunk transcriptions into a single cohesive transcript
+ * @param chunkTranscripts Array of transcripts from different chunks
+ * @returns Combined transcript
+ */
+export const combineChunkTranscripts = (chunkTranscripts: string[]): string => {
+  if (!chunkTranscripts || chunkTranscripts.length === 0) return '';
+  
+  // Filter out empty transcripts
+  const validTranscripts = chunkTranscripts.filter(t => !!t);
+  
+  if (validTranscripts.length === 0) return '';
+  
+  // If there's only one chunk, return it directly
+  if (validTranscripts.length === 1) return validTranscripts[0];
+  
+  // Otherwise, combine them with appropriate spacing
+  return validTranscripts.join('\n\n');
+};
+
+/**
+ * Process audio chunk for transcription with proper optimization
+ * @param audioData Audio blob data
+ * @param options Transcription options
+ * @returns Promise with transcription result
+ */
+export const processAudioChunk = async (
+  audioData: Blob,
+  options: {
+    apiKey: string;
+    language?: string;
+    detectSpeakers?: boolean;
+  }
+): Promise<any> => {
+  try {
+    const formData = new FormData();
+    formData.append('file', audioData, 'chunk.mp3');
+    formData.append('model', 'whisper-1');
+    formData.append('response_format', 'json');
+    
+    if (options.language) {
+      formData.append('language', options.language);
+    }
+    
+    // Call the Whisper API
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${options.apiKey}`
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Whisper API error: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error processing audio chunk:", error);
+    throw error;
+  }
 };

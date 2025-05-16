@@ -103,11 +103,7 @@ serve(async (req) => {
         `${project.video_metadata?.duration.toFixed(1)}s` : "Unknown"
     })}`);
     
-    // Check if video is too large for direct processing
-    const videoSize = project.video_metadata?.file_size || 0;
-    const videoSizeMB = videoSize / (1024 * 1024);
-    
-    // Use chunk information if available
+    // Check if chunking is available
     if (chunking?.isChunked && chunking.chunks && chunking.chunks.length > 0) {
       console.log(`Processing video with ${chunking.chunks.length} chunks using Whisper API`);
       
@@ -120,7 +116,7 @@ serve(async (req) => {
         console.log(`Processing chunk ${i+1}/${chunking.chunks.length}: ${chunk.startTime}s - ${chunk.endTime}s`);
         
         try {
-          // Get the chunk's video file URL
+          // Get the chunk's video file path
           const chunkPath = chunk.videoPath;
           if (!chunkPath) {
             console.warn(`No video path for chunk ${i+1}, using estimated transcript`);
@@ -160,6 +156,23 @@ serve(async (req) => {
           const videoBlob = await videoResponse.blob();
           console.log(`Downloaded chunk ${i+1}: ${(videoBlob.size / 1024 / 1024).toFixed(2)} MB`);
           
+          // Check if the chunk exceeds Whisper API size limits
+          if (videoBlob.size > 25 * 1024 * 1024) {
+            console.warn(`Chunk ${i+1} exceeds Whisper API size limit. Size: ${(videoBlob.size / 1024 / 1024).toFixed(2)} MB`);
+            
+            // In a production system, this would extract audio to reduce file size
+            // For now, we'll skip this chunk and add an error note
+            const chunkTranscript = `## ${videoTitle} - Part ${i+1} (${formatTime(chunk.startTime)} to ${formatTime(chunk.endTime)})\n\n` +
+              `[Chunk exceeds Whisper API size limit. In production, audio extraction would be used to reduce file size.]`;
+              
+            if (combinedTranscript) {
+              combinedTranscript += `\n\n${chunkTranscript}`;
+            } else {
+              combinedTranscript = chunkTranscript;
+            }
+            continue;
+          }
+          
           // Create form for Whisper API call
           const formData = new FormData();
           formData.append('file', videoBlob, `chunk_${i+1}.mp4`);
@@ -169,8 +182,6 @@ serve(async (req) => {
           if (useSpeakerDetection) {
             console.log(`Requesting speaker detection for chunk ${i+1}`);
             formData.append('language', 'en');
-            // Note: Whisper does not directly support speaker diarization
-            // For full diarization, a specialized model would be needed
           }
           
           // Call the Whisper API
@@ -243,18 +254,23 @@ serve(async (req) => {
           chunksProcessed: chunking.chunks.length,
           processingTimeSeconds: totalTime/1000,
           isVirtualChunking: chunking.isVirtualChunking || false,
-          usedWhisperAPI: true
+          usedWhisperAPI: true,
+          nextSteps: "Implement real audio extraction to improve transcription accuracy and reduce file size"
         }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     } 
     
-    // If no chunking or there was another approach needed
+    // Check if video is too large for direct processing
+    const videoSize = project.video_metadata?.file_size || 0;
+    const videoSizeMB = videoSize / (1024 * 1024);
+    
     if (videoSizeMB > 25) {
       // Video is too large for direct processing
       const largeVideoTranscript = `## ${project.title || "Video Transcription"}\n\n` +
-        `This video file (${videoSizeMB.toFixed(1)} MB) is too large for direct transcription and needs to be processed in chunks.\n\n` +
+        `This video file (${videoSizeMB.toFixed(1)} MB) is too large for direct transcription with Whisper API.\n\n` +
+        `For production use, implement a preprocessing step that extracts the audio track to reduce file size.\n\n` +
         `Please use the "Re-Transcribe Video" button to process with automatic chunking.`;
         
       // Update the project with the message
@@ -270,7 +286,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         transcript: largeVideoTranscript,
         success: true,
-        needsChunking: true
+        needsChunking: true,
+        nextSteps: "Implement audio extraction to reduce file size for the Whisper API"
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });

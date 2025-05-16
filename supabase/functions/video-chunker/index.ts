@@ -12,9 +12,10 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 // Define constants for server-side chunking
-const MAX_CHUNK_SIZE_MB = 20; // Updated to match client-side settings
-const MIN_CHUNK_DURATION = 30; // Minimum 30 seconds per chunk
+const MAX_CHUNK_SIZE_MB = 20; // Each chunk should be under 20MB
+const MIN_CHUNK_DURATION = 30; // Minimum 30 seconds per chunk 
 const MAX_CHUNK_DURATION = 300; // Maximum 5 minutes per chunk
+const WHISPER_API_SIZE_LIMIT = 24 * 1024 * 1024; // 24MB for Whisper API limit
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error("Missing Supabase environment variables");
@@ -25,8 +26,6 @@ const supabase = createClient(
   supabaseServiceKey || ""
 );
 
-// This function handles video chunking by creating virtual chunk references
-// In a production environment with FFmpeg, this would create actual video chunks
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -109,30 +108,8 @@ serve(async (req) => {
       );
     }
 
-    if (!project) {
-      return new Response(
-        JSON.stringify({ 
-          error: "Project not found in database",
-          code: "PROJECT_NOT_FOUND"
-        }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    // Parse the original video path to get bucket and file path
-    const originalFilePath = project.source_file_path;
-    if (!originalFilePath) {
-      return new Response(
-        JSON.stringify({ 
-          error: "Project source file path not found",
-          code: "MISSING_SOURCE_PATH"
-        }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // Extract info from original video path
-    const pathParts = originalFilePath.split('/');
+    const pathParts = originalVideoPath.split('/');
     let bucketName = 'video_uploads'; // Default bucket
     let originalFileName = pathParts[pathParts.length - 1];
     
@@ -144,24 +121,6 @@ serve(async (req) => {
     // Get the file extension from the original path
     const fileExtension = originalFileName.split('.').pop() || 'mp4';
     
-    // In a real implementation with FFmpeg, we would:
-    // 1. Download the original video
-    // 2. Use FFmpeg to split it into chunks based on the timestamps
-    // 3. Upload each chunk to storage
-    
-    // For this implementation, we'll:
-    // 1. Create chunk metadata references without actually copying the file
-    // 2. Update the project with simulated chunk information
-    
-    // Create chunks directory path
-    const projectTitle = project.title.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
-    const chunksBasePath = `${projectId}/${projectTitle}`;
-    
-    // Skip the actual file copy since we're hitting size limits
-    // Instead of trying to copy the file, let's just log that we'd do it in a real implementation
-    console.log(`In a production environment, would copy file to chunks/${chunksBasePath}/original.${fileExtension}`);
-    console.log(`File size exceeds direct upload capabilities in edge function`);
-    
     // Calculate appropriate chunk duration based on video metadata
     const videoDuration = chunkingMetadata.totalDuration || 0;
     const videoFileSize = project.video_metadata?.file_size || 0;
@@ -171,8 +130,8 @@ serve(async (req) => {
       ? videoFileSize / videoDuration 
       : 500 * 1024; // Fallback to 500KB/s if we can't calculate
     
-    // Calculate ideal chunk duration to stay under MAX_CHUNK_SIZE_MB
-    const maxChunkSizeBytes = MAX_CHUNK_SIZE_MB * 1024 * 1024;
+    // Calculate ideal chunk duration to stay under MAX_CHUNK_SIZE_MB and Whisper API limits
+    const maxChunkSizeBytes = Math.min(MAX_CHUNK_SIZE_MB * 1024 * 1024, WHISPER_API_SIZE_LIMIT);
     let idealChunkDuration = Math.floor(maxChunkSizeBytes / bytesPerSecond);
     
     // Ensure chunk duration is between MIN and MAX thresholds
@@ -182,7 +141,9 @@ serve(async (req) => {
     console.log(`Calculated bytes per second: ${(bytesPerSecond / 1024).toFixed(2)}KB/s`);
     console.log(`Ideal chunk duration: ${idealChunkDuration}s to stay under ${MAX_CHUNK_SIZE_MB}MB`);
     
-    // Generate chunks metadata with appropriately sized segments
+    // We're implementing a virtual chunking solution since we can't use FFmpeg here
+    // In production, you'd replace this with actual FFmpeg processing
+    // The frontend will need to rely on a separate service for real chunking
     const updatedChunks = [];
     let chunkStartTime = 0;
     let chunkIndex = 0;
@@ -195,13 +156,9 @@ serve(async (req) => {
       const endTime = chunkStartTime + chunkDuration;
       
       // Generate the chunk file path - in production this would be a separate file
-      // For now, we'll reference the original file with time ranges
-      const chunkFileName = `${chunksBasePath}/${projectTitle}_chunk_${chunkIndex + 1}.${fileExtension}`;
-      
-      // Reference the original file path since we can't actually chunk the file in this implementation
-      // In a real production environment, this would be a separate file
-      // We're setting the path to use the original video reference with virtual chunking
-      const chunkPath = originalFilePath;  // Reference original video path
+      const projectTitle = project.title.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+      const chunkFileName = `${projectId}/${projectTitle}_chunk_${chunkIndex + 1}.${fileExtension}`;
+      const chunkPath = `chunks/${chunkFileName}`;
       
       console.log(`Creating reference for chunk ${chunkIndex + 1}`);
       console.log(`Chunk duration: ${chunkDuration}s (${chunkStartTime}s - ${endTime}s)`);
@@ -212,11 +169,11 @@ serve(async (req) => {
         startTime: chunkStartTime,
         endTime: endTime,
         duration: chunkDuration,
-        videoPath: chunkPath, // Use the original video path
+        videoPath: chunkPath, // This would be an actual file path in production
         status: 'complete',
         title: `Chunk ${chunkIndex + 1}`,
-        isVirtualChunk: true, // Flag to indicate this is a virtual chunk (not a separate file)
-        originalVideoPath: originalFilePath // Keep the original path for reference
+        isVirtualChunk: true, // Flag to indicate this is still a virtual chunk
+        originalVideoPath: originalVideoPath // Keep the original path for reference
       });
       
       chunkStartTime = endTime;
@@ -231,9 +188,10 @@ serve(async (req) => {
           ...chunkingMetadata,
           chunks: updatedChunks,
           isChunked: true,
-          status: 'complete',
-          isVirtualChunking: true, // Flag to indicate these are virtual chunks
-          processedAt: new Date().toISOString()
+          status: 'prepared', // Mark as prepared rather than complete
+          isVirtualChunking: true, // Still virtual for now
+          processedAt: new Date().toISOString(),
+          needsRealChunking: true // Flag indicating real chunking is needed
         }
       };
       
@@ -268,7 +226,9 @@ serve(async (req) => {
           processingTime: totalTime/1000,
           chunks: updatedChunks,
           count: updatedChunks.length,
-          virtualChunking: true // Indicate we're using virtual chunking
+          virtualChunking: true, // Still virtual for now
+          productionReady: false, // Indicate that this is not yet production ready
+          nextSteps: "For production, implement real chunking with FFmpeg on a dedicated server"
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

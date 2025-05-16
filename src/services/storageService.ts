@@ -7,7 +7,7 @@ let storageInitialized = false;
 
 /**
  * Initializes the Supabase storage buckets required by the application
- * Creates video_uploads, chunks, and slide_stills buckets if they don't exist
+ * Creates video_uploads, chunks, audio_extracts, and slide_stills buckets if they don't exist
  * Sets buckets to public
  * @returns Promise resolving to a success/failure status
  */
@@ -30,57 +30,34 @@ export const initializeStorage = async (): Promise<boolean> => {
     
     // Call our edge function to init the buckets with proper permissions
     try {
-      const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/init-storage-buckets', {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.session.access_token}`
-        }
-      });
+      const response = await supabase.functions.invoke('create-storage-buckets');
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Storage initialization failed:", errorData);
+      if (response.error) {
+        console.error("Storage initialization failed:", response.error);
         toast.error("Failed to initialize storage buckets. Some features may not work correctly.");
         return false;
       }
       
-      const data = await response.json();
-      console.log("Storage initialization result:", data);
+      console.log("Storage initialization result:", response.data);
       
-      // Verify the results to make sure all required buckets were created/updated
-      if (data.success) {
-        // Check specifically if the required buckets are properly configured
-        const videoUploadsResult = data.results.find(r => r.bucket === 'video_uploads');
-        const chunksResult = data.results.find(r => r.bucket === 'chunks');
-        const slidesResult = data.results.find(r => r.bucket === 'slide_stills');
-        
-        const allBucketsOk = videoUploadsResult && videoUploadsResult.status !== 'error' && 
-                            chunksResult && chunksResult.status !== 'error' &&
-                            slidesResult && slidesResult.status !== 'error';
-        
-        if (allBucketsOk) {
-          console.log("All required buckets are properly configured");
-          storageInitialized = true;
-        } else {
-          console.warn("One or more buckets might not be properly configured");
-          console.log("Bucket results:", data.results);
-          
-          // Check specifically for issues with the chunks bucket
-          if (!chunksResult || chunksResult.status === 'error') {
-            console.error("The 'chunks' bucket was not created correctly");
-            toast.error("Storage 'chunks' bucket could not be created. Video chunking will not work properly.");
-          } else {
-            toast.warning("Storage might not be configured correctly. Video processing may not work properly.");
-          }
-          
-          return false;
-        }
+      // Check if all buckets were successfully created
+      const results = response.data.results || [];
+      const anyErrors = results.some(r => r.status === 'error');
+      
+      if (anyErrors) {
+        console.warn("Some storage buckets encountered errors during initialization");
+        toast.warning("Storage initialization partially succeeded. Some features may have limited functionality.");
+      } else {
+        toast.success("Storage system initialized successfully");
+        storageInitialized = true;
       }
       
-      return data.success === true;
+      // Log the results for debugging
+      console.log("Bucket creation results:", results);
+      
+      return !anyErrors;
     } catch (fetchError) {
-      console.error("Error calling init-storage-buckets function:", fetchError);
+      console.error("Error calling create-storage-buckets function:", fetchError);
       toast.error("Storage initialization service error. Please try again.");
       return false;
     }
@@ -146,34 +123,69 @@ export const syncStorageUsage = async (): Promise<boolean> => {
   try {
     console.log("Syncing user's storage usage after storage changes");
     
-    // Check if user is authenticated before proceeding
-    const { data: session } = await supabase.auth.getSession();
-    if (!session?.session?.access_token) {
-      console.log("Storage sync skipped: User not authenticated");
+    // Call the sync function directly with supabase functions
+    const response = await supabase.functions.invoke('sync-storage-usage');
+    
+    if (response.error) {
+      console.error("Storage sync failed:", response.error);
       return false;
     }
     
-    // Call the storage sync function
-    const response = await fetch('https://bjzvlatqgrqaefnwihjj.supabase.co/functions/v1/sync-storage-usage', {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.session.access_token}`
-      }
-    });
+    console.log("Storage sync result:", response.data);
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Storage sync failed:", errorData);
-      return false;
-    }
-    
-    const data = await response.json();
-    console.log("Storage sync result:", data);
-    
-    return data.success === true;
+    return response.data?.success === true;
   } catch (error) {
     console.error("Error syncing storage usage:", error);
+    return false;
+  }
+};
+
+/**
+ * Creates the suggested production directory structure in storage
+ * for organizing project assets
+ * @param projectId The project ID to create directories for
+ * @returns Promise resolving to success/failure status
+ */
+export const createProjectDirectoryStructure = async (projectId: string): Promise<boolean> => {
+  try {
+    if (!projectId) {
+      console.error("Project ID is required to create directory structure");
+      return false;
+    }
+    
+    console.log(`Creating directory structure for project: ${projectId}`);
+    
+    // We need to create empty files to establish directory structure in Supabase Storage
+    // Create an empty marker file
+    const emptyBlob = new Blob([''], { type: 'text/plain' });
+    
+    // Define the directories we need to create
+    const directories = [
+      { bucket: 'video_uploads', path: `${projectId}/.directory` },
+      { bucket: 'chunks', path: `${projectId}/.directory` },
+      { bucket: 'audio_extracts', path: `${projectId}/.directory` },
+      { bucket: 'slide_stills', path: `${projectId}/.directory` }
+    ];
+    
+    // Create each directory by uploading the marker file
+    for (const dir of directories) {
+      try {
+        const { error } = await supabase.storage
+          .from(dir.bucket)
+          .upload(dir.path, emptyBlob);
+          
+        if (error && !error.message.includes('The resource already exists')) {
+          console.error(`Error creating directory ${dir.bucket}/${dir.path}:`, error);
+        }
+      } catch (dirError) {
+        console.error(`Failed to create directory ${dir.bucket}/${dir.path}:`, dirError);
+        // Continue to next directory even if one fails
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error creating project directory structure:", error);
     return false;
   }
 };
