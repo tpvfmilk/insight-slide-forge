@@ -315,19 +315,7 @@ async function generateSlidesBySections(
         sectionDuration = Math.round(videoDuration / sections.length);
       }
       
-      // Add a section title slide
-      const sectionTitleSlide = {
-        id: `slide-${slideIdCounter++}`,
-        title: "Video Section",
-        content: `# ${section.title}`,
-        timestamp: null,
-        transcriptTimestamps: [],
-        isSection: true
-      };
-      
-      allSlides.push(sectionTitleSlide);
-      
-      // Generate slides for this section
+      // Generate slides for this section - no longer adding section title slides
       const sectionSlides = await generateSlidesFromTranscript(
         section.content,
         contextPrompt,
