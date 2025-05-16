@@ -19,6 +19,13 @@ import { transcribeVideo } from "@/services/uploadService"
 import { useProcessingProgress } from '@/hooks/useOperationProgress'
 import { ChunkedProcessingAlert } from './ChunkedProcessingAlert'
 import { ExtendedVideoMetadata } from "@/types/videoChunking"
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface TranscriptDialogProps {
   project: any;
@@ -38,6 +45,7 @@ export function TranscriptDialog({
   const [open, setOpen] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [needsChunking, setNeedsChunking] = useState(false);
+  const [transcriptionProvider, setTranscriptionProvider] = useState<'openai' | 'google'>('openai');
   
   const { startProcessingOperation } = useProcessingProgress();
   
@@ -76,7 +84,7 @@ export function TranscriptDialog({
     }
     
     const operation = startProcessingOperation(
-      "Transcribing video", 
+      `Transcribing video with ${transcriptionProvider === 'google' ? 'Google Speech-to-Text' : 'OpenAI Whisper'}`, 
       "Starting transcription...",
       "transcription"
     );
@@ -87,7 +95,13 @@ export function TranscriptDialog({
       // Update progress for starting
       operation.updateProgress(10, "Preparing audio for transcription");
       
-      const transcriptionResult = await transcribeVideo(project.id);
+      const transcriptionResult = await transcribeVideo(
+        project.id, 
+        [], 
+        false, 
+        null, 
+        transcriptionProvider
+      );
 
       if (!transcriptionResult.success) {
         // Check if the error indicates the video is too large
@@ -151,7 +165,31 @@ export function TranscriptDialog({
             />
           )}
           
-          {!transcript ? null : (
+          {!transcript && !needsChunking && (
+            <div className="grid gap-2">
+              <Label htmlFor="transcription-provider">Transcription Service</Label>
+              <Select
+                value={transcriptionProvider}
+                onValueChange={(value) => setTranscriptionProvider(value as 'openai' | 'google')}
+              >
+                <SelectTrigger className="w-full" id="transcription-provider">
+                  <SelectValue placeholder="Select transcription service" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI Whisper</SelectItem>
+                  <SelectItem value="google">Google Speech-to-Text</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {transcriptionProvider === 'google'
+                  ? "Google Speech API provides good accuracy and speaker detection"
+                  : "OpenAI Whisper provides fast and accurate transcription"
+                }
+              </p>
+            </div>
+          )}
+          
+          {transcript ? (
             <div className="grid gap-2">
               <Label htmlFor="transcript">Transcript</Label>
               <Input
@@ -162,7 +200,7 @@ export function TranscriptDialog({
                 readOnly
               />
             </div>
-          )}
+          ) : null}
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>

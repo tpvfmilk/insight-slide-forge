@@ -14,7 +14,12 @@ import { useProgress } from '@/context/ProgressContext';
 import { transcribeVideo } from '@/services/uploadService';
 
 interface AudioChunkingContextType {
-  prepareForChunkedProcessing: (projectId: string, originalVideoPath: string, autoTranscribeAfter?: boolean) => Promise<boolean>;
+  prepareForChunkedProcessing: (
+    projectId: string, 
+    originalVideoPath: string, 
+    autoTranscribeAfter?: boolean,
+    transcriptionProvider?: 'openai' | 'google'
+  ) => Promise<boolean>;
   isPreparingChunks: boolean;
 }
 
@@ -70,7 +75,8 @@ export function AudioChunkingProvider({ children }: AudioChunkingProviderProps) 
   const prepareForChunkedProcessing = async (
     projectId: string, 
     originalVideoPath: string,
-    autoTranscribeAfter: boolean = false
+    autoTranscribeAfter: boolean = false,
+    transcriptionProvider: 'openai' | 'google' = 'openai'
   ) => {
     if (!projectId || !originalVideoPath) {
       toast.error("Missing project information");
@@ -87,7 +93,7 @@ export function AudioChunkingProvider({ children }: AudioChunkingProviderProps) 
       toast.loading("Preparing video for chunked processing...", { id: toastId });
       
       // First update the metadata to flag this video for chunking
-      const result = await forceUpdateChunkingMetadata(projectId);
+      const result = await forceUpdateChunkingMetadata(projectId, transcriptionProvider);
       
       if (!result.success) {
         throw new Error(result.error || "Failed to prepare chunking metadata");
@@ -160,19 +166,26 @@ export function AudioChunkingProvider({ children }: AudioChunkingProviderProps) 
       
       // If we should auto-transcribe after chunking, do it now
       if (autoTranscribeAfter) {
-        toast.loading("Starting transcription process...", { id: toastId });
+        toast.loading(`Starting transcription with ${transcriptionProvider}...`, { id: toastId });
         
         // Add a small delay to allow the UI to update
         setTimeout(async () => {
           try {
-            const transcribeResult = await transcribeVideo(projectId);
+            const transcribeResult = await transcribeVideo(
+              projectId, 
+              [], 
+              false, 
+              null,
+              transcriptionProvider
+            );
+            
             if (transcribeResult.success) {
               toast.success("Transcription completed successfully!", { id: toastId });
             } else {
               toast.error("Transcription failed, but chunks are ready. You can try transcribing again manually.", { id: toastId });
             }
           } catch (err) {
-            console.error("Error in auto-transcription:", err);
+            console.error(`Error in auto-transcription with ${transcriptionProvider}:`, err);
             toast.error("Automatic transcription failed, but chunks are ready. You can try transcribing again manually.", { id: toastId });
           }
         }, 1500);

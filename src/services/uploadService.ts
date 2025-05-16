@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { parseStoragePath } from "@/utils/videoPathUtils";
@@ -273,22 +272,27 @@ export const uploadFileWithProgress = async (
 };
 
 /**
- * Transcribes a video using OpenAI's Whisper API via Supabase Edge Function
+ * Transcribes a video using OpenAI's Whisper API or Google Speech API via Supabase Edge Function
  * @param projectId The project ID to transcribe
  * @param projectVideos Optional array of video objects (for multi-video projects)
  * @param isTranscriptOnly Whether this is a text-only project without video
  * @param audioData Optional audio data if already extracted
+ * @param provider Which transcription provider to use ('openai' or 'google')
  * @returns The transcription result
  */
 export const transcribeVideo = async (
   projectId: string,
   projectVideos: any[] = [],
   isTranscriptOnly: boolean = false,
-  audioData: string | null = null
+  audioData: string | null = null,
+  provider: 'openai' | 'google' = 'openai'
 ) => {
   try {
-    // Call the transcribe-video Edge Function
-    const { data, error } = await supabase.functions.invoke("transcribe-video", {
+    // Call the appropriate transcription Edge Function
+    const functionName = provider === 'google' ? "transcribe-video-google" : "transcribe-video";
+    console.log(`Using transcription provider: ${provider}`);
+    
+    const { data, error } = await supabase.functions.invoke(functionName, {
       body: {
         projectId,
         projectVideos,
@@ -302,7 +306,7 @@ export const transcribeVideo = async (
     });
 
     if (error) {
-      console.error("Transcription error:", error);
+      console.error(`${provider} Transcription error:`, error);
       return { 
         success: false, 
         error: `Transcription failed: ${error.message || "Unknown error"}`,
@@ -321,10 +325,11 @@ export const transcribeVideo = async (
     return { 
       success: true, 
       transcript: data.transcript, 
-      needsChunking: data.needsChunking || false 
+      needsChunking: data.needsChunking || false,
+      provider
     };
   } catch (error) {
-    console.error("Error in transcribeVideo:", error);
+    console.error(`Error in transcribeVideo (${provider}):`, error);
     return { 
       success: false, 
       error: `Transcription failed: ${error.message || "Unknown error"}`,

@@ -5,6 +5,14 @@ import { Button } from "@/components/ui/button";
 import { useAudioChunking } from "@/context/AudioChunkingContext";
 import { Progress } from "@/components/ui/progress";
 import { ArrowRight, Clock } from "lucide-react";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface ChunkedProcessingAlertProps {
   projectId: string;
@@ -21,6 +29,7 @@ export const ChunkedProcessingAlert = ({
 }: ChunkedProcessingAlertProps) => {
   const [isProcessing, setIsProcessing] = useState<boolean>(autoProcess);
   const [progress, setProgress] = useState<number>(0);
+  const [transcriptionProvider, setTranscriptionProvider] = useState<'openai' | 'google'>('openai');
   const { prepareForChunkedProcessing, isPreparingChunks } = useAudioChunking();
 
   // Auto-start processing if autoProcess is true
@@ -47,7 +56,12 @@ export const ChunkedProcessingAlert = ({
     }, 1000);
 
     // Actual processing
-    const success = await prepareForChunkedProcessing(projectId, originalVideoPath);
+    const success = await prepareForChunkedProcessing(
+      projectId, 
+      originalVideoPath, 
+      false, // Don't auto-transcribe here
+      transcriptionProvider
+    );
     
     // Clear interval and set final progress
     clearInterval(progressInterval);
@@ -110,9 +124,27 @@ export const ChunkedProcessingAlert = ({
               <Progress value={progress} className="h-2" />
             </div>
           ) : (
-            <Button onClick={handleStartProcessing} size="sm" className="mt-2 gap-2">
-              Process Audio <ArrowRight className="h-4 w-4" />
-            </Button>
+            <div className="space-y-3">
+              <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="transcription-provider">Transcription Service</Label>
+                <Select
+                  value={transcriptionProvider}
+                  onValueChange={(value) => setTranscriptionProvider(value as 'openai' | 'google')}
+                >
+                  <SelectTrigger className="w-full" id="transcription-provider">
+                    <SelectValue placeholder="Select transcription service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI Whisper</SelectItem>
+                    <SelectItem value="google">Google Speech-to-Text</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <Button onClick={handleStartProcessing} size="sm" className="mt-2 gap-2">
+                Process Audio <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
           )}
         </div>
       </AlertDescription>
