@@ -12,6 +12,7 @@ export function StorageBucketVerifier() {
   const [isFixing, setIsFixing] = useState(false);
   const [checkResults, setCheckResults] = useState<any>(null);
   const [fixResults, setFixResults] = useState<any>(null);
+  const [verifyStage, setVerifyStage] = useState<string>("");
   
   const handleCheckStorage = async () => {
     setIsChecking(true);
@@ -20,9 +21,11 @@ export function StorageBucketVerifier() {
     
     try {
       // First initialize storage to ensure buckets exist
+      setVerifyStage("Initializing storage buckets...");
       await initializeStorage();
       
       // Then verify everything is working correctly
+      setVerifyStage("Verifying bucket access...");
       const results = await verifyStorageStatus();
       setCheckResults(results);
     } catch (error) {
@@ -32,6 +35,7 @@ export function StorageBucketVerifier() {
         error
       });
     } finally {
+      setVerifyStage("");
       setIsChecking(false);
     }
   };
@@ -73,7 +77,7 @@ export function StorageBucketVerifier() {
             {isChecking ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Checking...
+                {verifyStage || "Checking..."}
               </>
             ) : (
               <>
@@ -103,6 +107,16 @@ export function StorageBucketVerifier() {
           )}
         </div>
       </div>
+      
+      {isChecking && !checkResults && (
+        <Alert>
+          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+          <AlertTitle>Verifying Storage</AlertTitle>
+          <AlertDescription>
+            {verifyStage || "Checking storage bucket status..."}
+          </AlertDescription>
+        </Alert>
+      )}
       
       {/* Check Results */}
       {checkResults && (

@@ -19,7 +19,7 @@ export const verifyStorageStatus = async () => {
     };
   }
   
-  // Now check project references to verify paths
+  // Now check project references to verify paths - limit to recent projects for better performance
   const pathIssues = await checkPathReferences();
   
   return {
@@ -33,17 +33,19 @@ export const verifyStorageStatus = async () => {
 };
 
 /**
- * Checks all project references to storage paths to verify they're correct
+ * Checks project references to storage paths to verify they're correct
  * @returns Promise resolving to array of issues found
  */
 const checkPathReferences = async () => {
   const issues = [];
   
   try {
-    // Check projects table
+    // Check only the 10 most recent projects for better performance
     const { data: projects, error: projectsError } = await supabase
       .from('projects')
-      .select('id, source_type, source_file_path');
+      .select('id, source_type, source_file_path')
+      .order('updated_at', { ascending: false })
+      .limit(10);
       
     if (projectsError) {
       issues.push({
@@ -54,30 +56,41 @@ const checkPathReferences = async () => {
       // Check each project's source_file_path
       for (const project of projects || []) {
         if (project.source_type === 'video' && project.source_file_path) {
-          // Parse the path to check bucket
-          const { bucketName, filePath } = parseStoragePath(project.source_file_path);
-          
-          // Check if the file exists
-          const { data, error } = await supabase.storage
-            .from(bucketName)
-            .download(filePath);
+          try {
+            // Parse the path to check bucket
+            const { bucketName, filePath } = parseStoragePath(project.source_file_path);
             
-          if (error) {
+            // Just check if bucket exists rather than trying to download the file
+            const { data: bucketInfo, error: bucketError } = await supabase.storage
+              .getBucket(bucketName);
+              
+            if (bucketError) {
+              issues.push({
+                type: "missing-bucket",
+                projectId: project.id,
+                path: project.source_file_path,
+                bucket: bucketName,
+                message: `Bucket not found: ${bucketName}`
+              });
+            }
+          } catch (pathError) {
             issues.push({
-              type: "missing-file",
+              type: "path-error",
               projectId: project.id,
               path: project.source_file_path,
-              message: `File not found: ${project.source_file_path}`
+              message: `Error parsing path: ${pathError.message}`
             });
           }
         }
       }
     }
     
-    // Check project_videos table
+    // Check a limited number of project videos
     const { data: projectVideos, error: videosError } = await supabase
       .from('project_videos')
-      .select('id, project_id, source_file_path');
+      .select('id, project_id, source_file_path')
+      .order('updated_at', { ascending: false })
+      .limit(10);
       
     if (videosError) {
       issues.push({
@@ -88,21 +101,31 @@ const checkPathReferences = async () => {
       // Check each video's source_file_path
       for (const video of projectVideos || []) {
         if (video.source_file_path) {
-          // Parse the path to check bucket
-          const { bucketName, filePath } = parseStoragePath(video.source_file_path);
-          
-          // Check if the file exists
-          const { data, error } = await supabase.storage
-            .from(bucketName)
-            .download(filePath);
+          try {
+            // Parse the path to check bucket
+            const { bucketName, filePath } = parseStoragePath(video.source_file_path);
             
-          if (error) {
+            // Just check if bucket exists rather than trying to download the file
+            const { data: bucketInfo, error: bucketError } = await supabase.storage
+              .getBucket(bucketName);
+              
+            if (bucketError) {
+              issues.push({
+                type: "missing-bucket",
+                projectId: video.project_id,
+                videoId: video.id,
+                path: video.source_file_path,
+                bucket: bucketName,
+                message: `Bucket not found: ${bucketName}`
+              });
+            }
+          } catch (pathError) {
             issues.push({
-              type: "missing-file",
+              type: "path-error",
               projectId: video.project_id,
               videoId: video.id,
               path: video.source_file_path,
-              message: `File not found: ${video.source_file_path}`
+              message: `Error parsing path: ${pathError.message}`
             });
           }
         }
@@ -129,7 +152,9 @@ export const fixCommonStoragePathIssues = async () => {
     // Fix project paths that might be missing correct bucket prefixes
     const { data: projects, error: projectsError } = await supabase
       .from('projects')
-      .select('id, source_type, source_file_path');
+      .select('id, source_type, source_file_path')
+      .order('updated_at', { ascending: false })
+      .limit(20);
       
     if (!projectsError) {
       for (const project of projects || []) {
@@ -158,7 +183,9 @@ export const fixCommonStoragePathIssues = async () => {
     // Fix project video paths
     const { data: projectVideos, error: videosError } = await supabase
       .from('project_videos')
-      .select('id, project_id, source_file_path');
+      .select('id, project_id, source_file_path')
+      .order('updated_at', { ascending: false })
+      .limit(20);
       
     if (!videosError) {
       for (const video of projectVideos || []) {

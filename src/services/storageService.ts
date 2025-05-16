@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -7,8 +6,6 @@ let storageInitialized = false;
 
 /**
  * Initializes the Supabase storage buckets required by the application
- * Creates video_uploads, chunks, audio_extracts, audio_chunks, and slide_stills buckets if they don't exist
- * Sets buckets to public
  * @returns Promise resolving to a success/failure status
  */
 export const initializeStorage = async (): Promise<boolean> => {
@@ -28,42 +25,56 @@ export const initializeStorage = async (): Promise<boolean> => {
       return false;
     }
     
-    // Call our edge function to init the buckets with proper permissions
     try {
-      const response = await supabase.functions.invoke('create-storage-buckets');
+      // First check if init-storage-buckets function exists
+      const response = await supabase.functions.invoke('init-storage-buckets', {
+        body: {}
+      });
       
       if (response.error) {
         console.error("Storage initialization failed:", response.error);
-        toast.error("Failed to initialize storage buckets. Some features may not work correctly.");
+        toast.error("Failed to initialize storage buckets");
         return false;
       }
       
       console.log("Storage initialization result:", response.data);
       
       // Check if all buckets were successfully created
-      const results = response.data.results || [];
+      const results = response.data?.results || [];
       const anyErrors = results.some(r => r.status === 'error');
       
       if (anyErrors) {
         console.warn("Some storage buckets encountered errors during initialization");
-        toast.warning("Storage initialization partially succeeded. Some features may have limited functionality.");
       } else {
-        toast.success("Storage system initialized successfully");
+        console.log("Storage initialized successfully");
         storageInitialized = true;
       }
       
-      // Log the results for debugging
-      console.log("Bucket creation results:", results);
-      
       return !anyErrors;
     } catch (fetchError) {
-      console.error("Error calling create-storage-buckets function:", fetchError);
-      toast.error("Storage initialization service error. Please try again.");
-      return false;
+      console.error("Error calling init-storage-buckets function:", fetchError);
+      
+      // Try alternate function name
+      try {
+        const response = await supabase.functions.invoke('create-storage-buckets', {
+          body: {}
+        });
+        
+        if (response.error) {
+          console.error("Alternate storage initialization failed:", response.error);
+          toast.error("Failed to initialize storage buckets");
+          return false;
+        }
+        
+        storageInitialized = true;
+        return true;
+      } catch (altError) {
+        console.error("Error with alternate storage initialization:", altError);
+        return false;
+      }
     }
   } catch (error) {
     console.error("Error initializing storage:", error);
-    toast.error("Storage initialization error. Please try refreshing the page.");
     return false;
   }
 };
@@ -208,26 +219,60 @@ export const verifyStorageBuckets = async (): Promise<{ success: boolean, result
     ];
     
     const results = [];
+    let allBucketsAvailable = true;
     
-    // Check each bucket
-    for (const bucketId of requiredBuckets) {
-      try {
-        // Try to list a single file to test access
-        const { data, error } = await supabase.storage
-          .from(bucketId)
-          .list('', { limit: 1 });
-          
-        if (error) {
-          results.push({ bucket: bucketId, status: 'error', message: error.message });
-        } else {
-          results.push({ bucket: bucketId, status: 'available', itemCount: data?.length || 0 });
-        }
-      } catch (bucketError) {
-        results.push({ bucket: bucketId, status: 'error', message: bucketError.message });
+    // First check if the storage API is available at all
+    try {
+      // Try to get a list of buckets
+      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+      
+      if (listError) {
+        // If listBuckets fails, storage might not be enabled
+        console.error("Storage API unavailable:", listError);
+        return {
+          success: false,
+          results: [{ bucket: 'all', status: 'error', message: 'Storage API unavailable' }]
+        };
       }
+      
+      // Map of existing bucket names for quick access
+      const existingBuckets = buckets ? buckets.reduce((acc, bucket) => {
+        acc[bucket.name] = bucket;
+        return acc;
+      }, {}) : {};
+      
+      // Check each required bucket
+      for (const bucketId of requiredBuckets) {
+        if (existingBuckets[bucketId]) {
+          // Bucket exists, check if we can list files in it
+          try {
+            const { data, error } = await supabase.storage
+              .from(bucketId)
+              .list('', { limit: 1 });
+              
+            if (error) {
+              results.push({ bucket: bucketId, status: 'error', message: error.message });
+              allBucketsAvailable = false;
+            } else {
+              results.push({ bucket: bucketId, status: 'available', itemCount: data?.length || 0 });
+            }
+          } catch (accessError) {
+            results.push({ bucket: bucketId, status: 'error', message: accessError.message });
+            allBucketsAvailable = false;
+          }
+        } else {
+          // Bucket doesn't exist
+          results.push({ bucket: bucketId, status: 'missing' });
+          allBucketsAvailable = false;
+        }
+      }
+    } catch (storageApiError) {
+      console.error("Error accessing Storage API:", storageApiError);
+      return {
+        success: false,
+        results: [{ bucket: 'all', status: 'error', message: 'Storage API error' }]
+      };
     }
-    
-    const allBucketsAvailable = results.every(r => r.status === 'available');
     
     return {
       success: allBucketsAvailable,
