@@ -7,7 +7,7 @@ import { FileUploader } from "@/components/ui/file-uploader";
 import { createProjectFromVideo } from "@/services/uploadService";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner"; // Updated import
+import { toast } from "sonner";
 import { extractAudioFromVideo } from "@/services/audioExtractionService";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Mic, AlertTriangle } from "lucide-react";
@@ -92,12 +92,12 @@ export const TranscriptExtractor = () => {
       
       let audioBlob;
       try {
-        // Show progress during extraction
-        const updateExtractionProgress = (progress: number) => {
-          setExtractionProgress(progress);
-        };
+        // The updated function now directly accepts a File object and a progress callback
+        audioBlob = await extractAudioFromVideo(
+          selectedFile,
+          (progress: number) => setExtractionProgress(progress)
+        );
         
-        audioBlob = await extractAudioFromVideo(selectedFile, updateExtractionProgress);
         toast.success("Audio extracted successfully", { id: "extract-audio" });
       } catch (extractionError: any) {
         console.error("Error during audio extraction:", extractionError);
@@ -118,7 +118,7 @@ export const TranscriptExtractor = () => {
       // Convert the audio blob to a file for upload
       const audioFile = new File([audioBlob], "extracted_audio.mp3", { type: "audio/mpeg" });
       
-      // Create the project first - fix the argument to match createProjectFromVideo signature
+      // Create the project first
       const project = await createProjectFromVideo(
         audioFile, 
         title, 
