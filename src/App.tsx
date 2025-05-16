@@ -1,72 +1,184 @@
-import { Toaster } from "@/components/ui/sonner";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/context/AuthContext";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { UIResetProvider } from "@/context/UIResetContext";
-import { EmergencyResetButton } from "@/components/ui/EmergencyResetButton";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import React, { useState, useEffect } from 'react';
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  Navigate,
+  useLocation,
+} from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from 'react-query';
+import { ReactQueryDevtools } from 'react-query/devtools';
+import { useAuth } from './hooks/useAuth';
+import { supabase } from './integrations/supabase/client';
+import { Auth } from './pages/Auth';
+import { Dashboard } from './pages/Dashboard';
+import { Upload } from './pages/Upload';
+import { Projects } from './pages/Projects';
+import { ProjectDetail } from './pages/ProjectDetail';
+import { Settings } from './pages/Settings';
+import { SlideEditor } from './pages/SlideEditor';
+import { PresentationView } from './pages/PresentationView';
+import { InsightSidebar } from './components/layout/InsightSidebar';
+import { EmergencyResetButton } from './components/ui/EmergencyResetButton';
+import { UIResetProvider } from './context/UIResetContext';
+import { ThemeProvider } from './components/shared/ThemeProvider';
+import { Toaster } from '@/components/ui/toaster';
 
-// Pages
-import LandingPage from "./pages/LandingPage";
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import DashboardPage from "./pages/DashboardPage";
-import UploadPage from "./pages/UploadPage";
-import ProjectsPage from "./pages/ProjectsPage";
-import ProjectPage from "./pages/ProjectPage";
-import PresentationPage from "./pages/PresentationPage";
-import CalendarPage from "./pages/CalendarPage";
-import SettingsPage from "./pages/SettingsPage";
-import NotFound from "./pages/NotFound";
-import TermsOfServicePage from "./pages/TermsOfServicePage";
-import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
+import { ProgressProvider } from '@/context/ProgressContext';
+
+// Define a type for the Supabase session
+type SupabaseSession = {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  token_type: string;
+} | null;
 
 const queryClient = new QueryClient();
 
-const AppContent = () => {
-  return (
-    <TooltipProvider>
-      <Toaster />
-      <EmergencyResetButton />
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/terms" element={<TermsOfServicePage />} />
-        <Route path="/privacy" element={<PrivacyPolicyPage />} />
-        
-        {/* Protected Routes */}
-        <Route element={<ProtectedRoute />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/upload" element={<UploadPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/projects/:id" element={<ProjectPage />} />
-          <Route path="/projects/:id/present" element={<PresentationPage />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Route>
-        
-        {/* Catch-all route */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </TooltipProvider>
-  );
-};
+function App() {
+  const { authStatus, setAuthStatus } = useAuth();
+  const [supabaseSession, setSupabaseSession] = useState<SupabaseSession>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
-      <AuthProvider>
-        <UIResetProvider>
-          <AppContent />
-        </UIResetProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  </QueryClientProvider>
-);
+  useEffect(() => {
+    // Check the initial auth status on app load
+    const checkAuthStatus = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSupabaseSession(session);
+      setAuthStatus(!!session);
+    };
+
+    checkAuthStatus();
+
+    // Set up a real-time listener for auth changes
+    supabase.auth.onAuthStateChange((event, session) => {
+      setSupabaseSession(session);
+      setAuthStatus(!!session);
+    });
+  }, [setAuthStatus]);
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  return (
+    <ProgressProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider defaultTheme="system" storageKey="vite-react-theme">
+          <UIResetProvider>
+            <Router>
+              <div className="flex h-screen bg-background antialiased">
+                {authStatus && (
+                  <InsightSidebar
+                    isOpen={isSidebarOpen}
+                    onClose={() => setIsSidebarOpen(false)}
+                  />
+                )}
+                <div className="flex flex-1 flex-col overflow-hidden">
+                  <main className="relative flex-1 overflow-y-auto focus:outline-none">
+                    <Routes>
+                      <Route
+                        path="/auth"
+                        element={
+                          !authStatus ? (
+                            <Auth />
+                          ) : (
+                            <Navigate to="/dashboard" replace />
+                          )
+                        }
+                      />
+                      <Route
+                        path="/dashboard"
+                        element={
+                          authStatus ? (
+                            <Dashboard toggleSidebar={toggleSidebar} />
+                          ) : (
+                            <Navigate to="/auth" replace />
+                          )
+                        }
+                      />
+                      <Route
+                        path="/upload"
+                        element={
+                          authStatus ? (
+                            <Upload toggleSidebar={toggleSidebar} />
+                          ) : (
+                            <Navigate to="/auth" replace />
+                          )
+                        }
+                      />
+                      <Route
+                        path="/projects"
+                        element={
+                          authStatus ? (
+                            <Projects toggleSidebar={toggleSidebar} />
+                          ) : (
+                            <Navigate to="/auth" replace />
+                          )
+                        }
+                      />
+                      <Route
+                        path="/projects/:projectId"
+                        element={
+                          authStatus ? (
+                            <ProjectDetail toggleSidebar={toggleSidebar} />
+                          ) : (
+                            <Navigate to="/auth" replace />
+                          )
+                        }
+                      />
+                      <Route
+                        path="/projects/:projectId/edit/:slideId"
+                        element={
+                          authStatus ? (
+                            <SlideEditor toggleSidebar={toggleSidebar} />
+                          ) : (
+                            <Navigate to="/auth" replace />
+                          )
+                        }
+                      />
+                      <Route
+                        path="/projects/:projectId/present"
+                        element={
+                          authStatus ? (
+                            <PresentationView />
+                          ) : (
+                            <Navigate to="/auth" replace />
+                          )
+                        }
+                      />
+                      <Route
+                        path="/settings"
+                        element={
+                          authStatus ? (
+                            <Settings toggleSidebar={toggleSidebar} />
+                          ) : (
+                            <Navigate to="/auth" replace />
+                          )
+                        }
+                      />
+                      <Route
+                        path="/"
+                        element={<Navigate to="/dashboard" replace />}
+                      />
+                      <Route
+                        path="*"
+                        element={<Navigate to="/dashboard" replace />}
+                      />
+                    </Routes>
+                  </main>
+                </div>
+              </div>
+              <EmergencyResetButton />
+            </Router>
+            <Toaster />
+          </UIResetProvider>
+        </ThemeProvider>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    </ProgressProvider>
+  );
+}
 
 export default App;

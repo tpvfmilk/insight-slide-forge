@@ -1,268 +1,161 @@
-import { useState, useRef, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { FileVideo, Upload, AlertTriangle, Info } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
-import { createProjectFromVideo } from "@/services/uploadService";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import { ContextPromptInput } from "./ContextPromptInput";
-import { FileUploader } from "@/components/ui/file-uploader";
-import { Label } from "@/components/ui/label";
+import React, { useState, useCallback } from 'react';
+import { toast } from 'sonner';
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { videoNeedsChunking, MAX_CHUNK_SIZE_MB } from "@/services/videoChunkingService";
-import { formatFileSize } from "@/utils/formatUtils";
-import { processVideoForChunking } from "@/services/clientVideoChunkingService";
-import { getUploadStageMessage } from "@/utils/uploadProgressUtils";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useDropzone } from 'react-dropzone';
+import { FileVideo, UploadCloud } from 'lucide-react';
+import { createProjectFromVideo } from "@/services/uploadService";
+import { Progress } from "@/components/ui/progress";
+import { useUploadProgress } from '@/hooks/useOperationProgress';
 
-export const VideoUpload = () => {
-  const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [progressMessage, setProgressMessage] = useState<string>("Preparing...");
-  const [contextPrompt, setContextPrompt] = useState<string>("");
+export function VideoUpload() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [title, setTitle] = useState<string>("");
-  const [isLargeFile, setIsLargeFile] = useState<boolean>(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const [title, setTitle] = useState("");
+  const [contextPrompt, setContextPrompt] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState("");
   
-  // Set default title from filename when a file is selected
-  useEffect(() => {
-    if (videoFile) {
-      const filename = videoFile.name.replace(/\.[^/.]+$/, ""); // Remove extension
-      if (!title) {
-        setTitle(filename);
-      }
-      
-      // Check if this is a large file that will need chunking
-      const needsChunking = videoNeedsChunking(videoFile.size);
-      setIsLargeFile(needsChunking);
-    } else {
-      setIsLargeFile(false);
-    }
-  }, [videoFile, title]);
+  const { createProgressHandler } = useUploadProgress();
   
-  const handleFileSelected = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    
-    const file = files[0]; // Only use the first file
-    
-    // Clear any error messages when new file is selected
-    setUploadError(null);
-    
-    // Check if the file is a video
-    if (!file.type.startsWith('video/')) {
-      toast.error(`${file.name} is not a valid video file`);
-      return;
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (acceptedFiles.length > 0) {
+      setVideoFile(acceptedFiles[0]);
     }
-    
-    // Check file size (limit to 500MB)
-    if (file.size > 500 * 1024 * 1024) {
-      toast.error(`${file.name} is too large (max 500MB allowed)`);
-      return;
-    }
-    
-    setVideoFile(file);
-    console.log(`[DEBUG] Selected video file: ${file.name} (${formatFileSize(file.size)})`);
-  };
+  }, []);
   
-  const handleRemoveFile = () => {
-    setVideoFile(null);
-    setUploadError(null);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const {getRootProps, getInputProps, isDragActive} = useDropzone({
+    onDrop,
+    accept: {
+      'video/*': ['.mp4', '.mov', '.avi', '.mkv']
+    },
+    maxFiles: 1
+  });
+  
+  const handleUpload = async () => {
     if (!videoFile) {
       toast.error("Please select a video file");
       return;
     }
     
-    if (!title.trim()) {
-      toast.error("Please enter a title for your project");
+    if (!title) {
+      toast.error("Please enter a project title");
       return;
     }
     
-    // Clear any previous errors
-    setUploadError(null);
-    
-    // Start uploading
-    setIsUploading(true);
-    setUploadProgress(0);
-    setProgressMessage("Preparing to upload...");
-    
     try {
-      console.log("[DEBUG] Processing video file:", videoFile.name);
-      console.log(`[DEBUG] Video size: ${(videoFile.size / (1024 * 1024)).toFixed(2)} MB`);
+      setIsUploading(true);
       
-      // Display slightly different message for large files
-      const toastId = "video-upload";
-      if (isLargeFile) {
-        toast.loading("Processing and uploading large video file...", { id: toastId });
-      } else {
-        toast.loading("Uploading video...", { id: toastId });
-      }
+      // Create a progress handler that updates both the local state and the global progress
+      const trackUploadProgress = (progress: number, stage?: string) => {
+        setUploadProgress(progress);
+        setUploadStage(stage || "");
+        
+        // Update the progress in our global system
+        globalProgressHandler(progress, stage);
+      };
       
-      // Video processing phase (0-20% of progress)
-      const processResult = await processVideoForChunking(videoFile, (progress, message) => {
-        // First 20% of progress is for processing
-        setUploadProgress(Math.floor(progress * 0.2)); 
-        setProgressMessage(message || "Processing video...");
-        console.log(`[DEBUG] Processing progress: ${progress}% - ${message || "Processing"}`);
-      });
-      
-      // If chunking was needed and successful, we'll upload the chunks
-      if (processResult.needsChunking && processResult.chunkFiles.length > 0) {
-        console.log(`[DEBUG] Video was chunked into ${processResult.chunkFiles.length} segments`);
-        setProgressMessage(`Uploading ${processResult.chunkFiles.length} video chunks...`);
-      } else {
-        console.log("[DEBUG] Video will be uploaded as a single file");
-        setProgressMessage("Uploading video file...");
-      }
-      
-      // Create project from the processed video files (upload + project creation)
-      // The progress callback will now receive accurate progress updates from uploadFileWithProgress
-      const project = await createProjectFromVideo(
-        processResult.originalFile, 
-        title, 
-        contextPrompt, 
-        processResult.needsChunking,
-        processResult.chunkFiles,
-        processResult.chunkMetadata,
-        (progress, stage) => {
-          setUploadProgress(progress);
-          
-          // Use the utility function to generate user-friendly messages
-          if (stage) {
-            const message = getUploadStageMessage(stage, progress);
-            setProgressMessage(message);
-          }
-          
-          console.log(`[DEBUG] Upload progress: ${progress}%, Stage: ${stage || "uploading"}`);
-        }
+      const globalProgressHandler = createProgressHandler(
+        `Uploading ${videoFile?.name || 'video file'}`, 
+        'upload'
       );
       
-      if (!project) {
-        throw new Error("Failed to create project");
+      const project = await createProjectFromVideo(
+        videoFile,
+        title,
+        contextPrompt,
+        false,
+        [],
+        null,
+        trackUploadProgress
+      );
+      
+      if (project) {
+        toast.success("Video uploaded and project created successfully!");
+        // Reset the form
+        setVideoFile(null);
+        setTitle("");
+        setContextPrompt("");
+        setUploadProgress(0);
+        setUploadStage("");
+      } else {
+        toast.error("Failed to create project from video");
       }
-      
-      setUploadProgress(100);
-      setProgressMessage("Upload complete!");
-      toast.success("Upload complete!", { id: toastId });
-      
-      setTimeout(() => {
-        setIsUploading(false);
-        
-        if (isLargeFile) {
-          toast.message("Large video has been automatically processed in chunks for better transcription", { duration: 6000 });
-        }
-        
-        toast.success("Redirecting to slide editor...");
-        navigate(`/projects/${project.id}`);
-      }, 500);
     } catch (error: any) {
+      console.error("Error uploading video:", error);
+      toast.error(`Upload failed: ${error.message}`);
+    } finally {
       setIsUploading(false);
-      const errorMessage = error?.message || "Unknown error";
-      setUploadError(errorMessage);
-      console.error("[DEBUG] Upload error:", error);
-      toast.error("Failed to upload video", { id: "video-upload" });
     }
   };
-
+  
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="video-title">Project Title</Label>
-          <Input
-            id="video-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Enter a title for your project"
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Upload Video</Label>
-          <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/50">
-            <FileVideo className="h-8 w-8 text-muted-foreground mb-4" />
-            <h3 className="font-medium mb-1">Upload a video file</h3>
-            <p className="text-sm text-muted-foreground mb-4 text-center">
-              MP4 or WebM format, up to 500MB
+    <div className="container mx-auto p-4">
+      <h2 className="text-2xl font-semibold mb-4">Upload Video</h2>
+      
+      <div {...getRootProps()} className="relative border-2 border-dashed rounded-md p-6 cursor-pointer bg-background hover:bg-accent/50 transition-colors">
+        <input {...getInputProps()} />
+        
+        <div className="flex flex-col items-center justify-center text-center">
+          <FileVideo className="h-10 w-10 text-muted-foreground mb-2" />
+          <p className="text-lg text-muted-foreground">
+            {isDragActive ? "Drop the video here..." : `Drag 'n' drop a video file here, or click to select`}
+          </p>
+          {videoFile && (
+            <p className="text-sm mt-2 text-muted-foreground">
+              Selected file: {videoFile.name}
             </p>
-            
-            <FileUploader
-              onFilesSelected={handleFileSelected}
-              selectedFiles={videoFile ? [videoFile] : []}
-              onRemoveFile={handleRemoveFile}
-              accept="video/*"
-              maxSize={500}
-              multiple={false}
-              className="w-full"
-              showPreview={true}
-              disabled={isUploading}
+          )}
+        </div>
+        
+        {isUploading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/75 backdrop-blur-sm">
+            <p className="text-lg font-semibold text-muted-foreground mb-2">
+              {uploadStage || "Uploading..."}
+            </p>
+            <Progress value={uploadProgress} className="w-64" />
+          </div>
+        )}
+      </div>
+      
+      <div className="mt-6">
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="title">Title</Label>
+            <Input
+              type="text"
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="contextPrompt">Context Prompt</Label>
+            <Textarea
+              id="contextPrompt"
+              placeholder="Add a context prompt to guide the AI"
+              value={contextPrompt}
+              onChange={(e) => setContextPrompt(e.target.value)}
             />
           </div>
         </div>
-        
-        {uploadError && (
-          <Alert variant="destructive" className="border-red-500">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Upload Error</AlertTitle>
-            <AlertDescription>
-              <div>{uploadError}</div>
-              <div className="text-xs mt-2">
-                Try refreshing the page or using a smaller video file (under 50MB).
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {isLargeFile && videoFile && !uploadError && (
-          <Alert variant="default">
-            <Info className="h-4 w-4" />
-            <AlertTitle>Large Video File</AlertTitle>
-            <AlertDescription>
-              <p>This video ({formatFileSize(videoFile.size)}) is larger than {MAX_CHUNK_SIZE_MB}MB and will be automatically processed in chunks for optimal transcription.</p>
-              <p className="mt-1">Each chunk will be transcribed separately and the results will be combined.</p>
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        <div className="space-y-2">
-          <Label className="mb-2 block">Add series or content context (optional)</Label>
-          <ContextPromptInput 
-            value={contextPrompt}
-            onChange={setContextPrompt}
-          />
-        </div>
+        <Button
+          className="w-full mt-6"
+          onClick={handleUpload}
+          disabled={isUploading || !videoFile}
+        >
+          {isUploading ? (
+            <>
+              <UploadCloud className="mr-2 h-4 w-4 animate-spin" />
+              Uploading...
+            </>
+          ) : (
+            "Create Project"
+          )}
+        </Button>
       </div>
-      
-      {isUploading ? (
-        <div className="w-full mt-6 space-y-2">
-          <div className="flex justify-between text-sm mb-1">
-            <span>{progressMessage}</span>
-            <span>{uploadProgress}%</span>
-          </div>
-          <Progress 
-            value={uploadProgress}
-            className="h-2"
-            indicatorClassName={uploadProgress < 20 ? "bg-amber-500" : "bg-primary"} 
-          />
-        </div>
-      ) : (
-        <div className="flex justify-end">
-          <Button 
-            type="submit" 
-            disabled={!videoFile || !title.trim()}
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Video
-          </Button>
-        </div>
-      )}
-    </form>
+    </div>
   );
-};
+}

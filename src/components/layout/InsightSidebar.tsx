@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { StorageUsageBar } from "@/components/dashboard/StorageUsageBar";
+import { SidebarProgressPanel } from "@/components/layout/SidebarProgressPanel";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -71,7 +72,11 @@ export function InsightSidebar({
 
         <Separator className="my-4 bg-border/80 h-[1.5px]" />
         
-        {/* Slide count information removed from here */}
+        {/* Progress panel - inserted here */}
+        <SidebarProgressPanel />
+        
+        {/* Additional spacing after progress panel */}
+        <div className="h-4"></div>
       </div>
 
       <div className="p-4 border-t border-border/80 flex justify-between items-center">
