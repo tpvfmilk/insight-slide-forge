@@ -14,10 +14,9 @@ import { FramePickerModal } from "@/components/video/FramePickerModal";
 import { ExtendedVideoMetadata } from "@/types/videoChunking";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
-import { forceUpdateChunkingMetadata } from "@/services/videoChunkingService";
 import { StorageBucketVerifier } from "@/components/storage/StorageBucketVerifier";
 import { initializeStorage } from "@/services/storageService";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAudioChunking } from "@/context/AudioChunkingContext";
 import { ChunkedProcessingAlert } from "@/components/project/ChunkedProcessingAlert";
 
@@ -25,6 +24,7 @@ const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
   const modals = useProjectModals();
   const { prepareForChunkedProcessing } = useAudioChunking();
+  const [hasInitiatedAudioProcessing, setHasInitiatedAudioProcessing] = useState(false);
   
   const {
     project,
@@ -64,6 +64,31 @@ const ProjectPage = () => {
     
     checkStorage();
   }, []);
+  
+  // Auto-process large videos that need chunking but haven't been chunked yet
+  useEffect(() => {
+    // Skip if already processing, already processed, or we're still loading
+    if (hasInitiatedAudioProcessing || isLoading || !project || !projectId) return;
+    
+    // Check if this is a large video that hasn't been chunked yet
+    const extendedMetadata = videoMetadata as ExtendedVideoMetadata | null;
+    const hasChunkedVideo = Boolean(
+      extendedMetadata?.chunking?.isChunked ||
+      (project?.video_metadata as ExtendedVideoMetadata | null)?.chunking?.isChunked
+    );
+    
+    const isLargeVideo = Boolean(
+      extendedMetadata?.file_size && (extendedMetadata.file_size / (1024 * 1024)) > 24
+    );
+    
+    const hasTooLargeTranscriptError = transcript?.includes("too large for direct transcription");
+    
+    // If it's a large video, that hasn't been chunked but has the error, auto-process it
+    if (isLargeVideo && !hasChunkedVideo && hasTooLargeTranscriptError && project.source_file_path) {
+      console.log("[DEBUG] Automatically processing large video for chunking");
+      setHasInitiatedAudioProcessing(true);
+    }
+  }, [project, videoMetadata, transcript, hasInitiatedAudioProcessing, isLoading, projectId]);
   
   const handleOpenManualFramePicker = () => {
     if (!project?.source_file_path) {
@@ -199,6 +224,7 @@ const ProjectPage = () => {
                   projectId={projectId || ""}
                   originalVideoPath={project?.source_file_path || ""}
                   onComplete={() => loadProject()}
+                  autoProcess={hasInitiatedAudioProcessing}
                 />
               )}
               

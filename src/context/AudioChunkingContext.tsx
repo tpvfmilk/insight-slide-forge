@@ -6,14 +6,15 @@ import { extractAudioFromVideoFile } from '@/services/audioExtractionService';
 import { 
   chunkAudioFile, 
   createActualAudioChunks, 
-  uploadAudioChunks, 
-  AudioChunkMetadata 
+  uploadAudioChunks
 } from '@/services/audioChunkingService';
 import { supabase } from '@/integrations/supabase/client';
 import { useAudioProcessingWorkflow } from '@/hooks/useOperationProgress';
+import { useProgress } from '@/context/ProgressContext';
+import { transcribeVideo } from '@/services/uploadService';
 
 interface AudioChunkingContextType {
-  prepareForChunkedProcessing: (projectId: string, originalVideoPath: string) => Promise<boolean>;
+  prepareForChunkedProcessing: (projectId: string, originalVideoPath: string, autoTranscribeAfter?: boolean) => Promise<boolean>;
   isPreparingChunks: boolean;
 }
 
@@ -34,6 +35,7 @@ interface AudioChunkingProviderProps {
 export function AudioChunkingProvider({ children }: AudioChunkingProviderProps) {
   const [isPreparingChunks, setIsPreparingChunks] = useState(false);
   const { startAudioProcessingWorkflow } = useAudioProcessingWorkflow();
+  const { getOperationById } = useProgress();
 
   // Helper function to download a video from storage
   const downloadVideoFromStorage = async (filePath: string): Promise<File | null> => {
@@ -65,7 +67,11 @@ export function AudioChunkingProvider({ children }: AudioChunkingProviderProps) 
     }
   };
 
-  const prepareForChunkedProcessing = async (projectId: string, originalVideoPath: string) => {
+  const prepareForChunkedProcessing = async (
+    projectId: string, 
+    originalVideoPath: string,
+    autoTranscribeAfter: boolean = false
+  ) => {
     if (!projectId || !originalVideoPath) {
       toast.error("Missing project information");
       return false;
@@ -151,6 +157,27 @@ export function AudioChunkingProvider({ children }: AudioChunkingProviderProps) 
       workflow.completeWorkflowStep(5, true, `Successfully uploaded ${uploadedChunks.length} audio chunks`);
       
       toast.success(`Successfully prepared ${uploadedChunks.length} audio chunks for transcription`, { id: toastId });
+      
+      // If we should auto-transcribe after chunking, do it now
+      if (autoTranscribeAfter) {
+        toast.loading("Starting transcription process...", { id: toastId });
+        
+        // Add a small delay to allow the UI to update
+        setTimeout(async () => {
+          try {
+            const transcribeResult = await transcribeVideo(projectId);
+            if (transcribeResult.success) {
+              toast.success("Transcription completed successfully!", { id: toastId });
+            } else {
+              toast.error("Transcription failed, but chunks are ready. You can try transcribing again manually.", { id: toastId });
+            }
+          } catch (err) {
+            console.error("Error in auto-transcription:", err);
+            toast.error("Automatic transcription failed, but chunks are ready. You can try transcribing again manually.", { id: toastId });
+          }
+        }, 1500);
+      }
+      
       return true;
     } catch (error: any) {
       console.error("[DEBUG] Error preparing for chunked processing:", error);
@@ -161,7 +188,7 @@ export function AudioChunkingProvider({ children }: AudioChunkingProviderProps) 
         // Check if this operation's ID is in the workflow
         const opId = workflow.operationIds[step - 1];
         // Get the operation from the context
-        const operation = opId ? workflow.getOperationById(opId) : undefined;
+        const operation = opId ? getOperationById(opId) : undefined;
         // Return true if this is a running operation
         return operation?.status === 'running';
       }) || workflow.operationIds.length;

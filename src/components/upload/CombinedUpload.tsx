@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ContextPromptInput } from "./ContextPromptInput";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAudioChunking } from "@/context/AudioChunkingContext";
 
 export const CombinedUpload = () => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
@@ -20,8 +21,10 @@ export const CombinedUpload = () => {
   const [videoFileName, setVideoFileName] = useState<string>("");
   const [showDeveloperOptions, setShowDeveloperOptions] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isProcessingAudio, setIsProcessingAudio] = useState<boolean>(false);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { prepareForChunkedProcessing } = useAudioChunking();
   
   const handleVideoButtonClick = () => {
     videoFileInputRef.current?.click();
@@ -114,20 +117,39 @@ export const CombinedUpload = () => {
       setUploadProgress(100);
       setUploadStage("complete");
       
-      setTimeout(() => {
-        setIsUploading(false);
+      if (!project) {
+        throw new Error("Failed to create project after successful upload");
+      }
+      
+      // If this is a large video that needs chunking, automatically start the audio extraction process
+      if (needsChunking && project.source_file_path) {
+        setUploadStage("processing_audio");
+        setIsProcessingAudio(true);
+        toast.loading("Video upload complete. Now preparing audio for processing...");
         
-        if (project) {
-          toast.success("Upload complete! Redirecting to slide editor...");
-          navigate(`/projects/${project.id}`);
+        // Start audio extraction and chunking process
+        const success = await prepareForChunkedProcessing(project.id, project.source_file_path);
+        
+        if (success) {
+          toast.success("Audio processing complete! Redirecting to project...");
         } else {
-          setUploadError("Failed to create project after successful upload");
+          toast.error("Audio processing was incomplete. You may need to try again from the project page.");
         }
-      }, 500);
+        
+        // Regardless of audio processing outcome, navigate to the project
+        navigate(`/projects/${project.id}`);
+      } else {
+        // Standard small video case - just redirect
+        toast.success("Upload complete! Redirecting to slide editor...");
+        navigate(`/projects/${project.id}`);
+      }
+      
+      setIsUploading(false);
     } catch (error: any) {
       clearInterval(interval);
       setIsUploading(false);
       setUploadStage("error");
+      setIsProcessingAudio(false);
       
       let errorMessage = error?.message || "Failed to upload content";
       
@@ -161,6 +183,7 @@ export const CombinedUpload = () => {
       case "analyzing": return "Analyzing video content...";
       case "finalizing": return "Finalizing project...";
       case "complete": return "Upload complete!";
+      case "processing_audio": return "Processing audio for transcription...";
       default: return "Uploading...";
     }
   };
@@ -190,7 +213,7 @@ export const CombinedUpload = () => {
             </Button>
           </div>
         ) : (
-          <Button onClick={handleVideoButtonClick} disabled={isUploading}>
+          <Button onClick={handleVideoButtonClick} disabled={isUploading || isProcessingAudio}>
             <Upload className="h-4 w-4 mr-2" />
             Choose Video File
           </Button>
@@ -238,7 +261,7 @@ export const CombinedUpload = () => {
             value={transcriptText}
             onChange={(e) => setTranscriptText(e.target.value)}
             className="min-h-[120px]"
-            disabled={isUploading}
+            disabled={isUploading || isProcessingAudio}
           />
         </div>
       </div>
@@ -250,7 +273,7 @@ export const CombinedUpload = () => {
         />
       </div>
       
-      {isUploading ? (
+      {(isUploading || isProcessingAudio) ? (
         <div className="w-full mt-6 space-y-2">
           <div className="flex justify-between text-sm mb-1">
             <span>{getUploadStatusText()}</span>
