@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Mic, AlertTriangle, FileAudio } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { AudioChunkMetadata } from "@/services/audioChunkingService";
+import { AudioChunkMetadata, chunkAudioFile, createActualAudioChunks, uploadAudioChunks } from "@/services/audioChunkingService";
 
 // Maximum recommended file duration in seconds
 const MAX_RECOMMENDED_DURATION = 60 * 60; // 60 minutes
@@ -32,6 +32,7 @@ export const TranscriptExtractor = () => {
   const [extractionProgress, setExtractionProgress] = useState<number>(0);
   const [processingStage, setProcessingStage] = useState<string>("");
   const [audioChunks, setAudioChunks] = useState<AudioChunkMetadata[]>([]);
+  const [chunkProgress, setChunkProgress] = useState<{current: number, total: number}>({current: 0, total: 0});
 
   // Set default title from filename when a file is selected
   useEffect(() => {
@@ -75,6 +76,95 @@ export const TranscriptExtractor = () => {
     }
   };
 
+  const extractAudioFromVideo = async (videoFile: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      // Create video and canvas elements
+      const video = document.createElement('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+      
+      // Set up audio context
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioContext();
+      const dest = audioCtx.createMediaStreamDestination();
+      
+      // Handle video loaded metadata
+      video.onloadedmetadata = () => {
+        // Set video to start at beginning
+        video.currentTime = 0;
+        
+        // Set up canvas size
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // Process video
+        video.muted = false; // We need audio
+        
+        // Connect audio output to destination
+        const audioSource = audioCtx.createMediaElementSource(video);
+        audioSource.connect(dest);
+        audioSource.connect(audioCtx.destination);
+        
+        // Create a media recorder
+        const chunks: Blob[] = [];
+        const recorder = new MediaRecorder(dest.stream);
+        
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            chunks.push(e.data);
+          }
+        };
+        
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'audio/mp3' });
+          resolve(blob);
+          
+          // Clean up
+          video.pause();
+          video.src = '';
+          URL.revokeObjectURL(video.src);
+        };
+        
+        // Start recording and playing
+        recorder.start();
+        video.play().catch(error => {
+          console.error("Error playing video:", error);
+          recorder.stop();
+          reject(error);
+        });
+        
+        // Stop recording when video ends
+        video.onended = () => {
+          recorder.stop();
+        };
+        
+        // Handle errors
+        video.onerror = (error) => {
+          console.error("Video error:", error);
+          recorder.stop();
+          reject(error);
+        };
+      };
+      
+      // Load the video
+      video.src = URL.createObjectURL(videoFile);
+      
+      // Set a timeout in case the video doesn't load
+      const timeout = setTimeout(() => {
+        reject(new Error("Timeout extracting audio from video"));
+      }, 60000); // 60 second timeout
+      
+      video.onended = () => {
+        clearTimeout(timeout);
+      };
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) {
@@ -112,49 +202,82 @@ export const TranscriptExtractor = () => {
       
       toast.success("Project created", { id: initialToastId });
       
-      // Extract and chunk audio from the video file
-      setProcessingStage("Processing audio");
-      const audioToastId = "process-audio";
-      toast.loading("Processing audio from video...", { id: audioToastId });
+      // Step 1: Extract audio from video
+      setProcessingStage("Extracting audio from video");
+      const audioToastId = "extract-audio";
+      toast.loading("Extracting audio from video...", { id: audioToastId });
       
-      // Implement our workflow:
-      // 1. Extract full audio from video
-      // 2. Store full audio in audio_extracts bucket (no size limit)
-      // 3. Chunk audio into smaller pieces (max 20MB each)
-      // 4. Store chunks in audio_chunks bucket
-      const audioResult = await extractAndChunkAudio(
-        selectedFile,
-        project.id,
-        {
-          maxChunkDuration: 60, // 60 second chunks
-          maxChunkSizeMB: 20,   // 20MB max chunk size
-          format: 'wav',
-          quality: 'medium'
-        },
-        (progress, stage) => {
-          setExtractionProgress(progress);
-          setProcessingStage(stage);
+      const audioBlob = await extractAudioFromVideo(selectedFile);
+      setExtractionProgress(20);
+      
+      // Step 2: Chunk the audio file
+      setProcessingStage("Chunking audio file");
+      const chunkingToastId = "chunk-audio";
+      toast.loading("Chunking audio file...", { id: chunkingToastId });
+      
+      // Get metadata for chunks
+      const chunkingResult = await chunkAudioFile(
+        audioBlob,
+        60, // 60 second chunks
+        20   // 20MB max chunk size
+      );
+      
+      if (!chunkingResult.success || !chunkingResult.chunks.length) {
+        throw new Error(chunkingResult.error || "Failed to chunk audio");
+      }
+      
+      setExtractionProgress(40);
+      setAudioChunks(chunkingResult.chunks);
+      
+      // Step 3: Create actual audio chunks
+      setProcessingStage("Creating audio chunks");
+      toast.loading(`Creating ${chunkingResult.chunks.length} audio chunks...`, { id: chunkingToastId });
+      
+      const actualChunks = await createActualAudioChunks(
+        audioBlob, 
+        chunkingResult.chunks,
+        (progress, current, total) => {
+          setExtractionProgress(40 + (progress * 0.2)); // 40% to 60%
+          setChunkProgress({current, total});
         }
       );
       
-      if (!audioResult.success || !audioResult.chunks) {
-        toast.error(`Failed to process audio: ${audioResult.error || "Unknown error"}`, { id: audioToastId });
-        setIsUploading(false);
-        return;
+      if (!actualChunks.length) {
+        throw new Error("Failed to create audio chunks");
       }
       
-      toast.success(`Audio processed into ${audioResult.chunks.length} chunks`, { id: audioToastId });
-      setAudioChunks(audioResult.chunks);
+      setExtractionProgress(60);
+      toast.success(`Successfully created ${actualChunks.length} audio chunks`, { id: chunkingToastId });
       
-      // Transcribe the audio chunks
-      setProcessingStage("Transcribing audio");
+      // Step 4: Upload audio chunks
+      setProcessingStage("Uploading audio chunks");
+      const uploadToastId = "upload-chunks";
+      toast.loading(`Uploading ${actualChunks.length} audio chunks...`, { id: uploadToastId });
+      
+      const uploadedChunks = await uploadAudioChunks(
+        project.id,
+        actualChunks,
+        (progress) => {
+          setExtractionProgress(60 + (progress * 0.2)); // 60% to 80%
+        }
+      );
+      
+      if (!uploadedChunks.length) {
+        throw new Error("Failed to upload audio chunks");
+      }
+      
+      toast.success(`Successfully uploaded ${uploadedChunks.length} audio chunks`, { id: uploadToastId });
+      setExtractionProgress(80);
+      
+      // Step 5: Transcribe the audio chunks
+      setProcessingStage("Transcribing audio chunks");
       const transcribeToastId = "transcribe-audio";
-      toast.loading(`Transcribing ${audioResult.chunks.length} audio segments...`, { id: transcribeToastId });
+      toast.loading(`Transcribing ${uploadedChunks.length} audio segments...`, { id: transcribeToastId });
       
       const transcriptionResult = await transcribeAudioChunks(
         project.id,
-        audioResult.chunks,
-        (progress) => setExtractionProgress(progress)
+        uploadedChunks,
+        (progress) => setExtractionProgress(80 + (progress * 0.2)) // 80% to 100%
       );
       
       if (!transcriptionResult.success) {
@@ -167,6 +290,7 @@ export const TranscriptExtractor = () => {
       }
       
       toast.success("Transcription completed successfully", { id: transcribeToastId });
+      setExtractionProgress(100);
       
       // Navigate to the project page
       navigate(`/projects/${project.id}`);
@@ -276,12 +400,18 @@ export const TranscriptExtractor = () => {
               "Processing transcription... Please wait."}
           </p>
           
+          {chunkProgress.current > 0 && (
+            <div className="text-xs text-muted-foreground">
+              Processing chunk {chunkProgress.current} of {chunkProgress.total}
+            </div>
+          )}
+          
           {audioChunks.length > 0 && (
             <div className="mt-2">
-              <p className="text-xs font-medium mb-1">Audio processing complete:</p>
+              <p className="text-xs font-medium mb-1">Audio processing:</p>
               <div className="flex items-center gap-1">
                 <FileAudio className="h-3.5 w-3.5 text-blue-600" /> 
-                <span className="text-xs">Full audio extracted and stored</span>
+                <span className="text-xs">Full audio extracted</span>
               </div>
               <div className="flex items-center gap-1">
                 <FileAudio className="h-3.5 w-3.5 text-green-600" /> 
