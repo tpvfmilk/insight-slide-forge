@@ -58,55 +58,10 @@ double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = false
 
-# Use an external OAuth provider. The full list of providers are: "apple", "azure", "bitbucket",
-# "discord", "facebook", "github", "gitlab", "google", "keycloak", "linkedin", "notion", "twitch",
-# "twitter", "slack", "spotify", "workos", "zoom".
-[auth.external.apple]
-enabled = false
-client_id = ""
-secret = ""
-# Overrides the default auth redirectUrl.
-redirect_uri = ""
-# Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
-# or any other third-party OIDC providers.
-url = ""
-
-[auth.external.azure]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.bitbucket]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.discord]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.facebook]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
+# External OAuth providers are configured below.
+# These are all disabled by default. To enable them, set 'enabled = true'
 
 [auth.external.github]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.gitlab]
 enabled = false
 client_id = ""
 secret = ""
@@ -120,28 +75,7 @@ secret = ""
 redirect_uri = ""
 url = ""
 
-[auth.external.keycloak]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.linkedin]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.notion]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.twitch]
+[auth.external.facebook]
 enabled = false
 client_id = ""
 secret = ""
@@ -149,34 +83,6 @@ redirect_uri = ""
 url = ""
 
 [auth.external.twitter]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.slack]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.spotify]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.workos]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
-url = ""
-
-[auth.external.zoom]
 enabled = false
 client_id = ""
 secret = ""
@@ -218,5 +124,9 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.video-chunker]
+# Set to true to enable the function.
+verify_jwt = true
+
+[functions.create-storage-buckets]
 # Set to true to enable the function.
 verify_jwt = true

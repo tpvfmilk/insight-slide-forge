@@ -14,7 +14,7 @@ export const parseStoragePath = (fullPath: string | null): { bucketName: string,
   // Remove any leading slashes
   const cleanPath = fullPath.startsWith('/') ? fullPath.substring(1) : fullPath;
 
-  // Check if path starts with 'video_uploads/' prefix
+  // Check bucket prefixes - explicit mapping to ensure paths are correctly routed
   if (cleanPath.startsWith('video_uploads/')) {
     return { 
       bucketName: 'video_uploads', 
@@ -22,7 +22,6 @@ export const parseStoragePath = (fullPath: string | null): { bucketName: string,
     };
   }
   
-  // Check if path is just 'uploads/...'
   if (cleanPath.startsWith('uploads/')) {
     return { 
       bucketName: 'video_uploads', 
@@ -30,11 +29,31 @@ export const parseStoragePath = (fullPath: string | null): { bucketName: string,
     };
   }
   
-  // Handle 'chunks/' paths explicitly - this is important for chunked videos
   if (cleanPath.startsWith('chunks/')) {
     return {
       bucketName: 'chunks',
       filePath: cleanPath.replace('chunks/', '')
+    };
+  }
+  
+  if (cleanPath.startsWith('audio_chunks/')) {
+    return {
+      bucketName: 'audio_chunks',
+      filePath: cleanPath.replace('audio_chunks/', '')
+    };
+  }
+  
+  if (cleanPath.startsWith('audio_extracts/')) {
+    return {
+      bucketName: 'audio_extracts',
+      filePath: cleanPath.replace('audio_extracts/', '')
+    };
+  }
+  
+  if (cleanPath.startsWith('slide_stills/')) {
+    return {
+      bucketName: 'slide_stills',
+      filePath: cleanPath.replace('slide_stills/', '')
     };
   }
 
@@ -145,5 +164,43 @@ export const ensureCorrectChunkPath = (videoPath: string | null): string | null 
     return `chunks/${cleanPath}`;
   }
   
+  // Fix incorrect audio chunk paths
+  if (cleanPath.includes('_audio_chunk_') && !cleanPath.startsWith('audio_chunks/')) {
+    return `audio_chunks/${cleanPath}`;
+  }
+  
   return videoPath;
+};
+
+/**
+ * Gets the correct bucket for a specific file type
+ * @param fileType The MIME type of the file
+ * @returns The appropriate bucket name for the file type
+ */
+export const getBucketForFileType = (fileType: string): string => {
+  if (fileType.startsWith('video/')) {
+    return 'video_uploads';
+  }
+  
+  if (fileType.startsWith('audio/')) {
+    return 'audio_extracts';
+  }
+  
+  if (fileType.startsWith('image/')) {
+    return 'slide_stills';
+  }
+  
+  return 'video_uploads'; // Default bucket
+};
+
+/**
+ * Creates a path for a file in the appropriate bucket
+ * @param projectId The project ID
+ * @param fileName The file name
+ * @param fileType The MIME type of the file
+ * @returns The full path for the file
+ */
+export const createPathForFile = (projectId: string, fileName: string, fileType: string): string => {
+  const bucketName = getBucketForFileType(fileType);
+  return `${projectId}/${Date.now()}_${fileName}`;
 };

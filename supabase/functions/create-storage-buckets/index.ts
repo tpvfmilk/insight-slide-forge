@@ -44,6 +44,12 @@ serve(async (req) => {
         fileSizeLimit: 26214400, // 25MB
       },
       {
+        id: 'audio_chunks',
+        name: 'Audio Chunks',
+        public: true,
+        fileSizeLimit: 10485760, // 10MB
+      },
+      {
         id: 'slide_stills',
         name: 'Slide Still Images',
         public: true,
@@ -79,11 +85,6 @@ serve(async (req) => {
               status: 'created', 
               message: 'Bucket created successfully' 
             });
-
-            // Set up public policies for the bucket if it's public
-            if (bucket.public) {
-              await createPublicPolicies(supabaseAdmin, bucket.id);
-            }
           }
         } else {
           // Update existing bucket
@@ -105,11 +106,6 @@ serve(async (req) => {
               status: 'updated', 
               message: 'Bucket updated successfully' 
             });
-
-            // Update policies for the bucket if it's public
-            if (bucket.public) {
-              await createPublicPolicies(supabaseAdmin, bucket.id);
-            }
           }
         }
       } catch (bucketError) {
@@ -121,11 +117,18 @@ serve(async (req) => {
       }
     }
 
+    // Inform the user which policies must be set up manually
+    // We can't use .createPolicy directly as it's not supported in the Supabase JS client
+    const policyMessage = `Note: Please ensure RLS policies are set up for these buckets. Go to Storage > Bucket > Policies in the Supabase dashboard to configure:
+    - Allow authenticated users to upload files
+    - Allow public read access to files`;
+
     return new Response(
       JSON.stringify({ 
         success: true, 
         results,
-        message: 'Storage buckets initialized successfully'
+        message: 'Storage buckets initialized successfully',
+        policyNote: policyMessage
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -139,41 +142,3 @@ serve(async (req) => {
     );
   }
 });
-
-// Helper function to create public policies for a bucket
-async function createPublicPolicies(supabase, bucketId) {
-  try {
-    // Create policy for public read access
-    const { error: readPolicyError } = await supabase.storage.from(bucketId).createPolicy('Public Read Access', {
-      name: `${bucketId}_public_read`,
-      definition: `bucket_id = '${bucketId}'`,
-      type: 'SELECT',
-      statements: null
-    });
-
-    if (readPolicyError) {
-      console.error(`Error creating read policy for ${bucketId}: ${readPolicyError.message}`);
-    } else {
-      console.log(`Created public read policy for ${bucketId}`);
-    }
-
-    // Create policy for authenticated users to upload
-    const { error: uploadPolicyError } = await supabase.storage.from(bucketId).createPolicy('Authenticated Upload Access', {
-      name: `${bucketId}_auth_insert`,
-      definition: `bucket_id = '${bucketId}' AND auth.role() = 'authenticated'`,
-      type: 'INSERT',
-      statements: null
-    });
-
-    if (uploadPolicyError) {
-      console.error(`Error creating upload policy for ${bucketId}: ${uploadPolicyError.message}`);
-    } else {
-      console.log(`Created authenticated upload policy for ${bucketId}`);
-    }
-
-    return true;
-  } catch (error) {
-    console.error(`Error creating policies for ${bucketId}:`, error);
-    return false;
-  }
-}

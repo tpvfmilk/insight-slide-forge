@@ -7,7 +7,7 @@ let storageInitialized = false;
 
 /**
  * Initializes the Supabase storage buckets required by the application
- * Creates video_uploads, chunks, audio_extracts, and slide_stills buckets if they don't exist
+ * Creates video_uploads, chunks, audio_extracts, audio_chunks, and slide_stills buckets if they don't exist
  * Sets buckets to public
  * @returns Promise resolving to a success/failure status
  */
@@ -164,6 +164,7 @@ export const createProjectDirectoryStructure = async (projectId: string): Promis
       { bucket: 'video_uploads', path: `${projectId}/.directory` },
       { bucket: 'chunks', path: `${projectId}/.directory` },
       { bucket: 'audio_extracts', path: `${projectId}/.directory` },
+      { bucket: 'audio_chunks', path: `${projectId}/.directory` },
       { bucket: 'slide_stills', path: `${projectId}/.directory` }
     ];
     
@@ -187,5 +188,56 @@ export const createProjectDirectoryStructure = async (projectId: string): Promis
   } catch (error) {
     console.error("Error creating project directory structure:", error);
     return false;
+  }
+};
+
+/**
+ * Verifies that all required storage buckets exist and are accessible
+ * @returns Promise resolving to an object with bucket status information
+ */
+export const verifyStorageBuckets = async (): Promise<{ success: boolean, results: any[] }> => {
+  try {
+    console.log("Verifying storage buckets...");
+    
+    const requiredBuckets = [
+      'video_uploads',
+      'chunks',
+      'audio_extracts',
+      'audio_chunks',
+      'slide_stills'
+    ];
+    
+    const results = [];
+    
+    // Check each bucket
+    for (const bucketId of requiredBuckets) {
+      try {
+        // Try to list a single file to test access
+        const { data, error } = await supabase.storage
+          .from(bucketId)
+          .list('', { limit: 1 });
+          
+        if (error) {
+          results.push({ bucket: bucketId, status: 'error', message: error.message });
+        } else {
+          results.push({ bucket: bucketId, status: 'available', itemCount: data?.length || 0 });
+        }
+      } catch (bucketError) {
+        results.push({ bucket: bucketId, status: 'error', message: bucketError.message });
+      }
+    }
+    
+    const allBucketsAvailable = results.every(r => r.status === 'available');
+    
+    return {
+      success: allBucketsAvailable,
+      results
+    };
+  } catch (error) {
+    console.error("Error verifying storage buckets:", error);
+    return {
+      success: false,
+      results: [{ status: 'error', message: error.message }]
+    };
   }
 };
