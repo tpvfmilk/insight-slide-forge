@@ -34,18 +34,25 @@ export const forceUpdateChunkingMetadata = async (
     }
 
     // Update the video metadata to indicate chunking is needed
-    // Fix: Explicitly check if video_metadata is an object and use a type assertion
-    const currentMetadata = projectData.video_metadata || {};
-    const newMetadata = {
-      ...currentMetadata,
-      chunking: {
-        isChunked: true,
-        isVirtualChunking: true,  // Set to true for client-side chunking
-        status: 'pending',
-        chunks: [],
-        createdAt: new Date().toISOString(),
-        transcriptionProvider: transcriptionProvider
-      }
+    // Fix: Create a new object without using spread operator on potentially non-object value
+    let newMetadata: Record<string, any> = {};
+    
+    // Safely copy existing metadata if it exists and is an object
+    if (projectData.video_metadata && typeof projectData.video_metadata === 'object') {
+      // Copy each property individually to avoid spreading a non-object
+      Object.keys(projectData.video_metadata).forEach(key => {
+        newMetadata[key] = projectData.video_metadata[key];
+      });
+    }
+    
+    // Add chunking information
+    newMetadata.chunking = {
+      isChunked: true,
+      isVirtualChunking: true,  // Set to true for client-side chunking
+      status: 'pending',
+      chunks: [],
+      createdAt: new Date().toISOString(),
+      transcriptionProvider: transcriptionProvider
     };
 
     // Update the database with the new metadata
