@@ -15,9 +15,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { useDistill } from "@/context/DistillContext"
 import { transcribeVideo } from "@/services/uploadService"
 import { useProcessingProgress } from '@/hooks/useOperationProgress'
+import { ChunkedProcessingAlert } from './ChunkedProcessingAlert'
+import { ExtendedVideoMetadata } from "@/types/videoChunking"
 
 interface TranscriptDialogProps {
   project: any;
@@ -36,6 +37,7 @@ export function TranscriptDialog({
 }: TranscriptDialogProps) {
   const [open, setOpen] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [needsChunking, setNeedsChunking] = useState(false);
   
   const { startProcessingOperation } = useProcessingProgress();
   
@@ -45,6 +47,19 @@ export function TranscriptDialog({
       setOpen(externalOpen);
     }
   }, [externalOpen]);
+
+  // Check if video needs chunking based on metadata
+  useEffect(() => {
+    if (project) {
+      const videoMetadata = project.video_metadata as ExtendedVideoMetadata | null;
+      const isLargeVideo = Boolean(
+        videoMetadata?.file_size && (videoMetadata.file_size / (1024 * 1024)) > 24
+      );
+      const isAlreadyChunked = Boolean(videoMetadata?.chunking?.isChunked);
+      
+      setNeedsChunking(isLargeVideo && !isAlreadyChunked);
+    }
+  }, [project]);
   
   // Handle open change and notify parent if callback provided
   const handleOpenChange = (newOpen: boolean) => {
@@ -75,6 +90,13 @@ export function TranscriptDialog({
       const transcriptionResult = await transcribeVideo(project.id);
 
       if (!transcriptionResult.success) {
+        // Check if the error indicates the video is too large
+        if (transcriptionResult.error?.includes("too large") || transcriptionResult.needsChunking) {
+          setNeedsChunking(true);
+          operation.complete(false, "Video is too large and needs chunking");
+          return;
+        }
+        
         toast.error(transcriptionResult.error || "Transcription failed");
         operation.complete(false, `Transcription failed: ${transcriptionResult.error}`);
         return;
@@ -100,6 +122,11 @@ export function TranscriptDialog({
       setIsTranscribing(false);
     }
   };
+
+  const handleChunkingComplete = () => {
+    setNeedsChunking(false);
+    toast.info("Video prepared for chunked transcription. You can now try transcribing again.");
+  };
   
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
@@ -116,6 +143,14 @@ export function TranscriptDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="grid gap-4 py-4">
+          {needsChunking && project && (
+            <ChunkedProcessingAlert 
+              projectId={project.id} 
+              originalVideoPath={project.source_file_path || ""}
+              onComplete={handleChunkingComplete}
+            />
+          )}
+          
           {!transcript ? null : (
             <div className="grid gap-2">
               <Label htmlFor="transcript">Transcript</Label>
@@ -131,7 +166,7 @@ export function TranscriptDialog({
         </div>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleTranscribe} disabled={isTranscribing}>
+          <AlertDialogAction onClick={handleTranscribe} disabled={isTranscribing || needsChunking}>
             {isTranscribing ? "Transcribing..." : "Transcribe"}
           </AlertDialogAction>
         </AlertDialogFooter>

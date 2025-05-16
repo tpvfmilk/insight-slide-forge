@@ -1,3 +1,4 @@
+
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SlideEditor } from "@/components/slides/SlideEditor";
@@ -17,10 +18,13 @@ import { forceUpdateChunkingMetadata } from "@/services/videoChunkingService";
 import { StorageBucketVerifier } from "@/components/storage/StorageBucketVerifier";
 import { initializeStorage } from "@/services/storageService";
 import { useEffect } from "react";
+import { useAudioChunking } from "@/context/AudioChunkingContext";
+import { ChunkedProcessingAlert } from "@/components/project/ChunkedProcessingAlert";
 
 const ProjectPage = () => {
   const { id: projectId } = useParams<{ id: string }>();
   const modals = useProjectModals();
+  const { prepareForChunkedProcessing } = useAudioChunking();
   
   const {
     project,
@@ -122,34 +126,13 @@ const ProjectPage = () => {
   
   // Function to handle force-chunking a video
   const handleForceChunking = async () => {
-    if (!projectId) return;
+    if (!projectId || !project?.source_file_path) return;
     
-    const toastId = "force-chunking";
-    toast.loading("Preparing video for chunked processing...", { id: toastId });
+    const success = await prepareForChunkedProcessing(projectId, project.source_file_path);
     
-    try {
-      // First make sure all required storage buckets exist
-      await initializeStorage();
-      
-      // Then update the chunking metadata
-      const result = await forceUpdateChunkingMetadata(projectId);
-      
-      if (result.success) {
-        toast.success("Video prepared for chunked processing", { id: toastId });
-        
-        // Re-load project data to get updated metadata
-        await loadProject();
-        
-        // Show a guidance message about next steps
-        toast.message("You can now use the Re-Transcribe button to process this video", {
-          duration: 6000
-        });
-      } else {
-        toast.error(`Failed to prepare video: ${result.error}`, { id: toastId });
-      }
-    } catch (error) {
-      toast.error("An error occurred while preparing the video", { id: toastId });
-      console.error("[DEBUG] Error in handleForceChunking:", error);
+    if (success) {
+      // Re-load project data to get updated metadata
+      await loadProject();
     }
   };
   
@@ -212,21 +195,11 @@ const ProjectPage = () => {
           ) : showStorageVerifier ? (
             <div className="p-4">
               {hasTooLargeTranscriptError && !hasChunkedVideo && isLargeVideo && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Video is too large for direct transcription</AlertTitle>
-                  <AlertDescription className="space-y-2 mt-2">
-                    <p>This video file is too large for direct transcription and needs to be processed in chunks.</p>
-                    <div className="mt-4">
-                      <button
-                        onClick={handleForceChunking}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
-                      >
-                        Prepare for Chunked Processing
-                      </button>
-                    </div>
-                  </AlertDescription>
-                </Alert>
+                <ChunkedProcessingAlert
+                  projectId={projectId || ""}
+                  originalVideoPath={project?.source_file_path || ""}
+                  onComplete={() => loadProject()}
+                />
               )}
               
               {/* Storage bucket verification component */}
