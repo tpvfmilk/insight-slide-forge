@@ -2,7 +2,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
-import { ThemeProvider } from "@/components/shared/ThemeToggle";
+import { ThemeProvider } from "@/components/shared/ThemeProvider";
 import { ProgressProvider } from '@/context/ProgressContext';
 import { DistillProvider } from '@/context/DistillContext';
 
